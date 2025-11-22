@@ -135,10 +135,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
             children: [
               // * OpenStreetMap tiles
+              // * NetworkTileProvider in flutter_map v8.2+ supports cancellable requests natively
               TileLayer(
                 urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                 userAgentPackageName: "com.smartroad.app",
                 maxZoom: 19,
+                // * NetworkTileProvider is the default and supports request cancellation
+                // * No need for flutter_map_cancellable_tile_provider (deprecated)
               ),
 
               // * User location marker

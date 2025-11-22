@@ -1,6 +1,6 @@
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "../models/hazard_model.dart";
-import "../services/hazard_service.dart";
+import "../services/hazard_service_adapter.dart";
 
 /// * Hazards state provider
 final hazardsProvider = StateNotifierProvider<HazardsNotifier, HazardsState>(
@@ -38,7 +38,7 @@ class HazardsNotifier extends StateNotifier<HazardsState> {
     loadHazards();
   }
 
-  final HazardService _hazardService = HazardService.instance;
+  final HazardServiceAdapter _hazardService = HazardServiceAdapter.instance;
 
   /// * Load all active hazards
   Future<void> loadHazards() async {

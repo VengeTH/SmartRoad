@@ -6,7 +6,7 @@ import "../core/constants/app_constants.dart";
 import "../providers/auth_provider.dart";
 import "../providers/location_provider.dart";
 import "../providers/hazard_provider.dart";
-import "../services/storage_service.dart";
+import "../services/storage_service_adapter.dart";
 import "../widgets/auth_dialog.dart";
 
 /// * Screen for reporting hazards
@@ -140,7 +140,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
       // * Upload image if selected
       if (_selectedImage != null) {
         final String tempHazardId = DateTime.now().millisecondsSinceEpoch.toString();
-        imageUrl = await StorageService.instance.uploadHazardImage(
+        imageUrl = await StorageServiceAdapter.instance.uploadHazardImage(
           imageFile: _selectedImage!,
           hazardId: tempHazardId,
         );

@@ -18,19 +18,40 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="The first project of The Heedful">
+  <meta name="description" content="SmartRoad - Real-time hazard reporting system by The Heedful">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="smartroad">
+  <meta name="apple-mobile-web-app-title" content="SmartRoad">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>smartroad</title>
+  <title>SmartRoad - The Heedful</title>
   <link rel="manifest" href="manifest.json">
+  <script>
+    // * Suppress MissingPluginException errors for path_provider on web
+    window.addEventListener('error', function(event) {
+      if (event.error && event.error.toString().includes('MissingPluginException') &&
+          event.error.toString().includes('path_provider')) {
+        console.log('⚠️ path_provider not available on web (this is expected)');
+        event.preventDefault(); // * Prevent error from showing
+        return true;
+      }
+    });
+    
+    // * Also catch unhandled promise rejections
+    window.addEventListener('unhandledrejection', function(event) {
+      if (event.reason && event.reason.toString().includes('MissingPluginException') &&
+          event.reason.toString().includes('path_provider')) {
+        console.log('⚠️ path_provider not available on web (this is expected)');
+        event.preventDefault(); // * Prevent error from showing
+        return true;
+      }
+    });
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

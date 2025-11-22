@@ -11,12 +11,43 @@ The flagship project of The Heedful - A real-time hazard reporting system using 
 - **Image Upload**: Attach photos to hazard reports
 - **Realtime Updates**: See new hazards appear instantly on the map
 
+## 💰 Supabase: Cloud vs Self-Hosted
+
+### Supabase Cloud (Free Tier)
+**Perfect for MVP/Demo:**
+- ✅ **Free forever** for small projects
+- ✅ No server maintenance
+- ✅ Automatic backups and updates
+- ✅ 500 MB database, 1 GB storage
+- ✅ 50,000 monthly active users
+- ✅ Quick setup (~2 minutes)
+
+**Limitations:**
+- Project pauses after 1 week of inactivity (free tier)
+- Limited to 2 projects on free tier
+- Data stored on Supabase servers
+
+### Self-Hosted Supabase
+**Best for:**
+- 🔒 Full data control and privacy
+- 🚀 No usage limits
+- 💰 Cost-effective at scale
+- 🌍 Custom domain and branding
+- 📊 Full server access
+
+**Requirements:**
+- Server with Docker (2GB+ RAM recommended)
+- Basic DevOps knowledge
+- Maintenance responsibility
+
 ## 📋 Prerequisites
 
 - Flutter SDK (3.7.0 or higher)
 - Dart SDK
 - Android Studio / Xcode (for mobile development)
-- Supabase account (free tier works)
+- **Supabase** (choose one):
+  - **Option A**: Supabase Cloud account (free tier available)
+  - **Option B**: Self-hosted Supabase instance
 
 ## 🛠️ Setup Instructions
 
@@ -33,11 +64,74 @@ cd SmartRoad
 flutter pub get
 ```
 
-### 3. Set Up Supabase
+### 3. Choose Storage Mode
 
-1. Create a new project at [Supabase](https://app.supabase.com)
-2. Go to Project Settings > API
-3. Copy your Project URL and anon/public key
+**The app supports TWO modes:**
+
+#### Option A: Local Storage (No Database Required) ⭐ **RECOMMENDED FOR MVP**
+
+Perfect for demos and testing without any backend setup!
+
+1. Open `lib/core/config/app_config.dart`
+2. Ensure `useLocalStorage = true` (this is the default)
+3. **That's it!** No database setup needed. Data is stored locally on the device.
+
+**Features:**
+- ✅ No database setup required
+- ✅ Works offline
+- ✅ Data persists between app restarts
+- ✅ Perfect for MVP/demo
+- ⚠️ Data is device-specific (not synced across devices)
+
+#### Option B: Supabase (Database Required)
+
+For production or when you need cloud sync.
+
+1. Open `lib/core/config/app_config.dart`
+2. Set `useLocalStorage = false`
+3. Follow the Supabase setup below
+
+### 4. Set Up Supabase (Only if using Option B)
+
+#### Option A: Supabase Cloud (Recommended for MVP/Demo)
+
+**Free Tier Includes:**
+- 500 MB database storage
+- 1 GB file storage
+- 2 GB bandwidth per month
+- 50,000 monthly active users
+- Unlimited API requests
+- Realtime subscriptions included
+
+**Setup Steps:**
+1. Create a free account at [Supabase](https://app.supabase.com)
+2. Create a new project (takes ~2 minutes)
+3. Go to Project Settings > API
+4. Copy your Project URL and anon/public key
+
+#### Option B: Self-Hosted Supabase
+
+**Requirements:**
+- Server with Docker and Docker Compose
+- Minimum 2GB RAM, 2 CPU cores
+- Domain name (optional, for HTTPS)
+
+**Setup Steps:**
+1. Install Supabase using [official self-hosting guide](https://supabase.com/docs/guides/self-hosting)
+2. Or use the quick start:
+   ```bash
+   git clone --depth 1 https://github.com/supabase/supabase
+   cd supabase/docker
+   cp .env.example .env
+   # Edit .env with your configuration
+   docker-compose up -d
+   ```
+3. Access your Supabase instance (usually at `http://your-server:8000`)
+4. Get your anon key from the API settings
+5. **Important**: For mobile apps, ensure your server is accessible:
+   - Use HTTPS (recommended) or HTTP for local testing
+   - Configure firewall to allow connections
+   - Update CORS settings if needed
 
 ### 4. Create Database Tables
 
@@ -106,20 +200,42 @@ CREATE POLICY "Users can update own hazards"
 1. Go to Database > Replication in Supabase dashboard
 2. Enable replication for the `hazards` table
 
-### 7. Configure Environment Variables
+### 7. Configure Environment Variables (Only if using Supabase)
 
-Create a `.env` file in the root directory:
+**Skip this step if using Local Storage mode!**
 
+Create a `.env` file in the root directory (copy from `env.example`):
+
+**For Supabase Cloud:**
 ```env
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key-here
 ```
 
-**Important**: Replace the values with your actual Supabase credentials.
+**For Self-Hosted Supabase:**
+```env
+SUPABASE_URL=http://your-server-ip:8000
+# or with HTTPS:
+SUPABASE_URL=https://supabase.yourdomain.com
+SUPABASE_ANON_KEY=your-self-hosted-anon-key
+```
 
-### 8. Update pubspec.yaml
+**Important**: 
+- Replace the values with your actual Supabase credentials
+- For self-hosted: Ensure your server URL is accessible from mobile devices
+- For production: Always use HTTPS
 
-Make sure `flutter_dotenv` is included in your `pubspec.yaml` (already added).
+### 8. Run the App!
+
+You're ready! Just run:
+
+```bash
+flutter run
+```
+
+**If using Local Storage:** The app will work immediately - no additional setup needed!
+
+**If using Supabase:** Make sure you've completed steps 4-7 above.
 
 ## 🏃 Running the App
 
@@ -183,13 +299,45 @@ lib/
 - Use environment variables for all sensitive data
 - Row Level Security (RLS) is enabled on all tables
 
+## 🔄 Switching from Local Storage to Supabase
+
+When you're ready to use your self-hosted Supabase:
+
+1. **Set up your Supabase instance** (cloud or self-hosted)
+2. **Create the database tables** (see step 4 above)
+3. **Create storage buckets** (see step 5 above)
+4. **Enable Realtime** (see step 6 above)
+5. **Update configuration:**
+   - Open `lib/core/config/app_config.dart`
+   - Change `useLocalStorage = false`
+   - Create `.env` file with your Supabase credentials
+6. **Run the app** - it will automatically use Supabase!
+
+**Note:** Data stored locally won't automatically migrate to Supabase. You'll need to export/import manually if needed.
+
 ## 🐛 Troubleshooting
+
+### Local Storage Issues
+
+- **Data not persisting**: Check app permissions for file storage
+- **Can't find data**: Data is stored in app's documents directory
+- **Images not loading**: Check file path permissions
 
 ### Supabase Connection Issues
 
-- Verify your `.env` file has correct values
-- Check that Supabase project is active
+- Verify your `.env` file has correct values (only needed if `useLocalStorage = false`)
+- Check that Supabase project is active (cloud) or server is running (self-hosted)
 - Ensure RLS policies are correctly set
+- **For self-hosted**: Check server accessibility and firewall settings
+- **For self-hosted**: Verify CORS is configured if accessing from web
+- **If using local storage**: Make sure `useLocalStorage = true` in `app_config.dart`
+
+### Self-Hosted Specific Issues
+
+- **Connection refused**: Check if Supabase services are running (`docker-compose ps`)
+- **Network unreachable**: Ensure server IP/domain is accessible from your device
+- **HTTPS errors**: Use HTTP for local testing, or configure SSL certificates
+- **Port blocked**: Check firewall allows connections on port 8000 (or your configured port)
 
 ### Location Permission Issues
 
@@ -201,6 +349,7 @@ lib/
 
 - Verify storage buckets exist and are public
 - Check bucket names match constants in `app_constants.dart`
+- **For self-hosted**: Ensure storage service is running and accessible
 
 ## 📝 License
 

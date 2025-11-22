@@ -2,7 +2,7 @@ import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:flutter_map/flutter_map.dart";
 import "package:latlong2/latlong.dart";
-import "package:supabase_flutter/supabase_flutter.dart";
+import "dart:async";
 import "../core/constants/app_constants.dart";
 import "../core/theme/app_theme.dart";
 import "../providers/hazard_provider.dart";
@@ -12,7 +12,7 @@ import "../models/hazard_model.dart";
 import "../widgets/hazard_marker.dart";
 import "../widgets/hazard_details_sheet.dart";
 import "../widgets/auth_dialog.dart";
-import "../services/hazard_service.dart";
+import "../services/hazard_service_adapter.dart";
 import "report_screen.dart";
 
 /// * Map screen showing hazards and user location
@@ -25,7 +25,7 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen> {
   final MapController _mapController = MapController();
-  RealtimeChannel? _realtimeChannel;
+  StreamSubscription<HazardModel>? _hazardSubscription;
 
   @override
   void initState() {
@@ -37,7 +37,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   void dispose() {
-    _realtimeChannel?.unsubscribe();
+    _hazardSubscription?.cancel();
     super.dispose();
   }
 
@@ -45,7 +45,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void _setupRealtimeSubscription() {
     final HazardsNotifier hazardsNotifier = ref.read(hazardsProvider.notifier);
 
-    _realtimeChannel = HazardService.instance.subscribeToHazards(
+    final subscription = HazardServiceAdapter.instance.subscribeToHazards(
       onInsert: (hazard) {
         hazardsNotifier.addHazard(hazard);
       },
@@ -56,6 +56,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         hazardsNotifier.removeHazard(hazardId);
       },
     );
+
+    // * Store subscription for cleanup (if it's a StreamSubscription)
+    if (subscription is StreamSubscription) {
+      _hazardSubscription = subscription as StreamSubscription<HazardModel>;
+    }
   }
 
   /// * Show hazard details bottom sheet

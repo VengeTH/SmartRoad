@@ -1,6 +1,6 @@
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "../models/user_model.dart";
-import "../services/auth_service.dart";
+import "../services/auth_service_adapter.dart";
 
 /// * Authentication state provider
 final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>(
@@ -40,11 +40,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _checkAuthStatus();
   }
 
-  final AuthService _authService = AuthService.instance;
+  final AuthServiceAdapter _authService = AuthServiceAdapter.instance;
 
   /// * Check current authentication status
   Future<void> _checkAuthStatus() async {
-    final String? userId = _authService.currentUserId;
+    final String? userId = await _authService.getCurrentUserId();
     if (userId != null) {
       try {
         final UserModel user = await _authService.getUserProfile(userId);

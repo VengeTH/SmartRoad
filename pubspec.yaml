@@ -1,5 +1,5 @@
 name: smartroad
-description: "The first project of The Heedful"
+description: "SmartRoad - Real-time hazard reporting system by The Heedful"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -61,6 +61,13 @@ dependencies:
 
   # Environment Variables
   flutter_dotenv: ^5.1.0
+
+  # Local Storage
+  # * path_provider is optional - only used on mobile platforms
+  # * Web uses SharedPreferences only
+  path_provider:
+    ^2.1.2
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:

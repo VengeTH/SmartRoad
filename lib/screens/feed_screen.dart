@@ -2,7 +2,7 @@ import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "../providers/hazard_provider.dart";
 import "../models/hazard_model.dart";
-import "../services/auth_service.dart";
+import "../services/auth_service_adapter.dart";
 
 /// * Community feed screen showing latest hazard reports
 class FeedScreen extends ConsumerWidget {
@@ -60,7 +60,7 @@ class FeedScreen extends ConsumerWidget {
   /// * Get username from user ID
   Future<String> _getUsername(String userId) async {
     try {
-      final user = await AuthService.instance.getUserProfile(userId);
+      final user = await AuthServiceAdapter.instance.getUserProfile(userId);
       return user.name ?? user.email.split("@")[0];
     } catch (e) {
       return "Unknown User";

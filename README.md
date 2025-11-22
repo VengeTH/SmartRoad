@@ -259,6 +259,16 @@ The APK will be located at: `build/app/outputs/flutter-apk/app-release.apk`
 flutter build ios --release
 ```
 
+### Build Web for Production
+
+```bash
+flutter build web --release
+```
+
+The web build will be in `build/web` directory.
+
+**For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md)**
+
 ## 📱 Platform-Specific Setup
 
 ### Android

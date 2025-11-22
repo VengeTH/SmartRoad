@@ -48,3 +48,9 @@ app.*.map.json
 .env
 .env.local
 .env.*.local
+
+# Build outputs
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies

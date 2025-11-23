@@ -43,3 +43,31 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+*.env
+.envrc
+
+# Android keystore files
+*.jks
+*.keystore
+key.properties
+android/key.properties
+
+# iOS certificates and provisioning
+*.mobileprovision
+*.p12
+*.certSigningRequest
+
+# API keys and secrets (if stored in files)
+**/secrets/
+**/keys/
+**/*secret*
+**/*key*
+**/*password*
+
+# Supabase service role key (never commit this!)
+**/supabase_service_role_key.txt

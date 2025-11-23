@@ -1,58 +1,26 @@
 import "package:flutter/material.dart";
-import "package:flutter/services.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "core/config/supabase_config.dart";
-import "core/config/app_config.dart";
 import "core/theme/app_theme.dart";
-import "services/local_storage_service.dart";
-import "screens/map_screen.dart";
-import "screens/feed_screen.dart";
-import "screens/profile_screen.dart";
+import "services/supabase_service.dart";
+import "services/offline_cache_service.dart";
+import "services/notification_service.dart";
+import "providers/auth_provider.dart";
+import "screens/auth/login_screen.dart";
+import "screens/auth/signup_screen.dart";
+import "screens/main_navigation_screen.dart";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // * Add error handling for Flutter errors
-  FlutterError.onError = (FlutterErrorDetails details) {
-    // * Suppress MissingPluginException for path_provider on web - this is expected
-    if (details.exception.toString().contains("MissingPluginException") &&
-        details.exception.toString().contains("path_provider")) {
-      debugPrint("⚠️ path_provider plugin not available on web (this is expected)");
-      debugPrint("💡 App will use SharedPreferences instead");
-      return; // * Don't show error - this is normal on web
-    }
-    FlutterError.presentError(details);
-    debugPrint("Flutter Error: ${details.exception}");
-    debugPrint("Stack: ${details.stack}");
-  };
-
-  // * Initialize storage based on configuration
+  
+  // * Initialize services
   try {
-    if (AppConfig.useLocalStorage) {
-      // * Initialize local storage
-      // * This will use SharedPreferences on web, file system on mobile
-      await LocalStorageService.instance.initialize();
-      debugPrint("✅ Using Local Storage (No database required)");
-    } else {
-      // * Initialize Supabase
-      try {
-        await SupabaseConfig.initialize();
-        debugPrint("✅ Using Supabase");
-      } catch (e) {
-        debugPrint("❌ Supabase initialization error: $e");
-        debugPrint("💡 Tip: Set useLocalStorage = true in app_config.dart to use local storage");
-      }
-    }
-  } on MissingPluginException catch (e) {
-    // * Catch MissingPluginException - this is expected on web for path_provider
-    debugPrint("⚠️ Plugin not available (this is normal on web): $e");
-    debugPrint("💡 App will continue using SharedPreferences");
-  } catch (e, stackTrace) {
-    debugPrint("❌ Initialization error: $e");
-    debugPrint("Stack: $stackTrace");
-    // * Don't crash the app - continue with SharedPreferences as fallback
+    await SupabaseService().initialize();
+    await OfflineCacheService().initialize();
+    await NotificationService().initialize();
+  } catch (e) {
+    debugPrint("Initialization error: $e");
   }
-
+  
   runApp(
     const ProviderScope(
       child: SmartRoadApp(),
@@ -60,76 +28,45 @@ void main() async {
   );
 }
 
-/// * Main app widget
-class SmartRoadApp extends StatelessWidget {
+class SmartRoadApp extends ConsumerWidget {
   const SmartRoadApp({super.key});
-
+  
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authStateProvider);
+    
     return MaterialApp(
       title: "SmartRoad",
+      theme: AppTheme.darkTheme,
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark,
-      home: const MainNavigationScreen(),
-      // * Add error builder to catch rendering errors
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(1.0)),
-          child: child ?? const SizedBox(),
-        );
-      },
-    );
-  }
-}
-
-/// * Main navigation screen with bottom navigation bar
-class MainNavigationScreen extends StatefulWidget {
-  const MainNavigationScreen({super.key});
-
-  @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
-}
-
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentIndex = 0;
-
-  final List<Widget> _screens = const [
-    MapScreen(),
-    FeedScreen(),
-    ProfileScreen(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: _screens[_currentIndex],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
+      home: authState.when(
+        data: (user) {
+          if (user != null) {
+            return const MainNavigationScreen();
+          } else {
+            return const LoginScreen();
+          }
         },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.map_outlined),
-            selectedIcon: Icon(Icons.map),
-            label: "Map",
+        loading: () => const Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
+        error: (error, stack) => Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                const SizedBox(height: 16),
+                Text("Error: $error"),
+              ],
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.feed_outlined),
-            selectedIcon: Icon(Icons.feed),
-            label: "Feed",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: "Profile",
-          ),
-        ],
+        ),
       ),
+      routes: {
+        "/login": (context) => const LoginScreen(),
+        "/signup": (context) => const SignUpScreen(),
+      },
     );
   }
 }

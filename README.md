@@ -1,370 +1,183 @@
-# SmartRoad MVP
+# smartroad
 
-The flagship project of The Heedful - A real-time hazard reporting system using Flutter, Supabase, and OpenStreetMap.
+A Flutter mobile application for reporting and viewing road hazards in real-time, built with Supabase backend.
 
-## 🚀 Features
+## Features
 
-- **Real-Time Map**: View hazards on an interactive map with OpenStreetMap tiles
-- **Hazard Reporting**: Report potholes, floods, accidents, closures, roadblocks, and landslides
-- **Community Feed**: Browse latest hazard reports from the community
-- **User Authentication**: Sign up and sign in with email/password
-- **Image Upload**: Attach photos to hazard reports
-- **Realtime Updates**: See new hazards appear instantly on the map
+- **Authentication**: Email/password authentication via Supabase Auth
+- **Interactive Map**: OpenStreetMap integration with real-time hazard markers
+- **Hazard Reporting**: Report road hazards with type, severity, description, and photos
+- **Feed View**: Reverse-chronological list of all reported hazards
+- **User Profiles**: View and update profile information
+- **Realtime Updates**: Live updates when hazards are added/updated/deleted
+- **Offline Support**: Cache hazards locally for offline viewing
+- **Local Notifications**: Get notified when hazards are created within 2km
 
-## 💰 Supabase: Cloud vs Self-Hosted
+## Prerequisites
 
-### Supabase Cloud (Free Tier)
-**Perfect for MVP/Demo:**
-- ✅ **Free forever** for small projects
-- ✅ No server maintenance
-- ✅ Automatic backups and updates
-- ✅ 500 MB database, 1 GB storage
-- ✅ 50,000 monthly active users
-- ✅ Quick setup (~2 minutes)
-
-**Limitations:**
-- Project pauses after 1 week of inactivity (free tier)
-- Limited to 2 projects on free tier
-- Data stored on Supabase servers
-
-### Self-Hosted Supabase
-**Best for:**
-- 🔒 Full data control and privacy
-- 🚀 No usage limits
-- 💰 Cost-effective at scale
-- 🌍 Custom domain and branding
-- 📊 Full server access
-
-**Requirements:**
-- Server with Docker (2GB+ RAM recommended)
-- Basic DevOps knowledge
-- Maintenance responsibility
-
-## 📋 Prerequisites
-
-- Flutter SDK (3.7.0 or higher)
-- Dart SDK
+- Flutter SDK 3.7+ (with Dart 3.x)
 - Android Studio / Xcode (for mobile development)
-- **Supabase** (choose one):
-  - **Option A**: Supabase Cloud account (free tier available)
-  - **Option B**: Self-hosted Supabase instance
+- Supabase account and project
+- PostGIS extension enabled in Supabase
 
-## 🛠️ Setup Instructions
+## Setup Instructions
 
-### 1. Clone the Repository
+### 1. Clone and Install Dependencies
 
 ```bash
 git clone <repository-url>
-cd SmartRoad
-```
-
-### 2. Install Dependencies
-
-```bash
+cd smartroad
 flutter pub get
 ```
 
-### 3. Choose Storage Mode
+### 2. Supabase Setup
 
-**The app supports TWO modes:**
+1. Create a new Supabase project at [supabase.com](https://supabase.com)
+2. Enable PostGIS extension in your Supabase project:
+   - Go to Database → Extensions
+   - Enable `postgis` extension
+3. Run the SQL schema script:
+   - Go to SQL Editor in Supabase dashboard
+   - Copy and paste the contents of `supabase_schema.sql`
+   - Execute the script
+4. Create Storage Bucket:
+   - Go to Storage in Supabase dashboard
+   - Create a new bucket named `hazard-images`
+   - Set it to Public
+   - Configure allowed MIME types: `image/jpeg`, `image/png`, `image/webp`
+   - Set file size limit to 5MB
 
-#### Option A: Local Storage (No Database Required) ⭐ **RECOMMENDED FOR MVP**
+### 3. Environment Configuration
 
-Perfect for demos and testing without any backend setup!
-
-1. Open `lib/core/config/app_config.dart`
-2. Ensure `useLocalStorage = true` (this is the default)
-3. **That's it!** No database setup needed. Data is stored locally on the device.
-
-**Features:**
-- ✅ No database setup required
-- ✅ Works offline
-- ✅ Data persists between app restarts
-- ✅ Perfect for MVP/demo
-- ⚠️ Data is device-specific (not synced across devices)
-
-#### Option B: Supabase (Database Required)
-
-For production or when you need cloud sync.
-
-1. Open `lib/core/config/app_config.dart`
-2. Set `useLocalStorage = false`
-3. Follow the Supabase setup below
-
-### 4. Set Up Supabase (Only if using Option B)
-
-#### Option A: Supabase Cloud (Recommended for MVP/Demo)
-
-**Free Tier Includes:**
-- 500 MB database storage
-- 1 GB file storage
-- 2 GB bandwidth per month
-- 50,000 monthly active users
-- Unlimited API requests
-- Realtime subscriptions included
-
-**Setup Steps:**
-1. Create a free account at [Supabase](https://app.supabase.com)
-2. Create a new project (takes ~2 minutes)
-3. Go to Project Settings > API
-4. Copy your Project URL and anon/public key
-
-#### Option B: Self-Hosted Supabase
-
-**Requirements:**
-- Server with Docker and Docker Compose
-- Minimum 2GB RAM, 2 CPU cores
-- Domain name (optional, for HTTPS)
-
-**Setup Steps:**
-1. Install Supabase using [official self-hosting guide](https://supabase.com/docs/guides/self-hosting)
-2. Or use the quick start:
-   ```bash
-   git clone --depth 1 https://github.com/supabase/supabase
-   cd supabase/docker
-   cp .env.example .env
-   # Edit .env with your configuration
-   docker-compose up -d
-   ```
-3. Access your Supabase instance (usually at `http://your-server:8000`)
-4. Get your anon key from the API settings
-5. **Important**: For mobile apps, ensure your server is accessible:
-   - Use HTTPS (recommended) or HTTP for local testing
-   - Configure firewall to allow connections
-   - Update CORS settings if needed
-
-### 4. Create Database Tables
-
-Run these SQL commands in your Supabase SQL Editor:
-
-```sql
--- Create users table
-CREATE TABLE users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT UNIQUE NOT NULL,
-  name TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  profile_image TEXT,
-  reporter_level INTEGER DEFAULT 1
-);
-
--- Create hazards table
-CREATE TABLE hazards (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  type TEXT NOT NULL,
-  description TEXT NOT NULL,
-  severity TEXT NOT NULL,
-  lat DOUBLE PRECISION NOT NULL,
-  lng DOUBLE PRECISION NOT NULL,
-  image_url TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  status TEXT DEFAULT 'active'
-);
-
--- Enable Row Level Security (RLS)
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hazards ENABLE ROW LEVEL SECURITY;
-
--- Create policies for users table
-CREATE POLICY "Users can view all profiles"
-  ON users FOR SELECT
-  USING (true);
-
-CREATE POLICY "Users can update own profile"
-  ON users FOR UPDATE
-  USING (auth.uid() = id);
-
--- Create policies for hazards table
-CREATE POLICY "Anyone can view active hazards"
-  ON hazards FOR SELECT
-  USING (status = 'active');
-
-CREATE POLICY "Authenticated users can create hazards"
-  ON hazards FOR INSERT
-  WITH CHECK (auth.role() = 'authenticated');
-
-CREATE POLICY "Users can update own hazards"
-  ON hazards FOR UPDATE
-  USING (auth.uid() = user_id);
-```
-
-### 5. Create Storage Buckets
-
-1. Go to Storage in your Supabase dashboard
-2. Create a bucket named `hazard-images` (public)
-3. Create a bucket named `profile-images` (public)
-
-### 6. Enable Realtime
-
-1. Go to Database > Replication in Supabase dashboard
-2. Enable replication for the `hazards` table
-
-### 7. Configure Environment Variables (Only if using Supabase)
-
-**Skip this step if using Local Storage mode!**
-
-Create a `.env` file in the root directory (copy from `env.example`):
-
-**For Supabase Cloud:**
-```env
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key-here
-```
-
-**For Self-Hosted Supabase:**
-```env
-SUPABASE_URL=http://your-server-ip:8000
-# or with HTTPS:
-SUPABASE_URL=https://supabase.yourdomain.com
-SUPABASE_ANON_KEY=your-self-hosted-anon-key
-```
-
-**Important**: 
-- Replace the values with your actual Supabase credentials
-- For self-hosted: Ensure your server URL is accessible from mobile devices
-- For production: Always use HTTPS
-
-### 8. Run the App!
-
-You're ready! Just run:
+Create a `.env` file in the project root (or use `--dart-define` flags):
 
 ```bash
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+STORAGE_BUCKET_NAME=hazard-images
+```
+
+**For Flutter, use `--dart-define` flags instead:**
+
+```bash
+flutter run --dart-define=SUPABASE_URL=your_url --dart-define=SUPABASE_ANON_KEY=your_key
+```
+
+Or create a script to run with environment variables (see `.env.example` for reference).
+
+### 4. Android Configuration
+
+Add location permissions to `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET"/>
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+```
+
+### 5. iOS Configuration
+
+Add location permissions to `ios/Runner/Info.plist`:
+
+```xml
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>We need your location to show nearby hazards and allow you to report hazards.</string>
+<key>NSLocationAlwaysUsageDescription</key>
+<string>We need your location to show nearby hazards and allow you to report hazards.</string>
+```
+
+### 6. Build and Run
+
+```bash
+# For Android
 flutter run
-```
 
-**If using Local Storage:** The app will work immediately - no additional setup needed!
-
-**If using Supabase:** Make sure you've completed steps 4-7 above.
-
-## 🏃 Running the App
-
-### Development
-
-```bash
+# For iOS
 flutter run
-```
 
-### Build Android APK
-
-```bash
+# Build APK
+flutter build apk --debug
+# or
 flutter build apk --release
 ```
 
-The APK will be located at: `build/app/outputs/flutter-apk/app-release.apk`
+## Demo Account
 
-### Build iOS
+For investor demos, use the pre-seeded demo account:
+- Email: `demo@smartroad.app`
+- Password: `DemoPass123!`
 
-```bash
-flutter build ios --release
-```
+*Note: You need to create this user in Supabase Auth dashboard first.*
 
-### Build Web for Production
-
-```bash
-flutter build web --release
-```
-
-The web build will be in `build/web` directory.
-
-**For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md)**
-
-## 📱 Platform-Specific Setup
-
-### Android
-
-1. Update `android/app/src/main/AndroidManifest.xml`:
-   - Add location permissions
-   - Add internet permission
-
-### iOS
-
-1. Update `ios/Runner/Info.plist`:
-   - Add location usage descriptions
-   - Add camera and photo library permissions
-
-## 🗂️ Project Structure
+## Project Structure
 
 ```
 lib/
 ├── core/
-│   ├── config/          # Configuration files (Supabase)
+│   ├── config/          # Environment configuration
 │   ├── constants/       # App constants
 │   └── theme/           # App theme
-├── models/              # Data models
-├── providers/           # Riverpod providers
-├── screens/             # App screens
-│   ├── map_screen.dart
-│   ├── report_screen.dart
-│   ├── feed_screen.dart
-│   └── profile_screen.dart
+├── models/              # Data models (Hazard, UserProfile)
+├── providers/           # Riverpod state providers
+├── screens/             # UI screens
+│   ├── auth/           # Login, Signup
+│   ├── map/            # Map screen
+│   ├── feed/            # Feed screen
+│   ├── profile/         # Profile screen
+│   └── report/          # Report hazard screen
 ├── services/            # Business logic services
+│   ├── supabase_service.dart
+│   ├── location_service.dart
+│   ├── notification_service.dart
+│   └── offline_cache_service.dart
 └── widgets/             # Reusable widgets
 ```
 
-## 🔐 Security Notes
+## Key Dependencies
 
-- Never commit your `.env` file to version control
-- Add `.env` to `.gitignore`
-- Use environment variables for all sensitive data
-- Row Level Security (RLS) is enabled on all tables
+- `flutter_riverpod`: State management
+- `supabase_flutter`: Backend integration
+- `flutter_map`: Map display (OpenStreetMap)
+- `geolocator`: Location services
+- `image_picker`: Image selection
+- `hive_flutter`: Offline caching
+- `flutter_local_notifications`: Local notifications
 
-## 🔄 Switching from Local Storage to Supabase
-
-When you're ready to use your self-hosted Supabase:
-
-1. **Set up your Supabase instance** (cloud or self-hosted)
-2. **Create the database tables** (see step 4 above)
-3. **Create storage buckets** (see step 5 above)
-4. **Enable Realtime** (see step 6 above)
-5. **Update configuration:**
-   - Open `lib/core/config/app_config.dart`
-   - Change `useLocalStorage = false`
-   - Create `.env` file with your Supabase credentials
-6. **Run the app** - it will automatically use Supabase!
-
-**Note:** Data stored locally won't automatically migrate to Supabase. You'll need to export/import manually if needed.
-
-## 🐛 Troubleshooting
-
-### Local Storage Issues
-
-- **Data not persisting**: Check app permissions for file storage
-- **Can't find data**: Data is stored in app's documents directory
-- **Images not loading**: Check file path permissions
-
-### Supabase Connection Issues
-
-- Verify your `.env` file has correct values (only needed if `useLocalStorage = false`)
-- Check that Supabase project is active (cloud) or server is running (self-hosted)
-- Ensure RLS policies are correctly set
-- **For self-hosted**: Check server accessibility and firewall settings
-- **For self-hosted**: Verify CORS is configured if accessing from web
-- **If using local storage**: Make sure `useLocalStorage = true` in `app_config.dart`
-
-### Self-Hosted Specific Issues
-
-- **Connection refused**: Check if Supabase services are running (`docker-compose ps`)
-- **Network unreachable**: Ensure server IP/domain is accessible from your device
-- **HTTPS errors**: Use HTTP for local testing, or configure SSL certificates
-- **Port blocked**: Check firewall allows connections on port 8000 (or your configured port)
+## Troubleshooting
 
 ### Location Permission Issues
+- Ensure permissions are added to AndroidManifest.xml and Info.plist
+- Check device location settings
 
-- Grant location permissions in device settings
-- For Android: Check `AndroidManifest.xml` permissions
-- For iOS: Check `Info.plist` location usage descriptions
+### Supabase Connection Issues
+- Verify SUPABASE_URL and SUPABASE_ANON_KEY are correct
+- Check Supabase project status
+- Verify RLS policies are set correctly
 
 ### Image Upload Issues
+- Ensure storage bucket exists and is public
+- Check file size limits
+- Verify MIME type restrictions
 
-- Verify storage buckets exist and are public
-- Check bucket names match constants in `app_constants.dart`
-- **For self-hosted**: Ensure storage service is running and accessible
+## Demo Script (30-60 seconds)
 
-## 📝 License
+1. **Login**: Use demo account or create new account
+2. **View Map**: See hazards on map, tap markers for details
+3. **Report Hazard**: Tap "Report Hazard" button, fill form, submit
+4. **View Feed**: Switch to Feed tab, see all hazards
+5. **Profile**: View profile, update name/photo
+6. **Realtime**: Open app on two devices, report on one, see update on other
 
-This project is proprietary software of The Heedful.
+## Production Notes
 
-## 👥 Contributors
+- Replace demo account with proper authentication flow
+- Implement proper error handling and retry logic
+- Add analytics and crash reporting
+- Optimize map marker rendering for large datasets
+- Implement proper image compression before upload
+- Add rate limiting for hazard creation
+- Implement proper offline queue for pending reports
 
-The Heedful Development Team
+## License
+
+Copyright © 2025 The Heedful. All rights reserved.

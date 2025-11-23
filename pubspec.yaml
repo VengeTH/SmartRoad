@@ -1,5 +1,5 @@
 name: smartroad
-description: "SmartRoad - Real-time hazard reporting system by The Heedful"
+description: "The first project of The Heedful"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -31,43 +31,40 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
+  # UI & Icons
   cupertino_icons: ^1.0.8
-
-  # Map and Location
-  flutter_map: ^8.2.0
-  latlong2: ^0.9.1
-  geolocator: ^13.0.1
-  permission_handler: ^11.3.1
-
-  # Backend
-  supabase_flutter: ^2.5.6
+  flutter_svg: ^2.0.9
 
   # State Management
-  flutter_riverpod: ^2.5.1
+  flutter_riverpod: ^2.4.9
+
+  # Supabase
+  supabase_flutter: ^2.5.6
+
+  # Maps & Location
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  geolocator: ^11.0.0
+  permission_handler: ^11.3.0
+
+  # HTTP & Network
+  dio: ^5.4.0
 
   # Image Handling
-  image_picker: ^1.1.2
+  image_picker: ^1.0.7
 
-  # Network
-  dio: ^5.4.1
+  # Local Storage & Offline
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  sqflite: ^2.3.0
+  path_provider: ^2.1.1
 
-  # Icons
-  flutter_svg: ^2.0.10+1
+  # Notifications
+  flutter_local_notifications: ^17.0.0
 
-  # Date Formatting
+  # Utilities
   intl: ^0.19.0
-
-  # Environment Variables
-  flutter_dotenv: ^5.1.0
-
-  # Local Storage
-  # * path_provider is optional - only used on mobile platforms
-  # * Web uses SharedPreferences only
-  path_provider:
-    ^2.1.2
-  shared_preferences: ^2.2.2
+  uuid: ^4.3.3
 
 dev_dependencies:
   flutter_test:
@@ -91,9 +88,10 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  assets:
-    - .env
+  # Assets (uncomment when you add assets)
+  # assets:
+  #   - assets/images/
+  #   - assets/icons/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -45,13 +45,16 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+<<<<<<< Current (Your changes)
+=======
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>SmartRoad needs your location to show hazards on the map and to report new hazards.</string>
+	<string>We need your location to show nearby hazards and allow you to report hazards.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>SmartRoad needs your location to show hazards on the map and to report new hazards.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>SmartRoad needs camera access to take photos of hazards.</string>
+	<string>We need your location to show nearby hazards and allow you to report hazards.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>SmartRoad needs photo library access to select images for hazard reports.</string>
+	<string>We need access to your photo library to upload hazard images.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>We need access to your camera to take photos of hazards.</string>
+>>>>>>> Incoming (Background Agent changes)
 </dict>
 </plist>

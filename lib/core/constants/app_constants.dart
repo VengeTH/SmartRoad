@@ -24,5 +24,8 @@ class AppConstants {
   // * Demo Account
   static const String demoEmail = 'demo@smartroad.app';
   static const String demoPassword = 'DemoPass123!';
+  
+  // * Routing API
+  static const String routingApiUrl = 'http://localhost:3000';
 }
 

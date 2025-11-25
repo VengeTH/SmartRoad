@@ -1,4 +1,5 @@
 import "package:flutter/material.dart";
+import "package:flutter/services.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "../core/theme/app_theme.dart";
 import "map/map_screen.dart";
@@ -18,6 +19,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
     with SingleTickerProviderStateMixin {
   int _currentIndex = 0;
   late AnimationController _fabAnimationController;
+  late PageController _pageController;
   
   final List<Widget> _screens = [
     const MapScreen(),
@@ -28,6 +30,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: 0);
     _fabAnimationController = AnimationController(
       vsync: this,
       duration: AppTheme.animationNormal,
@@ -37,62 +40,96 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
   @override
   void dispose() {
     _fabAnimationController.dispose();
+    _pageController.dispose();
     super.dispose();
+  }
+  
+  void _onTabTapped(int index) {
+    if (index == _currentIndex) return;
+    
+    // * Haptic feedback
+    HapticFeedback.selectionClick();
+    
+    setState(() {
+      _currentIndex = index;
+    });
+    
+    // * Animate page transition
+    _pageController.animateToPage(
+      index,
+      duration: AppTheme.animationNormal,
+      curve: AppTheme.animationCurve,
+    );
+    
+    // * Animate FAB
+    if (index == 0) {
+      _fabAnimationController.forward();
+    } else {
+      _fabAnimationController.reverse();
+    }
   }
   
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
+      body: PageView(
+        controller: _pageController,
+        physics: const NeverScrollableScrollPhysics(), // * Disable swipe, use buttons only
+        onPageChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
         children: _screens,
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: AppTheme.surfaceColor,
-          boxShadow: AppTheme.shadowMedium,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
           border: Border(
             top: BorderSide(
               color: AppTheme.borderColor,
-              width: 1,
+              width: 1.5,
             ),
           ),
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() => _currentIndex = index);
-          },
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          selectedItemColor: AppTheme.primaryColor,
-          unselectedItemColor: AppTheme.textTertiary,
-          selectedFontSize: 12,
-          unselectedFontSize: 12,
-          selectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w600,
+        child: SafeArea(
+          child: Container(
+            height: 70,
+            padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMD),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _NavItem(
+                  icon: Icons.map_outlined,
+                  activeIcon: Icons.map,
+                  label: "Map",
+                  isActive: _currentIndex == 0,
+                  onTap: () => _onTabTapped(0),
+                ),
+                _NavItem(
+                  icon: Icons.feed_outlined,
+                  activeIcon: Icons.feed,
+                  label: "Feed",
+                  isActive: _currentIndex == 1,
+                  onTap: () => _onTabTapped(1),
+                ),
+                _NavItem(
+                  icon: Icons.person_outline,
+                  activeIcon: Icons.person,
+                  label: "Profile",
+                  isActive: _currentIndex == 2,
+                  onTap: () => _onTabTapped(2),
+                ),
+              ],
+            ),
           ),
-          unselectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w500,
-          ),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.map_outlined),
-              activeIcon: Icon(Icons.map),
-              label: "Map",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.feed_outlined),
-              activeIcon: Icon(Icons.feed),
-              label: "Feed",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: "Profile",
-            ),
-          ],
         ),
       ),
       floatingActionButton: _currentIndex == 0
@@ -146,6 +183,79 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
               ),
             )
           : null,
+    );
+  }
+}
+
+/// * Custom navigation item with premium styling
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _NavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              vertical: AppTheme.spacingSM,
+              horizontal: AppTheme.spacingXS,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedContainer(
+                  duration: AppTheme.animationNormal,
+                  curve: AppTheme.animationCurve,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? AppTheme.primaryColor.withOpacity(0.1)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                  ),
+                  child: Icon(
+                    isActive ? activeIcon : icon,
+                    color: isActive
+                        ? AppTheme.primaryColor
+                        : AppTheme.textTertiary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                AnimatedDefaultTextStyle(
+                  duration: AppTheme.animationNormal,
+                  curve: AppTheme.animationCurve,
+                  style: TextStyle(
+                    fontSize: isActive ? 12 : 11,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                    color: isActive
+                        ? AppTheme.primaryColor
+                        : AppTheme.textTertiary,
+                    letterSpacing: 0.3,
+                  ),
+                  child: Text(label),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

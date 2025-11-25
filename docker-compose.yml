@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  graphhopper:
+    build:
+      context: ./graphhopper
+      dockerfile: Dockerfile
+    container_name: smartroad-graphhopper
+    ports:
+      - "8989:8989"
+    volumes:
+      - graphhopper-data:/graphhopper/graph-cache
+      - graphhopper-osm:/graphhopper/data
+    environment:
+      - JAVA_OPTS=-Xmx2g -Xms2g
+    networks:
+      - smartroad-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smartroad-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - GRAPHHOPPER_URL=http://graphhopper:8989
+    depends_on:
+      - graphhopper
+    networks:
+      - smartroad-network
+    restart: unless-stopped
+
+volumes:
+  graphhopper-data:
+  graphhopper-osm:
+
+networks:
+  smartroad-network:
+    driver: bridge
+

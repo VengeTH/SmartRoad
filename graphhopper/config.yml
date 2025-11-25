@@ -1,0 +1,50 @@
+# GraphHopper Configuration for SmartRoad MVP
+# Car and Motorcycle profiles with toll avoidance
+
+graph:
+  datareader.file: philippines-latest.osm.pbf
+  graph.location: graph-cache
+
+# Routing profiles
+profiles:
+  - name: car
+    vehicle: car
+    weighting: fastest
+    turn_costs: false
+    custom_model:
+      speed:
+        - if: "road_class == MOTORWAY"
+          multiply_by: 1.0
+        - else: "*"
+          multiply_by: 1.0
+      # * Toll avoidance
+      priority:
+        - if: "toll == ALL || toll == DESIGNATED"
+          multiply_by: 0.0  # * Completely avoid toll roads when avoid_tolls=true
+
+  - name: motorcycle
+    vehicle: motorcycle
+    weighting: fastest
+    turn_costs: false
+    custom_model:
+      speed:
+        - if: "road_class == MOTORWAY"
+          multiply_by: 1.0
+        - else: "*"
+          multiply_by: 1.0
+      # * Toll avoidance
+      priority:
+        - if: "toll == ALL || toll == DESIGNATED"
+          multiply_by: 0.0  # * Completely avoid toll roads when avoid_tolls=true
+
+# Server configuration
+server:
+  application_connectors:
+    - type: http
+      port: 8989
+      bind_host: 0.0.0.0
+
+# Import settings
+import:
+  osmreader.osm: philippines-latest.osm.pbf
+

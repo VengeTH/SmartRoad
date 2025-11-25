@@ -3,6 +3,7 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:flutter_map/flutter_map.dart";
 import "package:latlong2/latlong.dart";
 import "package:geolocator/geolocator.dart";
+import "package:dio/dio.dart";
 import "../../providers/hazards_provider.dart";
 import "../../providers/location_provider.dart";
 import "../../models/hazard.dart";
@@ -15,7 +16,7 @@ import "../../services/location_service.dart";
 // * Import the notifier type
 import "../../providers/hazards_provider.dart" show MapHazardsNotifier;
 
-/// * Map control button widget
+/// * Map screen showing hazards on OpenStreetMap
 class _MapControlButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
@@ -78,6 +79,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _isInitialized = false;
   MapHazardsNotifier? _hazardsNotifier;
   
+  // * Search functionality
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _isSearching = false;
+  bool _showSearchResults = false;
+  final Dio _dio = Dio();
+  
   @override
   void initState() {
     super.initState();
@@ -102,7 +111,112 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   void dispose() {
     _mapController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _dio.close();
     super.dispose();
+  }
+  
+  /// * Search for locations using Nominatim API
+  Future<void> _searchLocation(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _showSearchResults = false;
+        _isSearching = false;
+      });
+      return;
+    }
+    
+    setState(() {
+      _isSearching = true;
+      _showSearchResults = true;
+    });
+    
+    try {
+      final response = await _dio.get(
+        'https://nominatim.openstreetmap.org/search',
+        queryParameters: {
+          'q': query,
+          'format': 'json',
+          'limit': 5,
+          'addressdetails': 1,
+        },
+        options: Options(
+          headers: {
+            'User-Agent': 'SmartRoad App',
+          },
+        ),
+      );
+      
+      if (response.statusCode == 200 && response.data is List) {
+        setState(() {
+          _searchResults = List<Map<String, dynamic>>.from(response.data);
+          _isSearching = false;
+        });
+      } else {
+        setState(() {
+          _searchResults = [];
+          _isSearching = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("❌ [MapScreen] Error searching location: $e");
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Error searching location. Please try again."),
+            backgroundColor: AppTheme.errorColor,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+  
+  /// * Format address from Nominatim result
+  String _formatAddress(Map<String, dynamic> address) {
+    final parts = <String>[];
+    if (address['city'] != null) parts.add(address['city']);
+    if (address['state'] != null) parts.add(address['state']);
+    if (address['country'] != null) parts.add(address['country']);
+    return parts.join(', ');
+  }
+  
+  /// * Select a search result and move map to it
+  void _selectSearchResult(Map<String, dynamic> result) {
+    try {
+      final lat = double.parse(result['lat'].toString());
+      final lon = double.parse(result['lon'].toString());
+      final location = LatLng(lat, lon);
+      
+      // * Move map to location
+      _mapController.move(location, 15.0);
+      
+      // * Close search results
+      setState(() {
+        _showSearchResults = false;
+        _searchFocusNode.unfocus();
+      });
+      
+      // * Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Navigated to: ${result['display_name'] ?? 'Location'}"),
+            backgroundColor: AppTheme.successColor,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("❌ [MapScreen] Error selecting search result: $e");
+    }
   }
   
   Future<void> _loadCurrentLocation() async {
@@ -474,10 +588,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   }
                 },
                 onTap: (tapPosition, point) {
-                  // * Close detail sheet if tapping map
+                  // * Close detail sheet and search results if tapping map
                   if (mounted) {
                     try {
-                      setState(() => _selectedHazard = null);
+                      setState(() {
+                        _selectedHazard = null;
+                        _showSearchResults = false;
+                        _searchFocusNode.unfocus();
+                      });
                     } catch (e) {
                       debugPrint("Error in onTap: $e");
                     }
@@ -609,69 +727,173 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   ),
                   boxShadow: AppTheme.shadowLarge,
                 ),
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: "Search location...",
-                    prefixIcon: Icon(
-                      Icons.search,
-                      color: AppTheme.textSecondary,
-                    ),
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppTheme.spacingSM,
-                            vertical: AppTheme.spacingXS,
-                          ),
-                          margin: const EdgeInsets.only(right: AppTheme.spacingSM),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(AppTheme.radiusSM),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.warning_amber_rounded,
-                                size: 16,
-                                color: AppTheme.warningColor,
-                              ),
-                              const SizedBox(width: AppTheme.spacingXS),
-                              Text(
-                                "${hazards.length}",
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppTheme.textPrimary,
-                                  fontWeight: FontWeight.w700,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      decoration: InputDecoration(
+                        hintText: "Search location...",
+                        prefixIcon: _isSearching
+                            ? SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12.0),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppTheme.primaryColor,
+                                  ),
                                 ),
+                              )
+                            : Icon(
+                                Icons.search,
+                                color: AppTheme.textSecondary,
                               ),
-                            ],
-                          ),
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_searchController.text.isNotEmpty)
+                              IconButton(
+                                icon: Icon(
+                                  Icons.clear,
+                                  color: AppTheme.textSecondary,
+                                ),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchResults = [];
+                                    _showSearchResults = false;
+                                  });
+                                },
+                                tooltip: "Clear",
+                              ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppTheme.spacingSM,
+                                vertical: AppTheme.spacingXS,
+                              ),
+                              margin: const EdgeInsets.only(right: AppTheme.spacingSM),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(AppTheme.radiusSM),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 16,
+                                    color: AppTheme.warningColor,
+                                  ),
+                                  const SizedBox(width: AppTheme.spacingXS),
+                                  Text(
+                                    "${hazards.length}",
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: AppTheme.textPrimary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                Icons.filter_list,
+                                color: AppTheme.textSecondary,
+                              ),
+                              onPressed: () {
+                                // * TODO: Add filter functionality
+                              },
+                              tooltip: "Filter hazards",
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.filter_list,
-                            color: AppTheme.textSecondary,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.spacingMD,
+                          vertical: AppTheme.spacingMD,
+                        ),
+                      ),
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppTheme.textPrimary,
+                      ),
+                      onChanged: (value) {
+                        // * Debounce search
+                        Future.delayed(const Duration(milliseconds: 500), () {
+                          if (_searchController.text == value && value.isNotEmpty) {
+                            _searchLocation(value);
+                          }
+                        });
+                      },
+                      onSubmitted: (value) {
+                        if (value.trim().isNotEmpty) {
+                          _searchLocation(value);
+                        }
+                      },
+                      onTap: () {
+                        if (_searchResults.isNotEmpty) {
+                          setState(() {
+                            _showSearchResults = true;
+                          });
+                        }
+                      },
+                    ),
+                    // * Search Results Dropdown
+                    if (_showSearchResults && _searchResults.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(top: AppTheme.spacingXS),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceColor,
+                          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                          border: Border.all(
+                            color: AppTheme.borderColor,
+                            width: 1.5,
                           ),
-                          onPressed: () {
-                            // * TODO: Add filter functionality
+                          boxShadow: AppTheme.shadowLarge,
+                        ),
+                        constraints: const BoxConstraints(maxHeight: 300),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: _searchResults.length,
+                          separatorBuilder: (context, index) => Divider(
+                            height: 1,
+                            color: AppTheme.borderColor,
+                          ),
+                          itemBuilder: (context, index) {
+                            final result = _searchResults[index];
+                            return ListTile(
+                              leading: Icon(
+                                Icons.location_on,
+                                color: AppTheme.primaryColor,
+                              ),
+                              title: Text(
+                                result['display_name'] ?? 'Unknown location',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: AppTheme.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: result['address'] != null
+                                  ? Text(
+                                      _formatAddress(result['address'] as Map<String, dynamic>),
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    )
+                                  : null,
+                              onTap: () => _selectSearchResult(result),
+                              dense: true,
+                            );
                           },
-                          tooltip: "Filter hazards",
                         ),
-                      ],
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: AppTheme.spacingMD,
-                      vertical: AppTheme.spacingMD,
-                    ),
-                  ),
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppTheme.textPrimary,
-                  ),
-                  onSubmitted: (value) {
-                    // * TODO: Implement search functionality
-                  },
+                      ),
+                  ],
                 ),
               ),
             ),

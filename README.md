@@ -1,4 +1,4 @@
-# smartroad
+# SmartRoad
 
 A Flutter mobile application for reporting and viewing road hazards in real-time, built with Supabase backend.
 
@@ -26,7 +26,7 @@ A Flutter mobile application for reporting and viewing road hazards in real-time
 
 ```bash
 git clone <repository-url>
-cd smartroad
+cd SmartRoad
 flutter pub get
 ```
 

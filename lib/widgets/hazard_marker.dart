@@ -44,13 +44,24 @@ class HazardMarker extends StatelessWidget {
     final icon = _getIconForType(hazard.type);
     
     return Container(
+      width: 40,
+      height: 40,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2),
+        border: Border.all(
+          color: Colors.white,
+          width: 3,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: color.withOpacity(0.4),
+            blurRadius: 8,
+            spreadRadius: 1,
+            offset: const Offset(0, 2),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -59,7 +70,7 @@ class HazardMarker extends StatelessWidget {
       child: Icon(
         icon,
         color: Colors.white,
-        size: 24,
+        size: 22,
       ),
     );
   }

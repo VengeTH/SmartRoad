@@ -48,3 +48,5 @@ Your `.env` file was previously committed to git, which may have exposed your Su
 - ✅ `.env` removed from git tracking
 - ⚠️ **ACTION REQUIRED**: Rotate Supabase keys if repo is public or shared
 
+
+

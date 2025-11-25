@@ -5,7 +5,6 @@ import "dart:io";
 import "../../models/hazard.dart";
 import "../../services/supabase_service.dart";
 import "../../services/location_service.dart";
-import "../../providers/location_provider.dart";
 import "../../core/constants/app_constants.dart";
 import "../../core/theme/app_theme.dart";
 
@@ -137,63 +136,129 @@ class _ReportHazardScreenState extends ConsumerState<ReportHazardScreen> {
   
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text("Report Hazard"),
+        elevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppTheme.spacingXL),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // * Hazard Type Selection
-              const Text(
-                "Hazard Type",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              // * Header Section
+              Container(
+                padding: const EdgeInsets.all(AppTheme.spacingLG),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                  border: Border.all(
+                    color: AppTheme.primaryColor.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: AppTheme.warningColor,
+                      size: 32,
+                    ),
+                    const SizedBox(width: AppTheme.spacingMD),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Report a Road Hazard",
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Help keep roads safe for everyone",
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppTheme.spacingXL),
+              // * Hazard Type Selection
+              Text(
+                "Hazard Type",
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacingMD),
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: AppTheme.spacingSM,
+                runSpacing: AppTheme.spacingSM,
                 children: HazardType.values.map((type) {
-                  return ChoiceChip(
+                  return FilterChip(
                     label: Text(type.value),
                     selected: _selectedType == type,
                     onSelected: (selected) {
                       setState(() => _selectedType = selected ? type : null);
                     },
+                    selectedColor: AppTheme.primaryColor.withOpacity(0.2),
+                    checkmarkColor: AppTheme.primaryColor,
                   );
                 }).toList(),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppTheme.spacingXL),
               // * Severity Selection
-              const Text(
-                "Severity",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              Text(
+                "Severity Level",
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppTheme.spacingMD),
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: AppTheme.spacingSM,
+                runSpacing: AppTheme.spacingSM,
                 children: SeverityLevel.values.map((severity) {
-                  return ChoiceChip(
+                  Color severityColor;
+                  switch (severity) {
+                    case SeverityLevel.low:
+                      severityColor = AppTheme.successColor;
+                      break;
+                    case SeverityLevel.medium:
+                      severityColor = AppTheme.warningColor;
+                      break;
+                    case SeverityLevel.high:
+                      severityColor = AppTheme.errorColor;
+                      break;
+                  }
+                  
+                  return FilterChip(
                     label: Text(severity.value),
                     selected: _selectedSeverity == severity,
                     onSelected: (selected) {
                       setState(() => _selectedSeverity = selected ? severity : null);
                     },
+                    selectedColor: severityColor.withOpacity(0.2),
+                    checkmarkColor: severityColor,
                   );
                 }).toList(),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppTheme.spacingXL),
               // * Description
               TextFormField(
                 controller: _descriptionController,
+                style: const TextStyle(color: AppTheme.textPrimary),
                 decoration: const InputDecoration(
                   labelText: "Description",
-                  hintText: "Describe the hazard in detail",
+                  hintText: "Describe the hazard in detail (location, size, impact, etc.)",
+                  prefixIcon: Icon(Icons.description_outlined, color: AppTheme.textSecondary),
                 ),
                 maxLines: 5,
                 validator: (value) {
@@ -206,45 +271,71 @@ class _ReportHazardScreenState extends ConsumerState<ReportHazardScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppTheme.spacingXL),
               // * Image Picker
               if (_selectedImage != null)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.file(
-                        _selectedImage!,
-                        height: 200,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                      child: Stack(
+                        children: [
+                          Image.file(
+                            _selectedImage!,
+                            height: 200,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                          Positioned(
+                            top: AppTheme.spacingSM,
+                            right: AppTheme.spacingSM,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.5),
+                                shape: BoxShape.circle,
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.close, color: Colors.white),
+                                onPressed: () => setState(() => _selectedImage = null),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () => setState(() => _selectedImage = null),
-                      child: const Text("Remove Image"),
                     ),
                   ],
                 )
               else
                 OutlinedButton.icon(
                   onPressed: _pickImage,
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text("Add Photo"),
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  label: const Text("Add Photo (Optional)"),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
+                  ),
                 ),
-              const SizedBox(height: 32),
+              const SizedBox(height: AppTheme.spacingXXL),
               // * Submit Button
-              ElevatedButton(
-                onPressed: _isLoading ? null : _submitReport,
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text("Submit Report"),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isLoading ? null : _submitReport,
+                  icon: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.send_rounded),
+                  label: Text(_isLoading ? "Submitting..." : "Submit Report"),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
+                  ),
+                ),
               ),
             ],
           ),

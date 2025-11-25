@@ -5,6 +5,7 @@ import "dart:io";
 import "../../providers/auth_provider.dart";
 import "../../services/supabase_service.dart";
 import "../../models/user_profile.dart";
+import "../../core/theme/app_theme.dart";
 import "../auth/login_screen.dart";
 
 /// * Profile screen
@@ -146,34 +147,58 @@ class _ProfileContentState extends State<_ProfileContent> {
   
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppTheme.spacingXL),
       child: Column(
         children: [
-          const SizedBox(height: 24),
-          // * Profile Photo
+          const SizedBox(height: AppTheme.spacingMD),
+          // * Profile Photo Section
           Stack(
             children: [
-              CircleAvatar(
-                radius: 60,
-                backgroundImage: _selectedImage != null
-                    ? FileImage(_selectedImage!)
-                    : widget.profile.photoUrl != null
-                        ? NetworkImage(widget.profile.photoUrl!)
-                        : null,
-                onBackgroundImageError: (exception, stackTrace) {
-                  // * Handle image load error
-                },
-                child: widget.profile.photoUrl == null && _selectedImage == null
-                    ? const Icon(Icons.person, size: 60)
-                    : null,
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppTheme.primaryColor,
+                    width: 3,
+                  ),
+                  boxShadow: AppTheme.shadowMedium,
+                ),
+                child: CircleAvatar(
+                  radius: 64,
+                  backgroundColor: AppTheme.surfaceVariant,
+                  backgroundImage: _selectedImage != null
+                      ? FileImage(_selectedImage!)
+                      : widget.profile.photoUrl != null
+                          ? NetworkImage(widget.profile.photoUrl!)
+                          : null,
+                  onBackgroundImageError: (exception, stackTrace) {
+                    // * Handle image load error
+                  },
+                  child: widget.profile.photoUrl == null && _selectedImage == null
+                      ? Icon(
+                          Icons.person,
+                          size: 64,
+                          color: AppTheme.textSecondary,
+                        )
+                      : null,
+                ),
               ),
               Positioned(
                 bottom: 0,
                 right: 0,
-                child: CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Theme.of(context).primaryColor,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppTheme.backgroundColor,
+                      width: 3,
+                    ),
+                    boxShadow: AppTheme.shadowSmall,
+                  ),
                   child: IconButton(
                     icon: const Icon(Icons.camera_alt, size: 20),
                     onPressed: _pickImage,
@@ -183,55 +208,111 @@ class _ProfileContentState extends State<_ProfileContent> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppTheme.spacingXL),
           // * Name Field
           TextField(
             controller: _nameController,
+            style: const TextStyle(color: AppTheme.textPrimary),
             decoration: const InputDecoration(
-              labelText: "Name",
-              prefixIcon: Icon(Icons.person),
+              labelText: "Full Name",
+              prefixIcon: Icon(Icons.person_outline, color: AppTheme.textSecondary),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppTheme.spacingMD),
           // * Email (read-only)
           TextField(
             controller: _emailController,
+            style: const TextStyle(color: AppTheme.textSecondary),
             decoration: const InputDecoration(
               labelText: "Email",
-              prefixIcon: Icon(Icons.email),
+              prefixIcon: Icon(Icons.email_outlined, color: AppTheme.textSecondary),
             ),
             readOnly: true,
             enabled: false,
           ),
-          const SizedBox(height: 16),
-          // * Reporter Level
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.star),
-              title: const Text("Reporter Level"),
-              subtitle: Text(widget.profile.reporterLevel.value),
-            ),
+          const SizedBox(height: AppTheme.spacingLG),
+          // * Stats Cards
+          Row(
+            children: [
+              Expanded(
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingMD),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.star_rounded,
+                          color: AppTheme.warningColor,
+                          size: 32,
+                        ),
+                        const SizedBox(height: AppTheme.spacingSM),
+                        Text(
+                          widget.profile.reporterLevel.value,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Reporter Level",
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppTheme.spacingMD),
+              Expanded(
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingMD),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.check_circle_rounded,
+                          color: AppTheme.successColor,
+                          size: 32,
+                        ),
+                        const SizedBox(height: AppTheme.spacingSM),
+                        Text(
+                          "${widget.profile.validReportsCount}",
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Valid Reports",
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          // * Valid Reports Count
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.check_circle),
-              title: const Text("Valid Reports"),
-              subtitle: Text("${widget.profile.validReportsCount} reports"),
-            ),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppTheme.spacingXL),
           // * Update Button
-          ElevatedButton(
-            onPressed: _isUpdating ? null : _updateProfile,
-            child: _isUpdating
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text("Update Profile"),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isUpdating ? null : _updateProfile,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
+              ),
+              child: _isUpdating
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Text("Update Profile"),
+            ),
           ),
         ],
       ),

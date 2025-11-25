@@ -26,24 +26,47 @@ class LocationService {
       // * Check if permission is granted
       final hasPermission = await isPermissionGranted();
       if (!hasPermission) {
+        print("📍 [LocationService] Permission not granted, requesting...");
         final granted = await requestPermission();
         if (!granted) {
+          print("📍 [LocationService] Permission denied by user");
           return null;
         }
+        print("📍 [LocationService] Permission granted");
       }
       
       // * Check if location services are enabled
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
+        print("📍 [LocationService] Location services not enabled");
         return null;
       }
       
-      // * Get current position
-      return await Geolocator.getCurrentPosition(
+      print("📍 [LocationService] Getting current position...");
+      // * Get current position with better error handling
+      final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
+        timeLimit: const Duration(seconds: 15),
       );
-    } catch (e) {
+      
+      print("📍 [LocationService] Position obtained: ${position.latitude}, ${position.longitude}");
+      return position;
+    } catch (e, stackTrace) {
+      print("❌ [LocationService] Error getting position: $e");
+      print("❌ [LocationService] Stack: $stackTrace");
+      
+      // * Try to get last known position as fallback
+      try {
+        print("📍 [LocationService] Trying last known position...");
+        final lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null) {
+          print("📍 [LocationService] Using last known position: ${lastKnown.latitude}, ${lastKnown.longitude}");
+          return lastKnown;
+        }
+      } catch (e2) {
+        print("❌ [LocationService] Error getting last known position: $e2");
+      }
+      
       return null;
     }
   }

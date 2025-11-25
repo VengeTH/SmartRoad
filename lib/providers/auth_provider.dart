@@ -2,10 +2,26 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 import "../services/supabase_service.dart";
 import "../models/user_profile.dart";
+import "dart:async";
 
 /// * Auth state provider
 final authStateProvider = StreamProvider<User?>((ref) {
-  return SupabaseService().client.auth.onAuthStateChange.map((event) => event.session?.user);
+  final service = SupabaseService();
+  
+  // * ALWAYS check demo mode first - never access Supabase if in demo mode
+  if (service.isDemoMode) {
+    return Stream.value(service.currentUser);
+  }
+  
+  // * Get client - it will return null if not initialized
+  final client = service.client;
+  if (client == null) {
+    // * Supabase not initialized, return null (user not logged in)
+    return Stream.value(null);
+  }
+  
+  // * Only access Supabase auth if we have a valid client
+  return client.auth.onAuthStateChange.map((event) => event.session?.user);
 });
 
 /// * Current user ID provider

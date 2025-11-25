@@ -29,105 +29,196 @@ class HazardDetailSheet extends StatelessWidget {
     }
   }
   
+  Color _getSeverityColor(SeverityLevel severity) {
+    switch (severity) {
+      case SeverityLevel.low:
+        return AppTheme.successColor;
+      case SeverityLevel.medium:
+        return AppTheme.warningColor;
+      case SeverityLevel.high:
+        return AppTheme.errorColor;
+    }
+  }
+  
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final severityColor = _getSeverityColor(hazard.severity);
+    
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusXL),
+        ),
+        boxShadow: AppTheme.shadowLarge,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // * Handle bar
           Container(
-            margin: const EdgeInsets.only(top: 12),
+            margin: const EdgeInsets.only(top: AppTheme.spacingMD),
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey,
+              color: AppTheme.textTertiary,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           // * Content
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppTheme.spacingLG),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // * Header
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    Container(
+                      padding: const EdgeInsets.all(AppTheme.spacingSM),
+                      decoration: BoxDecoration(
+                        color: severityColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                      ),
+                      child: Icon(
+                        Icons.warning_amber_rounded,
+                        color: severityColor,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: AppTheme.spacingMD),
                     Expanded(
-                      child: Text(
-                        hazard.type.value.toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            hazard.type.value.toUpperCase(),
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _formatTimeAgo(hazard.createdAt),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close),
+                      icon: const Icon(Icons.close_rounded),
                       onPressed: onClose,
+                      color: AppTheme.textSecondary,
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppTheme.spacingMD),
+                // * Description
                 Text(
                   hazard.description,
-                  style: const TextStyle(fontSize: 16),
+                  style: theme.textTheme.bodyLarge,
                 ),
-                const SizedBox(height: 16),
-                Row(
+                const SizedBox(height: AppTheme.spacingMD),
+                // * Metadata
+                Wrap(
+                  spacing: AppTheme.spacingSM,
+                  runSpacing: AppTheme.spacingSM,
                   children: [
-                    Chip(
-                      label: Text(hazard.severity.value),
-                      backgroundColor: hazard.severity == SeverityLevel.high
-                          ? Colors.red.withOpacity(0.2)
-                          : hazard.severity == SeverityLevel.medium
-                              ? Colors.orange.withOpacity(0.2)
-                              : Colors.green.withOpacity(0.2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.spacingMD,
+                        vertical: AppTheme.spacingSM,
+                      ),
+                      decoration: BoxDecoration(
+                        color: severityColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.priority_high_rounded,
+                            size: 16,
+                            color: severityColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            hazard.severity.value,
+                            style: TextStyle(
+                              color: severityColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 8),
                     if (hazard.userName != null)
-                      Text(
-                        "by ${hazard.userName}",
-                        style: const TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 14,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.spacingMD,
+                          vertical: AppTheme.spacingSM,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceVariant,
+                          borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.person_outline,
+                              size: 16,
+                              color: AppTheme.textSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              hazard.userName!,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
                         ),
                       ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  _formatTimeAgo(hazard.createdAt),
-                  style: const TextStyle(
-                    color: AppTheme.textTertiary,
-                    fontSize: 12,
-                  ),
-                ),
+                // * Image
                 if (hazard.imageUrl != null) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppTheme.spacingLG),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusLG),
                     child: Image.network(
                       hazard.imageUrl!,
                       width: double.infinity,
                       height: 200,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
-                        return const SizedBox(
+                        return Container(
                           height: 200,
+                          color: AppTheme.surfaceVariant,
                           child: Center(
-                            child: Icon(Icons.broken_image),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.broken_image,
+                                  size: 48,
+                                  color: AppTheme.textTertiary,
+                                ),
+                                const SizedBox(height: AppTheme.spacingSM),
+                                Text(
+                                  "Failed to load image",
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
                           ),
                         );
                       },
                     ),
                   ),
                 ],
+                const SizedBox(height: AppTheme.spacingMD),
               ],
             ),
           ),

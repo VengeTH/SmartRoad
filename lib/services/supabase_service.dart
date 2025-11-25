@@ -5,32 +5,98 @@ import "../models/hazard.dart";
 import "../models/user_profile.dart";
 import "../core/config/env.dart";
 import "../core/constants/app_constants.dart";
+import "demo_service.dart";
 
 /// * Supabase service for database operations
+/// * Falls back to demo mode if Supabase is not configured
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
   factory SupabaseService() => _instance;
-  SupabaseService._internal();
-  
-  SupabaseClient get client => Supabase.instance.client;
-  
-  /// * Initialize Supabase
-  Future<void> initialize() async {
+  SupabaseService._internal() {
+    // * Check immediately if we should use demo mode
     if (!Env.validate()) {
-      throw Exception("Missing required environment variables");
+      _isDemoMode = true;
+      _demoService.enableDemoMode();
+    }
+  }
+  
+  bool _isDemoMode = false;
+  bool _supabaseInitialized = false;
+  final _demoService = DemoService();
+  
+  SupabaseClient? get client {
+    // * Never access Supabase.instance if in demo mode
+    if (_isDemoMode) {
+      return null;
     }
     
-    await Supabase.initialize(
-      url: Env.supabaseUrl,
-      anonKey: Env.supabaseAnonKey,
-    );
+    // * Only access Supabase if we've successfully initialized it
+    if (!_supabaseInitialized) {
+      return null;
+    }
+    
+    // * At this point, we know Supabase is initialized, so it's safe to access
+    return Supabase.instance.client;
   }
+  
+  /// * Enable demo mode manually
+  void enableDemoMode() {
+    _isDemoMode = true;
+    _demoService.enableDemoMode();
+  }
+  
+  /// * Initialize Supabase or enable demo mode
+  Future<void> initialize() async {
+    // * If already in demo mode, don't try to initialize Supabase
+    if (_isDemoMode) {
+      return;
+    }
+    
+    if (!Env.validate()) {
+      // * Enable demo mode if Supabase is not configured
+      enableDemoMode();
+      return;
+    }
+    
+    try {
+      await Supabase.initialize(
+        url: Env.supabaseUrl,
+        anonKey: Env.supabaseAnonKey,
+      );
+      _supabaseInitialized = true;
+      _isDemoMode = false;
+    } catch (e) {
+      // * Fall back to demo mode on initialization error
+      enableDemoMode();
+    }
+  }
+  
+  /// * Check if in demo mode
+  bool get isDemoMode => _isDemoMode;
   
   // * Authentication Methods
   
   /// * Sign up with email and password
   Future<AuthResponse> signUp(String email, String password, String name) async {
-    final response = await client.auth.signUp(
+    if (_isDemoMode) {
+      final success = await _demoService.signUp(email, password, name);
+      if (!success) {
+        throw Exception("Demo signup failed");
+      }
+      // * Return mock AuthResponse
+      return AuthResponse(
+        session: null,
+        user: User(
+          id: DemoService.demoUserId,
+          appMetadata: {},
+          userMetadata: {'name': name},
+          aud: 'authenticated',
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+    }
+    
+    final response = await client!.auth.signUp(
       email: email,
       password: password,
       data: {'name': name},
@@ -40,7 +106,25 @@ class SupabaseService {
   
   /// * Sign in with email and password
   Future<AuthResponse> signIn(String email, String password) async {
-    return await client.auth.signInWithPassword(
+    if (_isDemoMode) {
+      final success = await _demoService.signIn(email, password);
+      if (!success) {
+        throw Exception("Invalid email or password");
+      }
+      // * Return mock AuthResponse
+      return AuthResponse(
+        session: null,
+        user: User(
+          id: DemoService.demoUserId,
+          appMetadata: {},
+          userMetadata: {'name': DemoService.demoUserName},
+          aud: 'authenticated',
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
+    }
+    
+    return await client!.auth.signInWithPassword(
       email: email,
       password: password,
     );
@@ -48,23 +132,56 @@ class SupabaseService {
   
   /// * Sign out
   Future<void> signOut() async {
-    await client.auth.signOut();
+    if (_isDemoMode) {
+      await _demoService.signOut();
+      return;
+    }
+    
+    await client!.auth.signOut();
   }
   
   /// * Get current user
-  User? get currentUser => client.auth.currentUser;
+  User? get currentUser {
+    if (_isDemoMode) {
+      if (_demoService.isAuthenticated) {
+        return User(
+          id: DemoService.demoUserId,
+          appMetadata: {},
+          userMetadata: {'name': DemoService.demoUserName},
+          aud: 'authenticated',
+          createdAt: DateTime.now().toIso8601String(),
+        );
+      }
+      return null;
+    }
+    return client?.auth.currentUser;
+  }
   
   /// * Get current user ID
-  String? get currentUserId => client.auth.currentUser?.id;
+  String? get currentUserId {
+    if (_isDemoMode) {
+      return _demoService.currentUserId;
+    }
+    return client?.auth.currentUser?.id;
+  }
   
   /// * Check if user is authenticated
-  bool get isAuthenticated => currentUser != null;
+  bool get isAuthenticated {
+    if (_isDemoMode) {
+      return _demoService.isAuthenticated;
+    }
+    return client?.auth.currentUser != null;
+  }
   
   // * Profile Methods
   
   /// * Get user profile
   Future<UserProfile?> getProfile(String userId) async {
-    final response = await client
+    if (_isDemoMode) {
+      return _demoService.demoUser;
+    }
+    
+    final response = await client!
         .from('profiles')
         .select()
         .eq('id', userId)
@@ -76,7 +193,12 @@ class SupabaseService {
   
   /// * Update user profile
   Future<void> updateProfile(String userId, Map<String, dynamic> updates) async {
-    await client
+    if (_isDemoMode) {
+      await _demoService.updateDemoProfile(updates);
+      return;
+    }
+    
+    await client!
         .from('profiles')
         .update(updates)
         .eq('id', userId);
@@ -89,7 +211,12 @@ class SupabaseService {
     int limit = AppConstants.feedPageSize,
     int offset = 0,
   }) async {
-    final response = await client
+    if (_isDemoMode) {
+      final allHazards = _demoService.getDemoHazards();
+      return allHazards.skip(offset).take(limit).toList();
+    }
+    
+    final response = await client!
         .from('hazards')
         .select('''
           *,
@@ -126,6 +253,10 @@ class SupabaseService {
     double maxLat,
     double maxLon,
   ) async {
+    if (_isDemoMode) {
+      return _demoService.getDemoHazardsInBounds(minLat, minLon, maxLat, maxLon);
+    }
+    
     // * Fetch all hazards (limited) and filter client-side
     // * In production, use PostGIS RPC function
     final allHazards = await getHazards(limit: AppConstants.maxMapMarkers);
@@ -152,6 +283,17 @@ class SupabaseService {
       throw Exception("User must be authenticated to create hazards");
     }
     
+    if (_isDemoMode) {
+      return await _demoService.createDemoHazard(
+        type: type,
+        description: description,
+        severity: severity,
+        latitude: latitude,
+        longitude: longitude,
+        imageUrl: imageUrl,
+      );
+    }
+    
     final hazardData = {
       'type': type.value,
       'description': description.trim(),
@@ -161,7 +303,7 @@ class SupabaseService {
       if (stickerFlag != null) 'sticker_flag': stickerFlag,
     };
     
-    final response = await client
+    final response = await client!
         .from('hazards')
         .insert(hazardData)
         .select()
@@ -171,12 +313,17 @@ class SupabaseService {
   }
   
   /// * Subscribe to realtime hazards updates
-  RealtimeChannel subscribeToHazards({
+  RealtimeChannel? subscribeToHazards({
     required Function(Map<String, dynamic>) onInsert,
     required Function(Map<String, dynamic>) onUpdate,
     required Function(Map<String, dynamic>) onDelete,
   }) {
-    final channel = client.channel('hazards_channel');
+    if (_isDemoMode) {
+      // * Demo mode doesn't support realtime updates
+      return null;
+    }
+    
+    final channel = client!.channel('hazards_channel');
     
     channel
         .onPostgresChanges(
@@ -206,14 +353,19 @@ class SupabaseService {
   
   /// * Upload image to Supabase Storage
   Future<String> uploadImage(File file, String fileName) async {
+    if (_isDemoMode) {
+      // * In demo mode, return a placeholder URL
+      return "https://via.placeholder.com/400x300?text=Demo+Image";
+    }
+    
     final bytes = await file.readAsBytes();
     final uint8List = Uint8List.fromList(bytes);
-    await client.storage
+    await client!.storage
         .from(AppConstants.storageBucketName)
         .uploadBinary(fileName, uint8List);
     
     // * Get public URL
-    final url = client.storage
+    final url = client!.storage
         .from(AppConstants.storageBucketName)
         .getPublicUrl(fileName);
     
@@ -222,11 +374,16 @@ class SupabaseService {
   
   /// * Upload image file bytes
   Future<String> uploadImageBytes(Uint8List bytes, String fileName) async {
-    await client.storage
+    if (_isDemoMode) {
+      // * In demo mode, return a placeholder URL
+      return "https://via.placeholder.com/400x300?text=Demo+Image";
+    }
+    
+    await client!.storage
         .from(AppConstants.storageBucketName)
         .uploadBinary(fileName, bytes);
     
-    final url = client.storage
+    final url = client!.storage
         .from(AppConstants.storageBucketName)
         .getPublicUrl(fileName);
     

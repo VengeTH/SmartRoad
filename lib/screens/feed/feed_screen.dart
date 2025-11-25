@@ -1,8 +1,8 @@
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "package:intl/intl.dart";
 import "../../providers/hazards_provider.dart";
 import "../../models/hazard.dart";
+import "../../core/theme/app_theme.dart";
 import "../../widgets/hazard_marker.dart";
 import "../map/map_screen.dart";
 import "../../widgets/hazard_detail_sheet.dart";
@@ -51,6 +51,7 @@ class FeedScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hazardsAsync = ref.watch(hazardsProvider);
+    final theme = Theme.of(context);
     
     return Scaffold(
       appBar: AppBar(
@@ -59,105 +60,252 @@ class FeedScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.read(hazardsProvider.notifier).refresh(),
+            tooltip: "Refresh",
           ),
         ],
       ),
       body: hazardsAsync.when(
         data: (hazards) {
           if (hazards.isEmpty) {
-            return const Center(
-              child: Text("No hazards reported yet"),
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.map_outlined,
+                    size: 64,
+                    color: AppTheme.textTertiary,
+                  ),
+                  const SizedBox(height: AppTheme.spacingMD),
+                  Text(
+                    "No hazards reported yet",
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spacingSM),
+                  Text(
+                    "Be the first to report a road hazard",
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
             );
           }
           
           return RefreshIndicator(
             onRefresh: () => ref.read(hazardsProvider.notifier).refresh(),
+            color: AppTheme.primaryColor,
             child: ListView.builder(
+              padding: const EdgeInsets.all(AppTheme.spacingMD),
               itemCount: hazards.length,
               itemBuilder: (context, index) {
                 final hazard = hazards[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: ListTile(
-                    leading: SizedBox(
-                      width: 50,
-                      height: 50,
-                      child: HazardMarker(hazard: hazard),
-                    ),
-                    title: Text(
-                      hazard.type.value.toUpperCase(),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        Text(
-                          hazard.description.length > 100
-                              ? "${hazard.description.substring(0, 100)}..."
-                              : hazard.description,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Chip(
-                              label: Text(hazard.severity.value),
-                              padding: EdgeInsets.zero,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _formatTimeAgo(hazard.createdAt),
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    trailing: hazard.imageUrl != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(
-                              hazard.imageUrl!,
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return const SizedBox(
-                                  width: 60,
-                                  height: 60,
-                                  child: Icon(Icons.broken_image),
-                                );
-                              },
-                            ),
-                          )
-                        : null,
-                    onTap: () => _navigateToMapWithHazard(context, hazard),
-                  ),
+                return _HazardCard(
+                  hazard: hazard,
+                  onTap: () => _navigateToMapWithHazard(context, hazard),
+                  formatTimeAgo: _formatTimeAgo,
                 );
               },
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => Center(
+          child: CircularProgressIndicator(
+            color: AppTheme.primaryColor,
+          ),
+        ),
         error: (error, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Padding(
+            padding: const EdgeInsets.all(AppTheme.spacingXL),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: AppTheme.errorColor,
+                ),
+                const SizedBox(height: AppTheme.spacingMD),
+                Text(
+                  "Error loading hazards",
+                  style: theme.textTheme.titleLarge,
+                ),
+                const SizedBox(height: AppTheme.spacingSM),
+                Text(
+                  error.toString(),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppTheme.spacingLG),
+                ElevatedButton.icon(
+                  onPressed: () => ref.read(hazardsProvider.notifier).refresh(),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text("Retry"),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// * Beautiful hazard card widget
+class _HazardCard extends StatelessWidget {
+  final Hazard hazard;
+  final VoidCallback onTap;
+  final String Function(DateTime) formatTimeAgo;
+  
+  const _HazardCard({
+    required this.hazard,
+    required this.onTap,
+    required this.formatTimeAgo,
+  });
+  
+  Color _getSeverityColor(SeverityLevel severity) {
+    switch (severity) {
+      case SeverityLevel.low:
+        return AppTheme.successColor;
+      case SeverityLevel.medium:
+        return AppTheme.warningColor;
+      case SeverityLevel.high:
+        return AppTheme.errorColor;
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final severityColor = _getSeverityColor(hazard.severity);
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppTheme.spacingMD),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+        child: Padding(
+          padding: const EdgeInsets.all(AppTheme.spacingMD),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
-              const SizedBox(height: 16),
-              Text("Error loading hazards: $error"),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => ref.read(hazardsProvider.notifier).refresh(),
-                child: const Text("Retry"),
+              // * Hazard Icon
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: severityColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                ),
+                child: Center(
+                  child: HazardMarker(hazard: hazard),
+                ),
               ),
+              const SizedBox(width: AppTheme.spacingMD),
+              // * Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            hazard.type.value.toUpperCase(),
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppTheme.spacingSM,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: severityColor.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                          ),
+                          child: Text(
+                            hazard.severity.value,
+                            style: TextStyle(
+                              color: severityColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppTheme.spacingSM),
+                    Text(
+                      hazard.description.length > 100
+                          ? "${hazard.description.substring(0, 100)}..."
+                          : hazard.description,
+                      style: theme.textTheme.bodyMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: AppTheme.spacingSM),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          size: 14,
+                          color: AppTheme.textTertiary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          formatTimeAgo(hazard.createdAt),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        if (hazard.userName != null) ...[
+                          const SizedBox(width: AppTheme.spacingMD),
+                          Icon(
+                            Icons.person_outline,
+                            size: 14,
+                            color: AppTheme.textTertiary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            hazard.userName!,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // * Image Thumbnail
+              if (hazard.imageUrl != null) ...[
+                const SizedBox(width: AppTheme.spacingMD),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                  child: Image.network(
+                    hazard.imageUrl!,
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 64,
+                        height: 64,
+                        color: AppTheme.surfaceVariant,
+                        child: Icon(
+                          Icons.broken_image,
+                          color: AppTheme.textTertiary,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ],
           ),
         ),

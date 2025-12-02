@@ -53,8 +53,12 @@ class _ManageStickersScreenState extends ConsumerState<ManageStickersScreen> {
   }
   
   Widget _buildContent(List<HOA> hoas, List<Sticker> stickers) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.spacingXL),
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        scrollbars: false,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppTheme.spacingXL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -77,13 +81,25 @@ class _ManageStickersScreenState extends ConsumerState<ManageStickersScreen> {
           // * Add Physical Sticker Button
           ElevatedButton.icon(
             onPressed: () => _showAddPhysicalStickerDialog(hoas),
-            icon: const Icon(Icons.add_photo_alternate),
-            label: const Text("I have a physical sticker"),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(
-                vertical: AppTheme.spacingMD,
-                horizontal: AppTheme.spacingLG,
+            icon: const Icon(
+              Icons.add_photo_alternate,
+              size: 22,
+            ),
+            label: Text(
+              "I have a physical sticker",
+              style: TextStyle(
+                fontSize: AppTheme.isMobile(context) ? 16 : 17,
+                fontWeight: FontWeight.w600,
               ),
+            ),
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.symmetric(
+                vertical: AppTheme.isMobile(context) ? AppTheme.spacingMD : AppTheme.spacingLG,
+                horizontal: AppTheme.isMobile(context) ? AppTheme.spacingLG : AppTheme.spacingXL,
+              ),
+              minimumSize: Size(0, AppTheme.responsiveButtonHeight(context)),
+              elevation: 3,
+              shadowColor: AppTheme.primaryColor.withOpacity(0.4),
             ),
           ),
           const SizedBox(height: AppTheme.spacingXL),
@@ -102,6 +118,7 @@ class _ManageStickersScreenState extends ConsumerState<ManageStickersScreen> {
           else
             ...stickers.map((sticker) => _buildStickerCard(sticker)),
         ],
+      ),
       ),
     );
   }
@@ -296,17 +313,30 @@ class _ManageStickersScreenState extends ConsumerState<ManageStickersScreen> {
       return;
     }
     
+    final isMobile = AppTheme.isMobile(context);
     showDialog(
       context: context,
-      builder: (context) => _AddPhysicalStickerDialog(hoas: hoas),
+      builder: (context) => _AddPhysicalStickerDialog(
+        hoas: hoas,
+        isMobile: isMobile,
+        onStickerAdded: () {
+          setState(() {});
+        },
+      ),
     );
   }
 }
 
 class _AddPhysicalStickerDialog extends ConsumerStatefulWidget {
   final List<HOA> hoas;
+  final bool isMobile;
+  final VoidCallback onStickerAdded;
   
-  const _AddPhysicalStickerDialog({required this.hoas});
+  const _AddPhysicalStickerDialog({
+    required this.onStickerAdded,
+    required this.hoas,
+    required this.isMobile,
+  });
   
   @override
   ConsumerState<_AddPhysicalStickerDialog> createState() => _AddPhysicalStickerDialogState();
@@ -505,8 +535,12 @@ class _AddPhysicalStickerDialogState extends ConsumerState<_AddPhysicalStickerDi
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: AppTheme.backgroundColor,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppTheme.spacingXL),
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(
+          scrollbars: false,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppTheme.spacingXL),
         child: Form(
           key: _formKey,
           child: Column(
@@ -551,9 +585,13 @@ class _AddPhysicalStickerDialogState extends ConsumerState<_AddPhysicalStickerDi
               // * Sticker Number
               TextFormField(
                 controller: _stickerNumberController,
-                decoration: const InputDecoration(
+                style: const TextStyle(fontSize: 16),
+                decoration: InputDecoration(
                   labelText: "Sticker Number (Optional)",
-                  prefixIcon: Icon(Icons.confirmation_number),
+                  prefixIcon: const Icon(
+                    Icons.confirmation_number,
+                    size: 24,
+                  ),
                   hintText: "Enter your sticker number if available",
                 ),
               ),
@@ -569,25 +607,107 @@ class _AddPhysicalStickerDialogState extends ConsumerState<_AddPhysicalStickerDi
               const SizedBox(height: AppTheme.spacingSM),
               
               if (_selectedImage == null && _selectedImageBytes == null)
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _takePhoto,
-                        icon: const Icon(Icons.camera_alt),
-                        label: const Text("Take Photo"),
-                      ),
-                    ),
-                    const SizedBox(width: AppTheme.spacingMD),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _pickImage,
-                        icon: const Icon(Icons.photo_library),
-                        label: const Text("Choose from Gallery"),
-                      ),
-                    ),
-                  ],
-                )
+                widget.isMobile
+                    ? Column(
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _takePhoto,
+                              icon: Icon(
+                                Icons.camera_alt,
+                                size: widget.isMobile ? 20 : 22,
+                              ),
+                              label: Text(
+                                "Take Photo",
+                                style: TextStyle(
+                                  fontSize: widget.isMobile ? 14 : 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                padding: EdgeInsets.symmetric(
+                                  vertical: widget.isMobile ? AppTheme.spacingMD : AppTheme.spacingLG,
+                                ),
+                                minimumSize: Size(0, AppTheme.responsiveButtonHeight(context)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppTheme.spacingMD),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _pickImage,
+                              icon: Icon(
+                                Icons.photo_library,
+                                size: widget.isMobile ? 20 : 22,
+                              ),
+                              label: Text(
+                                "Choose from Gallery",
+                                style: TextStyle(
+                                  fontSize: widget.isMobile ? 14 : 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                padding: EdgeInsets.symmetric(
+                                  vertical: widget.isMobile ? AppTheme.spacingMD : AppTheme.spacingLG,
+                                ),
+                                minimumSize: Size(0, AppTheme.responsiveButtonHeight(context)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _takePhoto,
+                              icon: const Icon(
+                                Icons.camera_alt,
+                                size: 22,
+                              ),
+                              label: const Text(
+                                "Take Photo",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppTheme.spacingLG,
+                                ),
+                                minimumSize: Size(0, AppTheme.responsiveButtonHeight(context)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppTheme.spacingMD),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _pickImage,
+                              icon: const Icon(
+                                Icons.photo_library,
+                                size: 22,
+                              ),
+                              label: const Text(
+                                "Choose from Gallery",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppTheme.spacingLG,
+                                ),
+                                minimumSize: Size(0, AppTheme.responsiveButtonHeight(context)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
               else
                 Column(
                   children: [
@@ -628,54 +748,89 @@ class _AddPhysicalStickerDialogState extends ConsumerState<_AddPhysicalStickerDi
               // * Submit Button
               if (_isVerifying)
                 Container(
-                  padding: const EdgeInsets.all(AppTheme.spacingMD),
+                  padding: const EdgeInsets.all(AppTheme.spacingLG),
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceVariant,
                     borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                    border: Border.all(
+                      color: AppTheme.primaryColor.withOpacity(0.3),
+                      width: 1.5,
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                        ),
                       ),
                       const SizedBox(width: AppTheme.spacingMD),
                       Text(
                         "Verifying with AI...",
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
                 )
               else if (_isUploading)
                 Container(
-                  padding: const EdgeInsets.all(AppTheme.spacingMD),
+                  padding: const EdgeInsets.all(AppTheme.spacingLG),
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceVariant,
                     borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                    border: Border.all(
+                      color: AppTheme.primaryColor.withOpacity(0.3),
+                      width: 1.5,
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                        ),
                       ),
                       const SizedBox(width: AppTheme.spacingMD),
                       Text(
                         "Uploading sticker...",
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
                 )
               else
-                ElevatedButton(
-                  onPressed: _submit,
-                  child: const Text("Submit"),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _submit,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.spacingXL,
+                        vertical: AppTheme.spacingLG,
+                      ),
+                      elevation: 3,
+                      shadowColor: AppTheme.primaryColor.withOpacity(0.4),
+                    ),
+                    child: const Text(
+                      "Submit",
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
               
               const SizedBox(height: AppTheme.spacingMD),
@@ -686,6 +841,7 @@ class _AddPhysicalStickerDialogState extends ConsumerState<_AddPhysicalStickerDi
               ),
             ],
           ),
+        ),
         ),
       ),
     );

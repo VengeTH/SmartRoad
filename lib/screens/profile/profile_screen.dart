@@ -222,10 +222,20 @@ class _ProfileContentState extends State<_ProfileContent> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isMobile = AppTheme.isMobile(context);
+    final padding = AppTheme.responsivePadding(context);
+    final maxWidth = AppTheme.maxContentWidth(context);
     
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.spacingXL),
-      child: Column(
+    return Center(
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(
+          scrollbars: false,
+        ),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(padding),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: Column(
         children: [
           const SizedBox(height: AppTheme.spacingMD),
           // * Profile Photo Section
@@ -289,20 +299,34 @@ class _ProfileContentState extends State<_ProfileContent> {
           // * Name Field
           TextField(
             controller: _nameController,
-            style: const TextStyle(color: AppTheme.textPrimary),
-            decoration: const InputDecoration(
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 16,
+            ),
+            decoration: InputDecoration(
               labelText: "Full Name",
-              prefixIcon: Icon(Icons.person_outline, color: AppTheme.textSecondary),
+              prefixIcon: const Icon(
+                Icons.person_outline, 
+                color: AppTheme.textSecondary,
+                size: 24,
+              ),
             ),
           ),
           const SizedBox(height: AppTheme.spacingMD),
           // * Email (read-only)
           TextField(
             controller: _emailController,
-            style: const TextStyle(color: AppTheme.textSecondary),
-            decoration: const InputDecoration(
+            style: TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 16,
+            ),
+            decoration: InputDecoration(
               labelText: "Email",
-              prefixIcon: Icon(Icons.email_outlined, color: AppTheme.textSecondary),
+              prefixIcon: const Icon(
+                Icons.email_outlined, 
+                color: AppTheme.textSecondary,
+                size: 24,
+              ),
             ),
             readOnly: true,
             enabled: false,
@@ -554,23 +578,37 @@ class _ProfileContentState extends State<_ProfileContent> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-            onPressed: _isUpdating ? null : _updateProfile,
+              onPressed: _isUpdating ? null : _updateProfile,
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.spacingXL,
+                  vertical: AppTheme.spacingLG,
+                ),
+                elevation: 3,
+                shadowColor: AppTheme.primaryColor.withOpacity(0.4),
               ),
-            child: _isUpdating
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
+              child: _isUpdating
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
                       child: CircularProgressIndicator(
-                        strokeWidth: 2,
+                        strokeWidth: 2.5,
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
-                  )
-                : const Text("Update Profile"),
+                    )
+                  : Text(
+                      "Update Profile",
+                      style: TextStyle(
+                        fontSize: isMobile ? 16 : 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
             ),
           ),
-        ],
+            ],
+          ),
+        ),
+        ),
       ),
     );
   }

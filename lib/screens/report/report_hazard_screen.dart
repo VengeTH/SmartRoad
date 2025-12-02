@@ -137,19 +137,29 @@ class _ReportHazardScreenState extends ConsumerState<ReportHazardScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isMobile = AppTheme.isMobile(context);
+    final padding = AppTheme.responsivePadding(context);
+    final maxWidth = AppTheme.maxContentWidth(context);
     
     return Scaffold(
       appBar: AppBar(
         title: const Text("Report Hazard"),
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppTheme.spacingXL),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      body: Center(
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(
+            scrollbars: false,
+          ),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(padding),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               // * Header Section
               Container(
                 padding: const EdgeInsets.all(AppTheme.spacingLG),
@@ -199,19 +209,45 @@ class _ReportHazardScreenState extends ConsumerState<ReportHazardScreen> {
               ),
               const SizedBox(height: AppTheme.spacingMD),
               Wrap(
-                spacing: AppTheme.spacingSM,
-                runSpacing: AppTheme.spacingSM,
+                spacing: isMobile ? AppTheme.spacingSM : AppTheme.spacingMD,
+                runSpacing: isMobile ? AppTheme.spacingSM : AppTheme.spacingMD,
                 children: HazardType.values.map((type) {
                   // * Capitalize first letter for display
                   final displayName = type.value[0].toUpperCase() + type.value.substring(1);
+                  final isSelected = _selectedType == type;
                   return FilterChip(
-                    label: Text(displayName),
-                    selected: _selectedType == type,
+                    label: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 2 : 4,
+                      ),
+                      child: Text(
+                        displayName,
+                        style: TextStyle(
+                          fontSize: isMobile ? 14 : 15,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    selected: isSelected,
                     onSelected: (selected) {
                       setState(() => _selectedType = selected ? type : null);
                     },
-                    selectedColor: AppTheme.primaryColor.withOpacity(0.2),
+                    selectedColor: AppTheme.primaryColor.withOpacity(0.25),
                     checkmarkColor: AppTheme.primaryColor,
+                    backgroundColor: AppTheme.surfaceVariant,
+                    side: BorderSide(
+                      color: isSelected 
+                          ? AppTheme.primaryColor 
+                          : AppTheme.borderColor,
+                      width: isSelected ? 2.0 : 1.5,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    elevation: isSelected ? 2 : 0,
+                    pressElevation: 4,
                   );
                 }).toList(),
               ),
@@ -225,8 +261,8 @@ class _ReportHazardScreenState extends ConsumerState<ReportHazardScreen> {
               ),
               const SizedBox(height: AppTheme.spacingMD),
               Wrap(
-                spacing: AppTheme.spacingSM,
-                runSpacing: AppTheme.spacingSM,
+                spacing: isMobile ? AppTheme.spacingSM : AppTheme.spacingMD,
+                runSpacing: isMobile ? AppTheme.spacingSM : AppTheme.spacingMD,
                 children: SeverityLevel.values.map((severity) {
                   Color severityColor;
                   switch (severity) {
@@ -241,14 +277,40 @@ class _ReportHazardScreenState extends ConsumerState<ReportHazardScreen> {
                       break;
                   }
                   
+                  final isSelected = _selectedSeverity == severity;
                   return FilterChip(
-                    label: Text(severity.value),
-                    selected: _selectedSeverity == severity,
+                    label: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 2 : 4,
+                      ),
+                      child: Text(
+                        severity.value,
+                        style: TextStyle(
+                          fontSize: isMobile ? 14 : 15,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    selected: isSelected,
                     onSelected: (selected) {
                       setState(() => _selectedSeverity = selected ? severity : null);
                     },
-                    selectedColor: severityColor.withOpacity(0.2),
+                    selectedColor: severityColor.withOpacity(0.25),
                     checkmarkColor: severityColor,
+                    backgroundColor: AppTheme.surfaceVariant,
+                    side: BorderSide(
+                      color: isSelected 
+                          ? severityColor 
+                          : AppTheme.borderColor,
+                      width: isSelected ? 2.0 : 1.5,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    elevation: isSelected ? 2 : 0,
+                    pressElevation: 4,
                   );
                 }).toList(),
               ),
@@ -256,13 +318,23 @@ class _ReportHazardScreenState extends ConsumerState<ReportHazardScreen> {
               // * Description
               TextFormField(
                 controller: _descriptionController,
-                style: const TextStyle(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: isMobile ? 15 : 16,
+                  height: 1.5,
+                ),
+                decoration: InputDecoration(
                   labelText: "Description",
                   hintText: "Describe the hazard in detail (location, size, impact, etc.)",
-                  prefixIcon: Icon(Icons.description_outlined, color: AppTheme.textSecondary),
+                  prefixIcon: const Icon(
+                    Icons.description_outlined, 
+                    color: AppTheme.textSecondary,
+                    size: 24,
+                  ),
+                  alignLabelWithHint: true,
                 ),
-                maxLines: 5,
+                maxLines: 6,
+                minLines: 5,
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return "Please enter a description";
@@ -309,12 +381,21 @@ class _ReportHazardScreenState extends ConsumerState<ReportHazardScreen> {
                   ],
                 )
               else
-                OutlinedButton.icon(
-                  onPressed: _pickImage,
-                  icon: const Icon(Icons.camera_alt_outlined),
-                  label: const Text("Add Photo (Optional)"),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _pickImage,
+                    icon: const Icon(
+                      Icons.camera_alt_outlined,
+                      size: 22,
+                    ),
+                    label: const Text("Add Photo (Optional)"),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.spacingXL,
+                        vertical: AppTheme.spacingLG,
+                      ),
+                    ),
                   ),
                 ),
               const SizedBox(height: AppTheme.spacingXXL),
@@ -325,21 +406,39 @@ class _ReportHazardScreenState extends ConsumerState<ReportHazardScreen> {
                   onPressed: _isLoading ? null : _submitReport,
                   icon: _isLoading
                       ? const SizedBox(
-                          height: 20,
-                          width: 20,
+                          height: 22,
+                          width: 22,
                           child: CircularProgressIndicator(
-                            strokeWidth: 2,
+                            strokeWidth: 2.5,
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : const Icon(Icons.send_rounded),
-                  label: Text(_isLoading ? "Submitting..." : "Submit Report"),
+                      : const Icon(
+                          Icons.send_rounded,
+                          size: 22,
+                        ),
+                  label: Text(
+                    _isLoading ? "Submitting..." : "Submit Report",
+                    style: TextStyle(
+                      fontSize: isMobile ? 16 : 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? AppTheme.spacingLG : AppTheme.spacingXL,
+                      vertical: isMobile ? AppTheme.spacingMD : AppTheme.spacingLG,
+                    ),
+                    minimumSize: Size(0, AppTheme.responsiveButtonHeight(context)),
+                    elevation: 3,
+                    shadowColor: AppTheme.primaryColor.withOpacity(0.4),
                   ),
                 ),
               ),
-            ],
+                ],
+              ),
+            ),
+          ),
           ),
         ),
       ),

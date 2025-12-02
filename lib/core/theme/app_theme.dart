@@ -79,6 +79,63 @@ class AppTheme {
   static const Curve animationCurve = Curves.easeInOut;
   static const Curve animationCurveBounce = Curves.easeOutBack;
   
+  // * Responsive Breakpoints
+  static const double breakpointMobile = 600.0;
+  static const double breakpointTablet = 900.0;
+  static const double breakpointDesktop = 1200.0;
+  
+  // * Responsive Helpers
+  static bool isMobile(BuildContext context) {
+    return MediaQuery.of(context).size.width < breakpointMobile;
+  }
+  
+  static bool isTablet(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return width >= breakpointMobile && width < breakpointDesktop;
+  }
+  
+  static bool isDesktop(BuildContext context) {
+    return MediaQuery.of(context).size.width >= breakpointDesktop;
+  }
+  
+  static double responsivePadding(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < breakpointMobile) {
+      return spacingMD; // 16px for mobile
+    } else if (width < breakpointTablet) {
+      return spacingLG; // 24px for tablet
+    } else {
+      return spacingXL; // 32px for desktop
+    }
+  }
+  
+  static double responsiveButtonHeight(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < breakpointMobile) {
+      return 52.0; // Slightly smaller for mobile
+    } else {
+      return 56.0; // Standard size for tablet/desktop
+    }
+  }
+  
+  static double responsiveFontSize(BuildContext context, {required double mobile, required double desktop}) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < breakpointMobile) {
+      return mobile;
+    } else {
+      return desktop;
+    }
+  }
+  
+  static double maxContentWidth(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < breakpointDesktop) {
+      return double.infinity;
+    } else {
+      return 800.0; // Max width for forms on desktop
+    }
+  }
+  
   // * Hazard Type Colors
   static const Map<String, Color> hazardColors = {
     'pothole': Color(0xFFF59E0B), // Amber
@@ -117,24 +174,88 @@ class AppTheme {
         filled: true,
         fillColor: surfaceColor,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(radiusMD),
+          borderSide: BorderSide(
+            color: borderColor,
+            width: 1.5,
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMD),
+          borderSide: BorderSide(
+            color: borderColor,
+            width: 1.5,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMD),
+          borderSide: BorderSide(
+            color: primaryColor,
+            width: 2.0,
+          ),
         ),
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 16,
+          horizontal: 20,
+          vertical: 20,
+        ),
+        labelStyle: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
+          elevation: 2,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 32,
+            vertical: 20,
+          ),
+          minimumSize: const Size(120, 56),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radiusMD),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: textPrimary,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 32,
+            vertical: 20,
+          ),
+          minimumSize: const Size(120, 56),
+          side: BorderSide(
+            color: borderColor,
+            width: 1.5,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radiusMD),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: primaryColor,
           padding: const EdgeInsets.symmetric(
             horizontal: 24,
             vertical: 16,
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+          minimumSize: const Size(88, 48),
+          textStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),

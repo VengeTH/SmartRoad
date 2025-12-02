@@ -336,7 +336,7 @@ class _LocationOptionsSheet extends StatelessWidget {
                     child: Row(
                       children: [
                         Icon(
-                          Icons.location_on,
+                          Icons.place,
                           size: 16,
                           color: AppTheme.textSecondary,
                         ),
@@ -1691,7 +1691,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           boxShadow: AppTheme.shadowMedium,
                         ),
                       child: const Icon(
-                        Icons.my_location,
+                        Icons.navigation,
                           color: Colors.white,
                           size: 24,
                         ),
@@ -1761,7 +1761,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   const SizedBox(height: AppTheme.spacingMD),
                   // * Location Button
                   _MapControlButton(
-                    icon: Icons.my_location,
+                    icon: _isNavigating ? Icons.navigation : Icons.gps_fixed,
                     onPressed: _hasPreciseLocation
                         ? () {
                             // * Center on current location
@@ -1769,7 +1769,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           }
                         : _requestLocationPermission,
                     tooltip: _hasPreciseLocation
-                        ? "Center on my location"
+                        ? (_isNavigating ? "Center on my location" : "Center on my location")
                         : "Get my location",
                     backgroundColor: _hasPreciseLocation
                         ? AppTheme.primaryColor
@@ -1938,7 +1938,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             final result = _searchResults[index];
                             return ListTile(
                               leading: Icon(
-                                Icons.location_on,
+                                Icons.place,
                                 color: AppTheme.primaryColor,
                               ),
                               title: Text(

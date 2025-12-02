@@ -62,7 +62,7 @@ class HOAGateMarker extends StatelessWidget {
           ],
         ),
         child: Icon(
-          Icons.home_work, // * Gate/community icon
+          Icons.security, // * Gate/security icon
           color: Colors.white,
           size: 22,
         ),

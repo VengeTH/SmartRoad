@@ -224,8 +224,12 @@ class _GatePassScreenState extends ConsumerState<GatePassScreen> {
     
     final qrData = _currentGatePass!.toJsonString();
     
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.spacingXL),
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        scrollbars: false,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppTheme.spacingXL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -433,6 +437,7 @@ class _GatePassScreenState extends ConsumerState<GatePassScreen> {
           ),
         ],
       ),
+      ),
     );
   }
   
@@ -470,8 +475,12 @@ class _GatePassScreenState extends ConsumerState<GatePassScreen> {
   
   /// * Build view for physical stickers (no QR code)
   Widget _buildPhysicalStickerView(List<Sticker> activeStickers) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.spacingXL),
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        scrollbars: false,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppTheme.spacingXL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -694,6 +703,7 @@ class _GatePassScreenState extends ConsumerState<GatePassScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

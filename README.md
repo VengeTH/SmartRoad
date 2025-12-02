@@ -18,6 +18,16 @@ A Flutter mobile application for reporting and viewing road hazards in real-time
   - Guard scanner for QR code validation
   - HOA access type system (Strict vs. Open gates)
   - Color-coded gate markers on map (Red = Strict, Green = Open)
+- **Responsive Design**: Optimized for all screen sizes
+  - Mobile-first design with adaptive layouts
+  - Larger touch targets for better usability
+  - Responsive padding and spacing
+  - Content width constraints for desktop
+- **Modern UI/UX**: Enhanced visual design
+  - Improved button sizes and styling
+  - Better input field design with focus states
+  - Hidden scrollbars for cleaner appearance
+  - Updated icons for better navigation context
 
 ## Prerequisites
 
@@ -181,6 +191,19 @@ lib/
 - **Gate Markers**: Ensure HOAs have valid latitude/longitude coordinates
 - **QR Code Scanning**: Requires camera permissions on device
 - **AI Verification**: Check Gemini API key is valid and has quota remaining
+
+## UI/UX Features
+
+### Responsive Design
+- **Mobile (< 600px)**: Optimized layouts with stacked buttons, reduced padding
+- **Tablet (600-1200px)**: Balanced layouts with medium padding
+- **Desktop (≥ 1200px)**: Max-width content constraints, generous padding
+
+### Visual Improvements
+- **Buttons**: Minimum 52-56px height for better touch targets
+- **Inputs**: 20px vertical padding for improved usability
+- **Icons**: Updated location icons (navigation compass for navigation mode)
+- **Scrollbars**: Hidden for cleaner appearance while maintaining functionality
 
 ## Demo Script (30-60 seconds)
 

@@ -165,8 +165,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppTheme.spacingXL),
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              scrollbars: false,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppTheme.spacingXL),
             child: FadeTransition(
               opacity: _fadeAnimation,
               child: SlideTransition(
@@ -263,12 +267,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
                         focusNode: _emailFocusNode,
                         keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
-                        style: const TextStyle(color: AppTheme.textPrimary),
-                        decoration: const InputDecoration(
+                        style: TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 16,
+                        ),
+                        decoration: InputDecoration(
                           labelText: "Email",
-                          prefixIcon: Icon(
+                          prefixIcon: const Icon(
                             Icons.email_outlined,
                             color: AppTheme.textSecondary,
+                            size: 24,
                           ),
                         ),
                         onFieldSubmitted: (_) {
@@ -433,6 +441,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
               ),
             ),
           ),
+        ),
         ),
       ),
     );

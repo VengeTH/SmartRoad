@@ -4,6 +4,62 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
+## Version 2.3.2 - UI/UX Improvements & Responsive Design
+
+**Release Date:** 2025  
+**Focus:** Enhanced User Experience & Visual Design
+
+### UI/UX Improvements
+
+- **Larger Buttons & Inputs**: 
+  - Increased button heights (52px mobile, 56px desktop) for better touch targets
+  - Enhanced input field padding (20px vertical) for improved usability
+  - Better visual hierarchy with improved shadows and borders
+  - Font sizes scale appropriately (14-15px mobile, 16-17px desktop)
+
+- **Responsive Design**:
+  - Added responsive breakpoints (Mobile: <600px, Tablet: 600-1200px, Desktop: ≥1200px)
+  - Adaptive padding and spacing based on screen size
+  - Content max-width constraints for better readability on large screens
+  - Photo upload buttons stack vertically on mobile, side-by-side on desktop
+  - FilterChips and buttons adjust spacing and sizing responsively
+
+- **Visual Enhancements**:
+  - Improved input field borders with focus states
+  - Enhanced button shadows and elevation
+  - Better icon sizing (20-24px) for consistency
+  - Consistent spacing using 8px grid system
+
+- **Scrollbar Improvements**:
+  - Hidden scrollbars across all screens for cleaner appearance
+  - Scrolling functionality maintained without visual scrollbars
+  - Applied to Report Hazard, Profile, Manage Stickers, Login, Signup, and Gate Pass screens
+
+- **Icon Updates**:
+  - **Location Icons**: Updated to use `Icons.navigation` for navigation mode and `Icons.gps_fixed` for location button
+  - **Current Location Marker**: Changed to compass/navigation icon for better navigation context
+  - **Search Results**: Updated to `Icons.place` for cleaner appearance
+  - **HOA Gate Markers**: Changed to `Icons.security` for better representation of gates/security checkpoints
+
+### Technical Implementation
+
+- Added responsive helper methods to `AppTheme`:
+  - `isMobile()`, `isTablet()`, `isDesktop()` - Screen size detection
+  - `responsivePadding()` - Adaptive padding based on screen size
+  - `responsiveButtonHeight()` - Adaptive button heights
+  - `responsiveFontSize()` - Adaptive font sizing
+  - `maxContentWidth()` - Content width constraints
+
+- Wrapped all `SingleChildScrollView` widgets with `ScrollConfiguration` to hide scrollbars
+- Updated button themes with larger minimum sizes and improved styling
+- Enhanced input decoration themes with better borders and focus states
+
+### Breaking Changes
+
+- None (UI improvements only)
+
+---
+
 ## Version 2.3.1 - Branding Update
 
 **Release Date:** 2025  

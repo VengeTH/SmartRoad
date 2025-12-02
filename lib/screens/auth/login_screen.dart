@@ -213,8 +213,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         ),
         child: SafeArea(
           child: Center(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(
+                scrollbars: false,
+              ),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(
                 horizontal: isWide ? AppTheme.spacingXL : AppTheme.spacingLG,
                 vertical: AppTheme.spacingXL,
               ),
@@ -244,6 +248,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               ),
             ),
           ),
+        ),
         ),
       ),
     );
@@ -390,12 +395,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           focusNode: _emailFocusNode,
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
-                          style: const TextStyle(color: AppTheme.textPrimary),
+                          style: TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 16,
+                          ),
                           decoration: InputDecoration(
                             labelText: "Email",
                             prefixIcon: const Icon(
                               Icons.email_outlined,
                               color: AppTheme.textSecondary,
+                              size: 24,
                             ),
                             suffixIcon: _emailController.text.isNotEmpty
                                 ? IconButton(
@@ -432,7 +441,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           focusNode: _passwordFocusNode,
                           obscureText: _obscurePassword,
                           textInputAction: TextInputAction.done,
-                          style: const TextStyle(color: AppTheme.textPrimary),
+                          style: TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 16,
+                          ),
                           onFieldSubmitted: (_) {
                             if (!_isLoading) {
                               _handleLogin();
@@ -443,6 +455,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             prefixIcon: const Icon(
                               Icons.lock_outline,
                               color: AppTheme.textSecondary,
+                              size: 24,
                             ),
                             suffixIcon: IconButton(
                               icon: Icon(
@@ -493,8 +506,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ),
                             child: _isLoading
                                 ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
+                                    height: 22,
+                                    width: 22,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.5,
                                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
@@ -503,7 +516,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                 : const Text(
                                     "Login",
                                     style: TextStyle(
-                                      fontSize: 16,
+                                      fontSize: 17,
                                       fontWeight: FontWeight.w600,
                                       letterSpacing: 0.5,
                                     ),
@@ -516,14 +529,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           onPressed: _isLoading ? null : _handleDemoLogin,
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
-                              vertical: AppTheme.spacingMD,
+                              vertical: AppTheme.spacingLG,
                             ),
                             side: BorderSide(
                               color: AppTheme.primaryColor.withOpacity(0.5),
                               width: 1.5,
                             ),
                           ),
-                          child: const Text("Try Demo Mode"),
+                          child: const Text(
+                            "Try Demo Mode",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
             const SizedBox(height: AppTheme.spacingMD),
             // * Demo Credentials Info - Premium Card

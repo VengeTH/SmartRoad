@@ -1,6 +1,6 @@
 # SmartRoad - Testing Guide
 
-This guide explains how to access and test the newly added features in SmartRoad.
+This guide explains how to access and test the newly added features in SmartRoad, including UI/UX improvements and responsive design.
 
 ---
 

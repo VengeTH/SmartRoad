@@ -177,6 +177,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- * STICKER & GATE SECURITY MODULE
 -- ============================================================================
 
+-- * Create enum for HOA access types
+CREATE TYPE hoa_access_type AS ENUM (
+  'public_shortcut',  -- * Outsiders can buy a pass
+  'residents_only'    -- * Outsiders CANNOT buy a pass
+);
+
 -- * Create HOAs (Homeowners Associations) table
 -- * Represents gates/communities that require stickers for access
 CREATE TABLE public.hoas (
@@ -185,6 +191,7 @@ CREATE TABLE public.hoas (
   description TEXT,
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
+  access_type hoa_access_type DEFAULT 'public_shortcut',
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -199,6 +206,9 @@ CREATE TABLE public.user_stickers (
   issued_at TIMESTAMPTZ NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   is_active BOOLEAN DEFAULT true,
+  is_physical_sticker BOOLEAN DEFAULT false, -- * True for uploaded physical stickers, False for in-app QR purchases
+  verified_by_ai BOOLEAN DEFAULT false, -- * True if Gemini AI confirms the image looks like a sticker
+  sticker_photo_url TEXT, -- * Path to the uploaded sticker image
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   -- * Prevent duplicate active stickers for same user + HOA
@@ -259,6 +269,21 @@ CREATE POLICY "Admins can manage stickers"
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
+
+-- * Users can insert their own physical stickers (after AI verification)
+CREATE POLICY "Users can insert physical stickers"
+  ON public.user_stickers FOR INSERT
+  WITH CHECK (
+    auth.uid() = user_id 
+    AND is_physical_sticker = true 
+    AND verified_by_ai = true
+  );
+
+-- * Users can update their own physical stickers
+CREATE POLICY "Users can update own physical stickers"
+  ON public.user_stickers FOR UPDATE
+  USING (auth.uid() = user_id AND is_physical_sticker = true)
+  WITH CHECK (auth.uid() = user_id AND is_physical_sticker = true);
 
 -- * Trigger for updated_at on new tables
 CREATE TRIGGER update_hoas_updated_at

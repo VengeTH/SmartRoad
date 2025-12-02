@@ -16,6 +16,11 @@ class Env {
     defaultValue: 'hazard-images',
   );
   
+  static const String geminiApiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: '',
+  );
+  
   /// * Validates that required environment variables are set
   static bool validate() {
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {

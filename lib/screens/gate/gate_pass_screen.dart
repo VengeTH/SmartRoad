@@ -44,17 +44,20 @@ class _GatePassScreenState extends ConsumerState<GatePassScreen> {
     
     setState(() {
       _selectedSticker = stickerToUse;
-      _currentGatePass = GatePassData.now(
-        userId: userId,
-        stickerId: stickerToUse.id,
-      );
-      _lastRefreshTime = DateTime.now();
-    });
-    
-    // * Auto-refresh every 4 minutes
-    Future.delayed(const Duration(minutes: 4), () {
-      if (mounted) {
-        _refreshGatePass();
+      // * Only generate QR code for digital stickers
+      if (!stickerToUse.isPhysicalSticker) {
+        _currentGatePass = GatePassData.now(
+          userId: userId,
+          stickerId: stickerToUse.id,
+        );
+        _lastRefreshTime = DateTime.now();
+        
+        // * Auto-refresh every 4 minutes (only for digital stickers)
+        Future.delayed(const Duration(minutes: 4), () {
+          if (mounted) {
+            _refreshGatePass();
+          }
+        });
       }
     });
   }
@@ -92,7 +95,8 @@ class _GatePassScreenState extends ConsumerState<GatePassScreen> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               setState(() {
                 _selectedSticker = activeStickers.first;
-                if (userId != null) {
+                // * Only generate QR code for digital stickers
+                if (userId != null && !_selectedSticker!.isPhysicalSticker) {
                   _currentGatePass = GatePassData.now(
                     userId: userId,
                     stickerId: _selectedSticker!.id,
@@ -204,7 +208,17 @@ class _GatePassScreenState extends ConsumerState<GatePassScreen> {
   }
   
   Widget _buildGatePassView(List<Sticker> activeStickers) {
-    if (_currentGatePass == null || _selectedSticker == null) {
+    if (_selectedSticker == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
+    // * Check if this is a physical sticker
+    if (_selectedSticker!.isPhysicalSticker) {
+      return _buildPhysicalStickerView(activeStickers);
+    }
+    
+    // * Digital sticker - show QR code
+    if (_currentGatePass == null) {
       return const Center(child: CircularProgressIndicator());
     }
     
@@ -261,13 +275,16 @@ class _GatePassScreenState extends ConsumerState<GatePassScreen> {
                         HapticFeedback.mediumImpact();
                         setState(() {
                           _selectedSticker = sticker;
-                          final userId = ref.read(currentUserIdProvider);
-                          if (userId != null) {
-                            _currentGatePass = GatePassData.now(
-                              userId: userId,
-                              stickerId: sticker.id,
-                            );
-                            _lastRefreshTime = DateTime.now();
+                          // * Only generate QR code for digital stickers
+                          if (!sticker.isPhysicalSticker) {
+                            final userId = ref.read(currentUserIdProvider);
+                            if (userId != null) {
+                              _currentGatePass = GatePassData.now(
+                                userId: userId,
+                                stickerId: sticker.id,
+                              );
+                              _lastRefreshTime = DateTime.now();
+                            }
                           }
                         });
                       }
@@ -449,6 +466,236 @@ class _GatePassScreenState extends ConsumerState<GatePassScreen> {
   
   String _formatTime(DateTime date) {
     return "${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
+  }
+  
+  /// * Build view for physical stickers (no QR code)
+  Widget _buildPhysicalStickerView(List<Sticker> activeStickers) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppTheme.spacingXL),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // * Sticker selector
+          if (activeStickers.length > 1) ...[
+            Container(
+              padding: const EdgeInsets.all(AppTheme.spacingMD),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceColor,
+                borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                border: Border.all(
+                  color: AppTheme.borderColor,
+                  width: 1.5,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Select Sticker",
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spacingSM),
+                  DropdownButtonFormField<Sticker>(
+                    value: _selectedSticker,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: AppTheme.surfaceVariant,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    items: activeStickers.map((sticker) {
+                      return DropdownMenuItem<Sticker>(
+                        value: sticker,
+                        child: Text(
+                          sticker.hoaName,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (sticker) {
+                      if (sticker != null) {
+                        HapticFeedback.mediumImpact();
+                        setState(() {
+                          _selectedSticker = sticker;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppTheme.spacingXL),
+          ],
+          
+          // * Physical Sticker Card
+          Container(
+            padding: const EdgeInsets.all(AppTheme.spacingXL),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceColor,
+              borderRadius: BorderRadius.circular(AppTheme.radiusXL),
+              border: Border.all(
+                color: AppTheme.borderColor,
+                width: 1.5,
+              ),
+              boxShadow: AppTheme.shadowLarge,
+            ),
+            child: Column(
+              children: [
+                // * HOA Name
+                Text(
+                  _selectedSticker!.hoaName,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingSM),
+                Text(
+                  "Physical Sticker",
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingXL),
+                
+                // * Physical Sticker Icon/Message
+                Container(
+                  padding: const EdgeInsets.all(AppTheme.spacingXL),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.verified,
+                        size: 80,
+                        color: AppTheme.successColor,
+                      ),
+                      const SizedBox(height: AppTheme.spacingMD),
+                      Text(
+                        "Physical Sticker Verified",
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingSM),
+                      Text(
+                        "Present Vehicle for Inspection",
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppTheme.textSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // * Show sticker photo if available
+                if (_selectedSticker!.stickerPhotoUrl != null) ...[
+                  const SizedBox(height: AppTheme.spacingXL),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                    child: Image.network(
+                      _selectedSticker!.stickerPhotoUrl!,
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          height: 200,
+                          color: AppTheme.surfaceVariant,
+                          child: Icon(
+                            Icons.image_not_supported,
+                            size: 48,
+                            color: AppTheme.textTertiary,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: AppTheme.spacingXL),
+          
+          // * Sticker Info Card
+          Container(
+            padding: const EdgeInsets.all(AppTheme.spacingMD),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceColor,
+              borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+              border: Border.all(
+                color: AppTheme.borderColor,
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.badge_outlined,
+                      size: 20,
+                      color: AppTheme.primaryColor,
+                    ),
+                    const SizedBox(width: AppTheme.spacingSM),
+                    Text(
+                      "Sticker Details",
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppTheme.spacingMD),
+                _buildInfoRow(
+                  "Issued",
+                  _formatDate(_selectedSticker!.issuedAt),
+                ),
+                _buildInfoRow(
+                  "Expires",
+                  _formatDate(_selectedSticker!.expiresAt),
+                ),
+                _buildInfoRow(
+                  "Days Remaining",
+                  "${_selectedSticker!.daysUntilExpiration} days",
+                  valueColor: _selectedSticker!.daysUntilExpiration < 30
+                      ? AppTheme.warningColor
+                      : AppTheme.successColor,
+                ),
+                if (_selectedSticker!.verifiedByAi) ...[
+                  const SizedBox(height: AppTheme.spacingSM),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.verified_user,
+                        size: 16,
+                        color: AppTheme.successColor,
+                      ),
+                      const SizedBox(width: AppTheme.spacingXS),
+                      Text(
+                        "Verified by AI",
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppTheme.successColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

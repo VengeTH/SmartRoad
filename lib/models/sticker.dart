@@ -10,6 +10,9 @@ class Sticker {
   final DateTime issuedAt;
   final DateTime expiresAt;
   final bool isActive;
+  final bool isPhysicalSticker; // * True for uploaded physical stickers, False for in-app QR purchases
+  final bool verifiedByAi; // * True if Gemini AI confirms the image looks like a sticker
+  final String? stickerPhotoUrl; // * Path to the uploaded sticker image
   final DateTime createdAt;
   final DateTime updatedAt;
   
@@ -21,6 +24,9 @@ class Sticker {
     required this.issuedAt,
     required this.expiresAt,
     required this.isActive,
+    this.isPhysicalSticker = false,
+    this.verifiedByAi = false,
+    this.stickerPhotoUrl,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -34,6 +40,9 @@ class Sticker {
       issuedAt: DateTime.parse(json['issued_at'] as String),
       expiresAt: DateTime.parse(json['expires_at'] as String),
       isActive: (json['is_active'] as bool?) ?? true,
+      isPhysicalSticker: (json['is_physical_sticker'] as bool?) ?? false,
+      verifiedByAi: (json['verified_by_ai'] as bool?) ?? false,
+      stickerPhotoUrl: json['sticker_photo_url'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
@@ -48,6 +57,9 @@ class Sticker {
       'issued_at': issuedAt.toIso8601String(),
       'expires_at': expiresAt.toIso8601String(),
       'is_active': isActive,
+      'is_physical_sticker': isPhysicalSticker,
+      'verified_by_ai': verifiedByAi,
+      if (stickerPhotoUrl != null) 'sticker_photo_url': stickerPhotoUrl,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -67,6 +79,12 @@ class Sticker {
   }
 }
 
+/// * HOA Access Type Enum
+enum HOAAccessType {
+  publicShortcut,  // * Outsiders can buy a pass
+  residentsOnly,   // * Outsiders CANNOT buy a pass
+}
+
 /// * HOA (Homeowners Association) Model
 /// * Represents a gate/community that requires stickers
 class HOA {
@@ -75,6 +93,7 @@ class HOA {
   final String? description;
   final double? latitude; // * Gate location
   final double? longitude;
+  final HOAAccessType accessType; // * Access type: public_shortcut or residents_only
   final bool isActive;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -85,18 +104,36 @@ class HOA {
     this.description,
     this.latitude,
     this.longitude,
+    this.accessType = HOAAccessType.publicShortcut,
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
   });
   
   factory HOA.fromJson(Map<String, dynamic> json) {
+    // * Parse access_type from database (enum string)
+    HOAAccessType accessType = HOAAccessType.publicShortcut;
+    final accessTypeStr = json['access_type'] as String?;
+    if (accessTypeStr != null) {
+      switch (accessTypeStr) {
+        case 'public_shortcut':
+          accessType = HOAAccessType.publicShortcut;
+          break;
+        case 'residents_only':
+          accessType = HOAAccessType.residentsOnly;
+          break;
+        default:
+          accessType = HOAAccessType.publicShortcut;
+      }
+    }
+    
     return HOA(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String?,
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
+      accessType: accessType,
       isActive: (json['is_active'] as bool?) ?? true,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
@@ -110,11 +147,20 @@ class HOA {
       if (description != null) 'description': description,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
+      'access_type': accessType == HOAAccessType.publicShortcut 
+          ? 'public_shortcut' 
+          : 'residents_only',
       'is_active': isActive,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
   }
+  
+  /// * Check if outsiders can buy a pass for this HOA
+  bool get allowsPublicAccess => accessType == HOAAccessType.publicShortcut;
+  
+  /// * Check if this HOA is strictly for residents only
+  bool get isResidentsOnly => accessType == HOAAccessType.residentsOnly;
 }
 
 /// * Gate Pass QR Code Data Model

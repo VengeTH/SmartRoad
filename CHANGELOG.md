@@ -4,6 +4,110 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
+## Version 2.3.0 - Physical Sticker Upload & HOA Access Types
+
+**Release Date:** 2025  
+**Focus:** Enhanced Sticker Management & Access Control
+
+### New Features
+
+#### Physical Sticker Upload with AI Verification
+- **My Stickers Screen**: New screen for managing all user stickers
+  - View all stickers (physical and digital)
+  - Upload physical stickers with photo verification
+  - AI-powered verification using Google Gemini
+  - Access from Profile screen → "My Stickers" card
+
+- **AI Sticker Verification**:
+  - Integration with Google Gemini 2.5 Flash model
+  - Automatic verification of uploaded sticker photos
+  - Validates if image contains a valid HOA sticker
+  - Rejects blurry or invalid images
+  - Free tier API usage
+
+- **Physical Sticker Upload Flow**:
+  - Select HOA from dropdown
+  - Optional sticker number input
+  - Photo upload (camera or gallery)
+  - AI verification with loading state
+  - Automatic save to database upon verification
+  - Photo stored in Supabase Storage
+
+- **Gate Pass Screen Updates**:
+  - Different UI for physical vs digital stickers
+  - Physical stickers: "Physical Sticker Verified - Present Vehicle for Inspection" card
+  - No QR code generation for physical stickers
+  - Displays uploaded sticker photo
+  - Shows AI verification badge
+
+#### HOA Access Types (Strict vs. Open)
+- **Access Type System**:
+  - `public_shortcut`: Outsiders can buy a pass (Pay-to-Pass available)
+  - `residents_only`: Outsiders CANNOT buy a pass (Strict residents/guests only)
+
+- **Visual Indicators on Map**:
+  - **Red Gate Icon**: Strict HOA (Residents/Guests Only)
+  - **Green Gate Icon**: Open HOA (Pay-to-Pass Available)
+  - HOA gate markers displayed on map with color coding
+  - Tap marker to see HOA name and access type
+
+- **Routing Logic Updates**:
+  - Hard Block: `residents_only` HOAs block routing if user has no sticker (Cost = Infinity)
+  - Soft Block: `public_shortcut` HOAs allow routing if user agrees to buy pass
+  - Routing service now receives HOA access type information
+  - Backend can implement permission-based road weighting
+
+### Database Changes
+
+- **New Columns in `user_stickers` table**:
+  - `is_physical_sticker` (boolean): True for uploads, False for in-app QR purchases
+  - `verified_by_ai` (boolean): True if Gemini confirms the image looks like a sticker
+  - `sticker_photo_url` (text): Path to the uploaded sticker image
+
+- **New Enum and Column in `hoas` table**:
+  - `hoa_access_type` enum: `'public_shortcut'` or `'residents_only'`
+  - `access_type` column with default `'public_shortcut'`
+
+- **RLS Policy Updates**:
+  - Users can insert their own physical stickers (after AI verification)
+  - Users can update their own physical stickers
+
+### Technical Implementation
+
+- **New Dependencies**:
+  - `google_generative_ai` package removed (using direct HTTP API calls)
+  - Using Dio for Gemini API communication
+
+- **New Services**:
+  - `StickerVerifierService`: AI-powered sticker image verification
+  - Web-compatible image handling (Image.memory for web, Image.file for mobile)
+
+- **New Screens**:
+  - `ManageStickersScreen`: Complete sticker management interface
+
+- **New Widgets**:
+  - `HOAGateMarker`: Custom marker widget for HOA gates with color coding
+
+- **Environment Configuration**:
+  - Added `GEMINI_API_KEY` environment variable support
+
+### Security Features
+
+- AI verification prevents fake sticker uploads
+- Physical stickers require photo verification
+- RLS policies ensure users can only manage their own stickers
+- Photo validation before database insertion
+
+### UI/UX Improvements
+
+- Web compatibility for image uploads
+- Loading states during AI verification
+- Clear error messages for rejected photos
+- Visual distinction between physical and digital stickers
+- Color-coded HOA gate markers for quick identification
+
+---
+
 ## Version 2.2.1 - Bug Fixes & UI Improvements
 
 **Release Date:** 2025  
@@ -249,6 +353,33 @@ This document tracks all version updates, feature additions, and significant cha
 
 ## Migration Notes
 
+### Upgrading to Version 2.3.0
+
+1. **Database Migration**:
+   ```sql
+   -- Run the updated supabase_schema.sql in Supabase SQL Editor
+   -- This adds:
+   -- 1. hoa_access_type enum
+   -- 2. access_type column to hoas table
+   -- 3. is_physical_sticker, verified_by_ai, sticker_photo_url columns to user_stickers table
+   -- 4. New RLS policies for physical sticker uploads
+   ```
+
+2. **Environment Configuration**:
+   ```bash
+   # Add GEMINI_API_KEY to your environment
+   --dart-define=GEMINI_API_KEY=your_gemini_api_key_here
+   ```
+
+3. **Dependencies**:
+   ```bash
+   flutter pub get
+   ```
+
+4. **Storage Bucket**:
+   - Ensure Supabase storage bucket allows uploads for sticker images
+   - Or create a new `stickers` folder in your existing bucket
+
 ### Upgrading to Version 2.2.1
 
 1. **Dependencies**:
@@ -287,6 +418,10 @@ This document tracks all version updates, feature additions, and significant cha
 
 ## Breaking Changes
 
+### Version 2.3.0
+- None (additive changes only)
+- Database migration required for new columns
+
 ### Version 2.2.1
 - None (bug fixes only)
 
@@ -306,6 +441,8 @@ This document tracks all version updates, feature additions, and significant cha
 - QR code scanning requires camera permissions (handled gracefully)
 - Demo mode stickers are static (for testing only)
 - Permission-based routing logic not yet implemented (structure prepared)
+- AI verification requires GEMINI_API_KEY to be configured
+- Physical sticker upload requires Supabase Storage bucket setup
 
 ---
 

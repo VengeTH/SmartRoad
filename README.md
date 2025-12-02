@@ -12,6 +12,12 @@ A Flutter mobile application for reporting and viewing road hazards in real-time
 - **Realtime Updates**: Live updates when hazards are added/updated/deleted
 - **Offline Support**: Cache hazards locally for offline viewing
 - **Local Notifications**: Get notified when hazards are created within 2km
+- **Sticker & Gate Security**: Digital and physical HOA sticker management
+  - Digital sticker wallet with QR code gate passes
+  - Physical sticker upload with AI verification (Google Gemini)
+  - Guard scanner for QR code validation
+  - HOA access type system (Strict vs. Open gates)
+  - Color-coded gate markers on map (Red = Strict, Green = Open)
 
 ## Prerequisites
 
@@ -40,12 +46,14 @@ flutter pub get
    - Go to SQL Editor in Supabase dashboard
    - Copy and paste the contents of `supabase_schema.sql`
    - Execute the script
-4. Create Storage Bucket:
+4. Create Storage Buckets:
    - Go to Storage in Supabase dashboard
-   - Create a new bucket named `hazard-images`
-   - Set it to Public
-   - Configure allowed MIME types: `image/jpeg`, `image/png`, `image/webp`
-   - Set file size limit to 5MB
+   - Create a bucket named `hazard-images` (for hazard photos)
+     - Set it to Public
+     - Configure allowed MIME types: `image/jpeg`, `image/png`, `image/webp`
+     - Set file size limit to 5MB
+   - Create a bucket or folder for `stickers` (for physical sticker photos)
+     - Same configuration as hazard-images
 
 ### 3. Environment Configuration
 
@@ -55,12 +63,13 @@ Create a `.env` file in the project root (or use `--dart-define` flags):
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
 STORAGE_BUCKET_NAME=hazard-images
+GEMINI_API_KEY=your_gemini_api_key  # Required for physical sticker AI verification
 ```
 
 **For Flutter, use `--dart-define` flags instead:**
 
 ```bash
-flutter run --dart-define=SUPABASE_URL=your_url --dart-define=SUPABASE_ANON_KEY=your_key
+flutter run --dart-define=SUPABASE_URL=your_url --dart-define=SUPABASE_ANON_KEY=your_key --dart-define=GEMINI_API_KEY=your_gemini_key
 ```
 
 Or create a script to run with environment variables (see `.env.example` for reference).
@@ -124,12 +133,17 @@ lib/
 │   ├── map/            # Map screen
 │   ├── feed/            # Feed screen
 │   ├── profile/         # Profile screen
-│   └── report/          # Report hazard screen
+│   ├── report/          # Report hazard screen
+│   ├── gate/            # Gate Pass, Guard Scanner
+│   └── stickers/        # Manage Stickers screen
 ├── services/            # Business logic services
 │   ├── supabase_service.dart
 │   ├── location_service.dart
 │   ├── notification_service.dart
-│   └── offline_cache_service.dart
+│   ├── offline_cache_service.dart
+│   ├── routing_service.dart
+│   ├── sticker_service.dart
+│   └── sticker_verifier_service.dart
 └── widgets/             # Reusable widgets
 ```
 
@@ -142,6 +156,9 @@ lib/
 - `image_picker`: Image selection
 - `hive_flutter`: Offline caching
 - `flutter_local_notifications`: Local notifications
+- `qr_flutter`: QR code generation for gate passes
+- `mobile_scanner`: QR code scanning for guard validation
+- `dio`: HTTP client for API calls (including Gemini AI)
 
 ## Troubleshooting
 
@@ -159,6 +176,12 @@ lib/
 - Check file size limits
 - Verify MIME type restrictions
 
+### Sticker & Gate Features
+- **Physical Sticker Upload**: Requires GEMINI_API_KEY for AI verification
+- **Gate Markers**: Ensure HOAs have valid latitude/longitude coordinates
+- **QR Code Scanning**: Requires camera permissions on device
+- **AI Verification**: Check Gemini API key is valid and has quota remaining
+
 ## Demo Script (30-60 seconds)
 
 1. **Login**: Use demo account or create new account
@@ -166,7 +189,10 @@ lib/
 3. **Report Hazard**: Tap "Report Hazard" button, fill form, submit
 4. **View Feed**: Switch to Feed tab, see all hazards
 5. **Profile**: View profile, update name/photo
-6. **Realtime**: Open app on two devices, report on one, see update on other
+6. **Gate Pass**: View QR code for gate access (if you have stickers)
+7. **My Stickers**: Manage stickers, upload physical stickers (requires GEMINI_API_KEY)
+8. **HOA Gates**: See color-coded gate markers on map (Red = Strict, Green = Open)
+9. **Realtime**: Open app on two devices, report on one, see update on other
 
 ## Production Notes
 

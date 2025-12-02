@@ -10,6 +10,7 @@ import "../../core/theme/app_theme.dart";
 import "../auth/login_screen.dart";
 import "../gate/gate_pass_screen.dart";
 import "../gate/guard_scanner_screen.dart";
+import "../stickers/manage_stickers_screen.dart";
 
 /// * Profile screen
 class ProfileScreen extends ConsumerWidget {
@@ -412,6 +413,65 @@ class _ProfileContentState extends State<_ProfileContent> {
                           const SizedBox(height: 4),
                           Text(
                             "Show QR code for gate access",
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: AppTheme.textTertiary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppTheme.spacingMD),
+          // * Manage Stickers Card
+          Card(
+            child: InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ManageStickersScreen(),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+              child: Padding(
+                padding: const EdgeInsets.all(AppTheme.spacingMD),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(AppTheme.spacingMD),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                      ),
+                      child: Icon(
+                        Icons.badge,
+                        color: AppTheme.primaryColor,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: AppTheme.spacingMD),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "My Stickers",
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Manage and upload physical stickers",
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: AppTheme.textSecondary,
                             ),

@@ -14,10 +14,12 @@ import "../../core/constants/app_constants.dart";
 import "../../core/theme/app_theme.dart";
 import "../../widgets/hazard_marker.dart";
 import "../../widgets/hazard_detail_sheet.dart";
+import "../../widgets/hoa_gate_marker.dart";
 import "../../services/location_service.dart";
 import "../../services/routing_service.dart";
 import "../../providers/hazards_provider.dart" show MapHazardsNotifier;
 import "../../providers/sticker_provider.dart";
+import "../../models/sticker.dart";
 
 /// * Navigation overlay widget
 class _NavigationOverlay extends StatelessWidget {
@@ -878,6 +880,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // * Get user sticker IDs for permission-based routing
       final userStickerIds = ref.read(userStickerIdsProvider);
       
+      // * Get HOA access types for routing logic (hard/soft blocks)
+      final hoasAsync = ref.read(hoasProvider);
+      final hoaAccessTypes = <String, String>{};
+      hoasAsync.whenData((hoas) {
+        for (final hoa in hoas) {
+          hoaAccessTypes[hoa.id] = hoa.accessType == HOAAccessType.publicShortcut
+              ? 'public_shortcut'
+              : 'residents_only';
+        }
+      });
+      
       // * Call backend routing service
       final routes = await _routingService.calculateRoute(
         origin: origin,
@@ -885,6 +898,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         mode: backendMode,
         avoidTolls: avoidTolls,
         userStickerIds: userStickerIds,
+        hoaAccessTypes: hoaAccessTypes,
       );
       
       if (routes.isEmpty) {
@@ -1709,6 +1723,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   );
                 }).toList(),
               ),
+              // * HOA Gate markers
+              _buildHOAMarkers(),
             ],
           ),
             // * Map Controls - Top Right (below search bar)
@@ -2031,6 +2047,59 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ),
       );
     }
+  }
+  
+  /// * Build HOA gate markers layer
+  Widget _buildHOAMarkers() {
+    final hoasAsync = ref.watch(hoasProvider);
+    
+    return hoasAsync.when(
+      data: (hoas) {
+        // * Filter HOAs with valid coordinates
+        final validHOAs = hoas.where((hoa) =>
+          hoa.latitude != null &&
+          hoa.longitude != null &&
+          hoa.latitude!.isFinite &&
+          hoa.longitude!.isFinite &&
+          hoa.latitude != 0.0 &&
+          hoa.longitude != 0.0
+        ).toList();
+        
+        if (validHOAs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        
+        return MarkerLayer(
+          markers: validHOAs.map((hoa) {
+            return Marker(
+              point: LatLng(hoa.latitude!, hoa.longitude!),
+              width: 40,
+              height: 40,
+              child: GestureDetector(
+                onTap: () {
+                  // * Could show HOA info dialog here
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          hoa.accessType == HOAAccessType.residentsOnly
+                              ? "${hoa.name}: Residents/Guests Only"
+                              : "${hoa.name}: Pay-to-Pass Available",
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                },
+                child: HOAGateMarker(hoa: hoa),
+              ),
+            );
+          }).toList(),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (error, stack) => const SizedBox.shrink(),
+    );
   }
 }
 

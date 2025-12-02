@@ -46,18 +46,21 @@ class RoutingService {
   /// * [mode] - "car" or "motorcycle"
   /// * [avoidTolls] - Whether to avoid toll roads
   /// * [userStickerIds] - List of active sticker IDs for permission-based routing
+  /// * [hoaAccessTypes] - Map of HOA IDs to their access types for routing logic
   /// * 
   /// Returns list of routes (primary + 1 alternative)
   /// 
-  /// Note: The userStickerIds parameter is prepared for future implementation
-  /// where GraphHopper will use sticker permissions to weight roads (e.g., 
-  /// if user has Sticker A, weight Road A as 0.0 for passable routes)
+  /// Routing Logic:
+  /// - If user has sticker for HOA -> Route through (Cost = 0.0)
+  /// - If HOA is 'residents_only' and user has NO sticker -> Hard Block (Cost = Infinity, never route)
+  /// - If HOA is 'public_shortcut' and user has NO sticker -> Soft Block (Route only if user agrees to buy pass)
   Future<List<RouteResponse>> calculateRoute({
     required LatLng origin,
     required LatLng destination,
     required String mode,
     bool avoidTolls = false,
     List<String> userStickerIds = const [],
+    Map<String, String> hoaAccessTypes = const {}, // * Map of hoa_id -> access_type
   }) async {
     try {
       final response = await _dio.post(
@@ -73,7 +76,8 @@ class RoutingService {
           },
           "mode": mode,
           "avoid_tolls": avoidTolls,
-          "user_sticker_ids": userStickerIds, // * Prepared for future routing logic
+          "user_sticker_ids": userStickerIds, // * User's active sticker IDs
+          "hoa_access_types": hoaAccessTypes, // * HOA access types for hard/soft blocking
         },
         options: Options(
           headers: {

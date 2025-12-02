@@ -29,6 +29,7 @@ class StickerService {
               description,
               latitude,
               longitude,
+              access_type,
               is_active
             )
           ''')
@@ -89,6 +90,7 @@ class StickerService {
               description,
               latitude,
               longitude,
+              access_type,
               is_active
             )
           ''')
@@ -194,6 +196,96 @@ class StickerService {
     }
   }
   
+  /// * Create a physical sticker (uploaded by user, verified by AI)
+  /// * 
+  /// * [userId] - The user ID
+  /// * [hoaId] - The HOA ID
+  /// * [stickerNumber] - The sticker number (optional)
+  /// * [stickerPhotoUrl] - The URL of the uploaded sticker photo
+  /// * [issuedAt] - When the sticker was issued
+  /// * [expiresAt] - When the sticker expires
+  /// * 
+  /// * Returns the created sticker
+  Future<Sticker> createPhysicalSticker({
+    required String userId,
+    required String hoaId,
+    String? stickerNumber,
+    required String stickerPhotoUrl,
+    required DateTime issuedAt,
+    required DateTime expiresAt,
+  }) async {
+    if (_supabaseService.isDemoMode) {
+      // * In demo mode, return a demo sticker
+      final now = DateTime.now();
+      return Sticker(
+        id: "demo-physical-sticker-${DateTime.now().millisecondsSinceEpoch}",
+        userId: userId,
+        hoaId: hoaId,
+        hoaName: "Demo HOA",
+        issuedAt: issuedAt,
+        expiresAt: expiresAt,
+        isActive: true,
+        isPhysicalSticker: true,
+        verifiedByAi: true,
+        stickerPhotoUrl: stickerPhotoUrl,
+        createdAt: now,
+        updatedAt: now,
+      );
+    }
+    
+    final client = _supabaseService.client;
+    if (client == null) {
+      throw Exception("Supabase client not available");
+    }
+    
+    try {
+      // * Get HOA name
+      final hoa = await getHOAById(hoaId);
+      if (hoa == null) {
+        throw Exception("HOA not found");
+      }
+      
+      // * Insert the physical sticker
+      final response = await client
+          .from('user_stickers')
+          .insert({
+            'user_id': userId,
+            'hoa_id': hoaId,
+            'issued_at': issuedAt.toIso8601String(),
+            'expires_at': expiresAt.toIso8601String(),
+            'is_active': true,
+            'is_physical_sticker': true,
+            'verified_by_ai': true,
+            'sticker_photo_url': stickerPhotoUrl,
+          })
+          .select('''
+            *,
+            hoas:hoa_id (
+              id,
+              name,
+              description,
+              latitude,
+              longitude,
+              is_active
+            )
+          ''')
+          .single();
+      
+      final stickerData = Map<String, dynamic>.from(response);
+      final hoaData = stickerData['hoas'] != null
+          ? Map<String, dynamic>.from(stickerData['hoas'] as Map)
+          : null;
+      
+      if (hoaData != null) {
+        stickerData['hoa_name'] = hoaData['name'];
+      }
+      
+      return Sticker.fromJson(stickerData);
+    } catch (e) {
+      throw Exception("Failed to create physical sticker: $e");
+    }
+  }
+  
   // * Demo Mode Methods
   
   List<Sticker> _getDemoStickers(String userId) {
@@ -208,6 +300,9 @@ class StickerService {
         issuedAt: now.subtract(const Duration(days: 30)),
         expiresAt: now.add(const Duration(days: 335)),
         isActive: true,
+        isPhysicalSticker: false,
+        verifiedByAi: false,
+        stickerPhotoUrl: null,
         createdAt: now.subtract(const Duration(days: 30)),
         updatedAt: now.subtract(const Duration(days: 30)),
       ),
@@ -219,6 +314,9 @@ class StickerService {
         issuedAt: now.subtract(const Duration(days: 15)),
         expiresAt: now.add(const Duration(days: 350)),
         isActive: true,
+        isPhysicalSticker: false,
+        verifiedByAi: false,
+        stickerPhotoUrl: null,
         createdAt: now.subtract(const Duration(days: 15)),
         updatedAt: now.subtract(const Duration(days: 15)),
       ),

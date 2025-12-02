@@ -46,10 +46,10 @@ void main() async {
   
   // * Only initialize other services if not in demo mode
   if (!supabaseService.isDemoMode) {
-    try {
-      await OfflineCacheService().initialize();
-      await NotificationService().initialize();
-    } catch (e) {
+  try {
+    await OfflineCacheService().initialize();
+    await NotificationService().initialize();
+  } catch (e) {
       debugPrint("Warning: Some services failed to initialize: $e");
     }
   } else {
@@ -134,15 +134,15 @@ class SmartRoadApp extends ConsumerWidget {
           body: Center(
             child: Padding(
               padding: const EdgeInsets.all(AppTheme.spacingXL),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
                   Icon(
                     Icons.error_outline,
                     size: 64,
                     color: AppTheme.errorColor,
                   ),
-                  const SizedBox(height: 16),
+                const SizedBox(height: 16),
                   Text(
                     "Error loading app",
                     style: Theme.of(context).textTheme.titleLarge,
@@ -167,7 +167,7 @@ class SmartRoadApp extends ConsumerWidget {
                     },
                     child: const Text("Retry"),
                   ),
-                ],
+              ],
               ),
             ),
           ),

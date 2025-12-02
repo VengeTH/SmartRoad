@@ -195,138 +195,197 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final size = MediaQuery.of(context).size;
+    final isWide = size.width >= 980;
     
     return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
             colors: [
               AppTheme.backgroundColor,
-              AppTheme.surfaceColor.withOpacity(0.3),
-              AppTheme.primaryColor.withOpacity(0.1),
-              AppTheme.backgroundColor,
+              AppTheme.surfaceColor.withOpacity(0.4),
             ],
-            stops: const [0.0, 0.3, 0.7, 1.0],
           ),
         ),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppTheme.spacingXL),
-              child: FadeTransition(
-                opacity: _fadeAnimation,
-                child: SlideTransition(
-                  position: _slideAnimation,
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SizedBox(height: 20),
-                        // * The Heedful Branding
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryColor.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(AppTheme.radiusFull),
-                                border: Border.all(
-                                  color: AppTheme.primaryColor.withOpacity(0.3),
-                                ),
-                              ),
-                              child: Text(
-                                "THE HEEDFUL",
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: AppTheme.primaryColor,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 32),
-                        // * Animated Logo/Icon Section
-                        TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0.0, end: 1.0),
-                          duration: const Duration(milliseconds: 800),
-                          curve: Curves.easeOutBack,
-                          builder: (context, value, child) {
-                            return Transform.scale(
-                              scale: value,
-                              child: Container(
-                                padding: const EdgeInsets.all(AppTheme.spacingLG),
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      AppTheme.primaryColor.withOpacity(0.2),
-                                      AppTheme.secondaryColor.withOpacity(0.1),
-                                    ],
-                                  ),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: AppTheme.primaryColor.withOpacity(0.4),
-                                    width: 2.5,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppTheme.primaryColor.withOpacity(0.3),
-                                      blurRadius: 20,
-                                      spreadRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                                child: const Icon(
-                                  Icons.route_rounded,
-                                  size: 72,
-                                  color: AppTheme.primaryColor,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: AppTheme.spacingXL),
-                        // * Title with gradient
-                        ShaderMask(
-                          shaderCallback: (bounds) => LinearGradient(
-                            colors: [
-                              AppTheme.textPrimary,
-                              AppTheme.primaryColor,
+              padding: EdgeInsets.symmetric(
+                horizontal: isWide ? AppTheme.spacingXL : AppTheme.spacingLG,
+                vertical: AppTheme.spacingXL,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1200),
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: SlideTransition(
+                    position: _slideAnimation,
+                    child: isWide
+                        ? Row(
+                            children: [
+                              Expanded(child: _buildStoryPanel(theme)),
+                              const SizedBox(width: AppTheme.spacingXL),
+                              Expanded(child: _buildLoginCard(theme, isWide)),
                             ],
-                          ).createShader(bounds),
-                          child: Text(
-                            "SmartRoad",
-                            style: theme.textTheme.headlineLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: -1,
-                            ),
-                            textAlign: TextAlign.center,
+                          )
+                        : Column(
+                            children: [
+                              _buildStoryPanel(theme),
+                              const SizedBox(height: AppTheme.spacingXL),
+                              _buildLoginCard(theme, isWide),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: AppTheme.spacingSM),
-                        // * Subtitle
-                        Text(
-                          "Report road hazards in real-time",
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: AppTheme.textSecondary,
-                            letterSpacing: 0.5,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: AppTheme.spacingXXL),
-                        // * Email Field
-                        TextFormField(
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStoryPanel(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.spacingXL),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(AppTheme.radiusXL),
+        border: Border.all(color: AppTheme.borderColor, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.spacingSM,
+                  vertical: AppTheme.spacingXS,
+                ),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                ),
+                child: Text(
+                  "THE HEEDFUL",
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppTheme.primaryColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppTheme.spacingSM),
+              Text(
+                "SmartRoad",
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppTheme.spacingLG),
+          Text(
+            "Report hazards, guide commuters, and showcase NCR's attentiveness.",
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: AppTheme.spacingLG),
+          Wrap(
+            spacing: AppTheme.spacingSM,
+            runSpacing: AppTheme.spacingSM,
+            children: const [
+              _StoryChip(label: "Realtime hazard board"),
+              _StoryChip(label: "PH-specific routing"),
+              _StoryChip(label: "Community first"),
+            ],
+          ),
+          const SizedBox(height: AppTheme.spacingXL),
+          const _StoryBullet(
+            title: "Built with local traffic rules in mind",
+            subtitle: "Motorcycle lane filtering, truck bans, toll avoidance.",
+          ),
+          const _StoryBullet(
+            title: "Municipal-grade monitoring",
+            subtitle: "Color-coded hazards with automatic freshness checks.",
+          ),
+          const _StoryBullet(
+            title: "Designed for teams",
+            subtitle: "Give NCR enforcers and commuters the same live map.",
+          ),
+          const SizedBox(height: AppTheme.spacingXL),
+          Row(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "14 cities",
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    "Piloting across NCR",
+                    style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
+                  ),
+                ],
+              ),
+              const SizedBox(width: AppTheme.spacingXL),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "1200+",
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    "Hazards resolved",
+                    style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoginCard(ThemeData theme, bool isWide) {
+    return Form(
+      key: _formKey,
+      child: Container(
+        padding: EdgeInsets.all(isWide ? AppTheme.spacingXL : AppTheme.spacingLG),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor,
+          borderRadius: BorderRadius.circular(AppTheme.radiusXL),
+          border: Border.all(color: AppTheme.borderColor, width: 1),
+          boxShadow: AppTheme.shadowLarge,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              "Sign in",
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: AppTheme.spacingXS),
+            Text(
+              "Welcome back! Access The Heedful control room.",
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppTheme.spacingXL),
+            // * Email Field
+            TextFormField(
                           controller: _emailController,
                           focusNode: _emailFocusNode,
                           keyboardType: TextInputType.emailAddress,
@@ -368,7 +427,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         ),
                         const SizedBox(height: AppTheme.spacingMD),
                         // * Password Field
-                        TextFormField(
+            TextFormField(
                           controller: _passwordController,
                           focusNode: _passwordFocusNode,
                           obscureText: _obscurePassword,
@@ -407,9 +466,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             return null;
                           },
                         ),
-                        const SizedBox(height: AppTheme.spacingLG),
-                        // * Login Button with gradient
-                        Container(
+            const SizedBox(height: AppTheme.spacingLG),
+            // * Login Button with gradient
+            Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
@@ -449,11 +508,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                       letterSpacing: 0.5,
                                     ),
                                   ),
-                          ),
+                                  ),
                         ),
-                        const SizedBox(height: AppTheme.spacingMD),
-                        // * Demo Button
-                        OutlinedButton(
+            const SizedBox(height: AppTheme.spacingMD),
+            // * Demo Button
+            OutlinedButton(
                           onPressed: _isLoading ? null : _handleDemoLogin,
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
@@ -466,9 +525,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           ),
                           child: const Text("Try Demo Mode"),
                         ),
-                        const SizedBox(height: AppTheme.spacingMD),
-                        // * Demo Credentials Info - Premium Card
-                        Container(
+            const SizedBox(height: AppTheme.spacingMD),
+            // * Demo Credentials Info - Premium Card
+            Container(
                           padding: const EdgeInsets.all(AppTheme.spacingMD),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
@@ -529,9 +588,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ],
                           ),
                         ),
-                        const SizedBox(height: AppTheme.spacingLG),
-                        // * Sign Up Link
-                        Row(
+            const SizedBox(height: AppTheme.spacingLG),
+            // * Sign Up Link
+            Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
@@ -548,15 +607,92 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// * Story chip widget
+class _StoryChip extends StatelessWidget {
+  final String label;
+
+  const _StoryChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.spacingMD,
+        vertical: AppTheme.spacingSM,
+      ),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+        border: Border.all(
+          color: AppTheme.borderColor,
+          width: 1,
+        ),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: AppTheme.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+/// * Story bullet widget
+class _StoryBullet extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _StoryBullet({
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppTheme.spacingMD),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 6, right: AppTheme.spacingMD),
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor,
+              shape: BoxShape.circle,
             ),
           ),
-        ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingXS),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

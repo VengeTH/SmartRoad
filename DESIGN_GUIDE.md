@@ -1,7 +1,7 @@
 # SmartRoad Design Guide
 ## The Heedful - First Project Design System
 
-**Version:** 2.0.0 - Premium Edition  
+**Version:** 2.1.0 - Refined Edition  
 **Last Updated:** 2025  
 **Purpose:** Comprehensive design system documentation for SmartRoad application  
 **Brand:** The Heedful - Premium Startup Experience
@@ -892,4 +892,36 @@ For design system questions or updates, contact the design team or refer to this
 ---
 
 *This design guide is a living document and will be updated as the design system evolves.*
+
+---
+
+## Version 2.1.0 Updates (Latest)
+
+### Login Screen Redesign
+- **Two-Panel Layout**: Split-screen design with story panel on left and login card on right (desktop) or stacked (mobile)
+- **Less AI-Generated Look**: Removed excessive gradients and animations, replaced with clean, professional design
+- **Story Panel**: Features The Heedful branding, value propositions, and key statistics
+- **Simplified Animations**: Subtle fade and slide transitions instead of complex animations
+
+### Map Screen Enhancements
+- **Bottom Toolbar**: Added floating toolbar at bottom with quick access to:
+  - Navigate (opens search/directions)
+  - Report (hazard reporting)
+  - Layers (map layer options)
+  - Settings (app settings)
+- **Improved Top Bar**: Enhanced search bar with better visual hierarchy
+- **Location Accuracy**: Default location set to STI College Las Piñas (14.4244°N, 120.9883°E)
+- **High-Accuracy Location**: Using `bestForNavigation` accuracy mode for precise location tracking
+
+### Routing Integration
+- **Backend-Powered Routing**: Integrated with SmartRoad backend API for route calculation
+- **MVP Routing**: Supports car and motorcycle modes with toll avoidance
+- **Simplified UI**: Cleaner navigation options with clear mode selection
+
+### Design System Additions
+- **Spacing Constants**: Added spacing system (XS, SM, MD, LG, XL, XXL)
+- **Border Radius Constants**: Added radius system (SM, MD, LG, XL, Full)
+- **Shadow System**: Added shadow variants (Small, Medium, Large, Glow)
+- **Info Color**: Added info color for informational messages
+- **Border Color**: Added border color for consistent borders
 

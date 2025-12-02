@@ -169,21 +169,21 @@ class _ProfileContentState extends State<_ProfileContent> {
                 child: CircleAvatar(
                   radius: 64,
                   backgroundColor: AppTheme.surfaceVariant,
-                  backgroundImage: _selectedImage != null
-                      ? FileImage(_selectedImage!)
-                      : widget.profile.photoUrl != null
-                          ? NetworkImage(widget.profile.photoUrl!)
-                          : null,
-                  onBackgroundImageError: (exception, stackTrace) {
-                    // * Handle image load error
-                  },
-                  child: widget.profile.photoUrl == null && _selectedImage == null
+                backgroundImage: _selectedImage != null
+                    ? FileImage(_selectedImage!)
+                    : widget.profile.photoUrl != null
+                        ? NetworkImage(widget.profile.photoUrl!)
+                        : null,
+                onBackgroundImageError: (exception, stackTrace) {
+                  // * Handle image load error
+                },
+                child: widget.profile.photoUrl == null && _selectedImage == null
                       ? Icon(
                           Icons.person,
                           size: 64,
                           color: AppTheme.textSecondary,
                         )
-                      : null,
+                    : null,
                 ),
               ),
               Positioned(
@@ -250,8 +250,8 @@ class _ProfileContentState extends State<_ProfileContent> {
                           widget.profile.reporterLevel.value,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
-                          ),
-                        ),
+            ),
+          ),
                         const SizedBox(height: 4),
                         Text(
                           "Reporter Level",
@@ -287,7 +287,7 @@ class _ProfileContentState extends State<_ProfileContent> {
                           style: theme.textTheme.bodySmall,
                         ),
                       ],
-                    ),
+            ),
                   ),
                 ),
               ),
@@ -298,20 +298,20 @@ class _ProfileContentState extends State<_ProfileContent> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _isUpdating ? null : _updateProfile,
+            onPressed: _isUpdating ? null : _updateProfile,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
               ),
-              child: _isUpdating
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
+            child: _isUpdating
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
-                    )
-                  : const Text("Update Profile"),
+                  )
+                : const Text("Update Profile"),
             ),
           ),
         ],

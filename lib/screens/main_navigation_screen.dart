@@ -109,25 +109,25 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
                 _NavItem(
                   icon: Icons.map_outlined,
                   activeIcon: Icons.map,
-                  label: "Map",
+            label: "Map",
                   isActive: _currentIndex == 0,
                   onTap: () => _onTabTapped(0),
-                ),
+          ),
                 _NavItem(
                   icon: Icons.feed_outlined,
                   activeIcon: Icons.feed,
-                  label: "Feed",
+            label: "Feed",
                   isActive: _currentIndex == 1,
                   onTap: () => _onTabTapped(1),
-                ),
+          ),
                 _NavItem(
                   icon: Icons.person_outline,
                   activeIcon: Icons.person,
-                  label: "Profile",
+            label: "Profile",
                   isActive: _currentIndex == 2,
                   onTap: () => _onTabTapped(2),
-                ),
-              ],
+          ),
+        ],
             ),
           ),
         ),
@@ -150,8 +150,8 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
                   boxShadow: AppTheme.shadowGlow,
                 ),
                 child: FloatingActionButton.extended(
-                  onPressed: () {
-                    Navigator.of(context).push(
+              onPressed: () {
+                Navigator.of(context).push(
                       PageRouteBuilder(
                         pageBuilder: (context, animation, secondaryAnimation) =>
                             const ReportHazardScreen(),
@@ -165,9 +165,9 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
                           );
                         },
                         transitionDuration: const Duration(milliseconds: 300),
-                      ),
-                    );
-                  },
+                  ),
+                );
+              },
                   icon: const Icon(Icons.add_alert_rounded),
                   label: const Text(
                     "Report",

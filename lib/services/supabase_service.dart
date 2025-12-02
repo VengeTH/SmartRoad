@@ -59,10 +59,10 @@ class SupabaseService {
     }
     
     try {
-      await Supabase.initialize(
-        url: Env.supabaseUrl,
-        anonKey: Env.supabaseAnonKey,
-      );
+    await Supabase.initialize(
+      url: Env.supabaseUrl,
+      anonKey: Env.supabaseAnonKey,
+    );
       _supabaseInitialized = true;
       _isDemoMode = false;
     } catch (e) {

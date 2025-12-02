@@ -46,9 +46,9 @@ class HazardsNotifier extends StateNotifier<AsyncValue<List<Hazard>>> {
     } catch (e, stack) {
       // * If online fetch fails, try cache
       if (!_supabaseService.isDemoMode) {
-        final cached = _cacheService.getCachedHazards();
-        if (cached != null && cached.isNotEmpty) {
-          state = AsyncValue.data(cached);
+      final cached = _cacheService.getCachedHazards();
+      if (cached != null && cached.isNotEmpty) {
+        state = AsyncValue.data(cached);
           return;
         }
       }
@@ -113,7 +113,7 @@ class MapHazardsNotifier extends StateNotifier<List<Hazard>> {
       
       // * Subscribe to realtime updates (only if not in demo mode)
       if (!_service.isDemoMode) {
-        _subscribeToRealtime();
+      _subscribeToRealtime();
       }
     } catch (e) {
       // * On error, keep current state (empty list is fine)
@@ -151,7 +151,7 @@ class MapHazardsNotifier extends StateNotifier<List<Hazard>> {
           // * Handle error
         }
       },
-      );
+    );
     } catch (e) {
       debugPrint("Error subscribing to realtime: $e");
     }

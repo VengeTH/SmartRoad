@@ -44,9 +44,10 @@ class LocationService {
       
       print("📍 [LocationService] Getting current position...");
       // * Get current position with better error handling
+      // * Use bestForNavigation for highest accuracy (important for STI College Las Piñas)
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 15),
+        desiredAccuracy: LocationAccuracy.bestForNavigation,
+        timeLimit: const Duration(seconds: 20),
       );
       
       print("📍 [LocationService] Position obtained: ${position.latitude}, ${position.longitude}");

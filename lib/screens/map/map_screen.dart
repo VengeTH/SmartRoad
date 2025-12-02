@@ -1,3 +1,5 @@
+import "dart:async";
+
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
@@ -154,12 +156,14 @@ class _DirectionOption extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final bool isActive;
 
   const _DirectionOption({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.isActive = false,
   });
 
   @override
@@ -176,17 +180,20 @@ class _DirectionOption extends StatelessWidget {
           padding: const EdgeInsets.all(AppTheme.spacingMD),
           decoration: BoxDecoration(
             border: Border.all(
-              color: AppTheme.borderColor,
+              color: isActive ? AppTheme.primaryColor : AppTheme.borderColor,
               width: 1.5,
             ),
             borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+            color: isActive ? AppTheme.primaryColor.withOpacity(0.05) : null,
           ),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(AppTheme.spacingSM),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.1),
+                  color: isActive
+                      ? AppTheme.primaryColor.withOpacity(0.2)
+                      : AppTheme.primaryColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(AppTheme.radiusMD),
                 ),
                 child: Icon(
@@ -521,6 +528,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _showSearchResults = false;
   final Dio _dio = Dio();
   final RoutingService _routingService = RoutingService(baseUrl: AppConstants.routingApiUrl);
+  StreamSubscription<Position>? _positionSubscription;
+  bool _hasPreciseLocation = false;
+  String _activeRoutingProfile = "car";
+  bool _avoidTollsToggle = false;
+  double _routeDistance = 0.0;
+  Duration _routeDuration = Duration.zero;
   
   @override
   void initState() {
@@ -529,6 +542,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _mapController = MapController();
     _currentLocation = LatLng(AppConstants.defaultLatitude, AppConstants.defaultLongitude);
     _isInitialized = true;
+    
+    _startLocationStream();
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -545,6 +560,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   
   @override
   void dispose() {
+    _positionSubscription?.cancel();
     _mapController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -745,6 +761,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           _isNavigating = true;
           _navigationDestination = destination;
           _navigationMode = mode;
+          _activeRoutingProfile = mode == 'car' ? 'car' : 'motorcycle_sub400';
         });
         
         // * Calculate route
@@ -831,296 +848,100 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
   
   
-  /// * Calculate route using OSRM API with PH-specific routing logic
+  /// * Calculate route using SmartRoad backend API (MVP)
   Future<void> _calculateRoute(LatLng destination, String mode) async {
     try {
       final origin = _currentLocation;
       
-      // * Determine routing profile and constraints based on mode
-      String profile;
-      bool avoidTollways = false;
-      bool avoidMajorRoads = false;
-      String routeNote = '';
+      // * Map mode to backend API format
+      String backendMode;
+      bool avoidTolls = false;
       
       switch (mode) {
         case 'car':
-          profile = 'driving';
-          avoidTollways = false;
-          routeNote = 'Car route (Expressways allowed)';
-          // * TODO: Add number coding check
+          backendMode = 'car';
+          avoidTolls = _avoidTollsToggle;
           break;
-          
         case 'motorcycle_sub400':
-          profile = 'driving';
-          avoidTollways = true; // * BANNED from expressways (NLEX, SLEX, CAVITEX, TPLEX, etc.)
-          routeNote = 'Motorcycle Sub-400cc (No expressways - NLEX, SLEX, CAVITEX, TPLEX banned)';
-          break;
-          
         case 'motorcycle_400plus':
-          profile = 'driving';
-          avoidTollways = false; // * Allowed on expressways
-          routeNote = 'Motorcycle 400cc+ (Expressways allowed)';
+          backendMode = 'motorcycle';
+          avoidTolls = true; // * Motorcycles always avoid tolls in MVP
           break;
-          
-        case 'truck':
-          profile = 'driving';
-          avoidTollways = false;
-          // * Check truck ban hours
-          if (_isTruckBanHours()) {
-            avoidMajorRoads = true; // * Avoid EDSA and major roads during ban hours
-            routeNote = 'Truck route (Truck ban hours active - avoiding major roads)';
-          } else {
-            routeNote = 'Truck route (Normal hours)';
-          }
-          // * TODO: Add truck size constraints (6-wheeler, 10-wheeler)
-          // * TODO: Add total truck ban areas (Manila, Makati zones)
-          break;
-          
-        case 'public_transit':
-          profile = 'driving'; // * Placeholder - would need fixed route database
-          avoidTollways = false;
-          routeNote = 'Public Transit (Jeepney/Bus routes - fixed franchises)';
-          // * TODO: Implement fixed route matching for jeepneys/buses
-          // * TODO: Add MRT/LRT/PNR integration
-          break;
-          
-        case 'tricycle':
-          profile = 'driving';
-          avoidTollways = true; // * Banned from national highways
-          avoidMajorRoads = true; // * Must use barangay roads only
-          routeNote = 'Tricycle route (No national highways - barangay roads only)';
-          break;
-          
         default:
-          profile = 'driving';
-          avoidTollways = false;
+          backendMode = 'car';
+          avoidTolls = _avoidTollsToggle;
       }
       
-      // * Use GraphHopper API for better toll avoidance support
-      // * GraphHopper has better support for avoiding tolls than OSRM public API
-      String url;
-      bool useGraphHopper = avoidTollways || avoidMajorRoads;
+      debugPrint("📍 [MapScreen] Calculating route: mode=$backendMode, avoidTolls=$avoidTolls");
       
-      if (useGraphHopper) {
-        // * GraphHopper API with toll avoidance
-        final avoidParams = <String>[];
-        if (avoidTollways) {
-          avoidParams.add('toll');
-        }
-        if (avoidMajorRoads) {
-          avoidParams.add('motorway');
-        }
-        
-        url = 'https://graphhopper.com/api/1/route'
-            '?point=${origin.latitude},${origin.longitude}'
-            '&point=${destination.latitude},${destination.longitude}'
-            '&vehicle=$profile'
-            '${avoidParams.isNotEmpty ? '&avoid=${avoidParams.join(",")}' : ''}'
-            '&type=json'
-            '&instructions=false'
-            '&calc_points=true'
-            '&key=demo'; // * Free demo key - replace with your own in production
-      } else {
-        // * Use OSRM for standard routes (faster, no API key needed)
-        url = 'https://router.project-osrm.org/route/v1/$profile/'
-            '${origin.longitude},${origin.latitude};'
-            '${destination.longitude},${destination.latitude}'
-            '?overview=full&geometries=geojson&alternatives=false';
+      // * Call backend routing service
+      final routes = await _routingService.calculateRoute(
+        origin: origin,
+        destination: destination,
+        mode: backendMode,
+        avoidTolls: avoidTolls,
+      );
+      
+      if (routes.isEmpty) {
+        throw Exception("No routes returned from backend");
       }
       
-      debugPrint("📍 [MapScreen] Calculating route: $routeNote");
-      if (avoidTollways) {
-        debugPrint("⚠️ [MapScreen] Avoiding expressways/tollways");
-      }
-      if (avoidMajorRoads) {
-        debugPrint("⚠️ [MapScreen] Avoiding major roads (truck ban/tricycle restrictions)");
-      }
+      // * Use primary route (first one)
+      final primaryRoute = routes[0];
       
-      final response = await _dio.get(url);
+      setState(() {
+        _navigationRoute = primaryRoute.geometry;
+        _routeDistance = primaryRoute.distanceMeters / 1000; // * Convert to km
+        _routeDuration = Duration(seconds: primaryRoute.durationSeconds);
+      });
       
-      if (response.statusCode == 200) {
-        Map<String, dynamic>? selectedRoute;
-        List<LatLng> routePoints = [];
-        double distance = 0.0;
-        double duration = 0.0;
-        
-        if (useGraphHopper) {
-          // * Parse GraphHopper response
-          final paths = response.data['paths'];
-          if (paths != null && paths is List && paths.isNotEmpty) {
-            selectedRoute = paths[0] as Map<String, dynamic>;
-            final pointsData = selectedRoute['points'];
-            if (pointsData != null && pointsData is Map) {
-              final points = pointsData['coordinates'] as List?;
-              if (points != null) {
-                // * GraphHopper returns coordinates as [lng, lat]
-                routePoints = points.map((coord) {
-                  return LatLng(coord[1] as double, coord[0] as double);
-                }).toList();
-              }
-            }
-            
-            final dist = selectedRoute['distance'];
-            final time = selectedRoute['time'];
-            if (dist != null) {
-              distance = (dist as num).toDouble() / 1000; // * Convert to km
-            }
-            if (time != null) {
-              duration = (time as num).toDouble() / 1000 / 60; // * Convert to minutes
-            }
-            
-            if (routePoints.isEmpty) {
-              throw Exception("No route points found from GraphHopper");
-            }
-          } else {
-            throw Exception("No route found from GraphHopper");
-          }
-        } else {
-          // * Parse OSRM response
-          final code = response.data['code'];
-          if (code == 'Ok') {
-            final routes = response.data['routes'] as List?;
-            if (routes != null && routes.isNotEmpty) {
-              selectedRoute = routes[0] as Map<String, dynamic>;
-              final geometry = selectedRoute['geometry'] as Map<String, dynamic>?;
-              if (geometry != null) {
-                final coords = geometry['coordinates'] as List?;
-                if (coords != null) {
-                  // * OSRM returns coordinates as [lng, lat]
-                  routePoints = coords.map((coord) {
-                    return LatLng(coord[1] as double, coord[0] as double);
-                  }).toList();
-                }
-              }
-              
-              final dist = selectedRoute['distance'];
-              final dur = selectedRoute['duration'];
-              if (dist != null) {
-                distance = (dist as num).toDouble() / 1000; // * Convert to km
-              }
-              if (dur != null) {
-                duration = (dur as num).toDouble() / 60; // * Convert to minutes
-              }
-            } else {
-              throw Exception("OSRM returned no routes");
-            }
-          } else {
-            throw Exception("OSRM route calculation failed: $code");
-          }
-        }
-        
-        // * Additional verification: check if route still contains expressways
-        if (avoidTollways && routePoints.isNotEmpty) {
-          bool stillHasExpressway = _routeContainsExpressway(
-            routePoints.map((p) => [p.longitude, p.latitude]).toList()
-          );
-          
-          if (stillHasExpressway) {
-            debugPrint("⚠️ [MapScreen] Route still contains expressway segments after filtering");
-            // * Try to get alternative route using OSRM with alternatives
-            try {
-              final altUrl = 'https://router.project-osrm.org/route/v1/$profile/'
-                  '${origin.longitude},${origin.latitude};'
-                  '${destination.longitude},${destination.latitude}'
-                  '?overview=full&geometries=geojson&alternatives=true';
-              
-              final altResponse = await _dio.get(altUrl);
-              if (altResponse.statusCode == 200 && altResponse.data['code'] == 'Ok') {
-                List<dynamic> altRoutes = altResponse.data['routes'] as List;
-                
-                // * Find route without expressways
-                for (var route in altRoutes) {
-                  final geometry = route['geometry']['coordinates'] as List;
-                  bool hasExpressway = _routeContainsExpressway(geometry);
-                  if (!hasExpressway) {
-                    routePoints = geometry.map((coord) {
-                      return LatLng(coord[1] as double, coord[0] as double);
-                    }).toList();
-                    distance = route['distance'] / 1000;
-                    duration = route['duration'] / 60;
-                    debugPrint("✅ [MapScreen] Found alternative route without expressways");
-                    break;
-                  }
-                }
-              }
-            } catch (e) {
-              debugPrint("⚠️ [MapScreen] Could not get alternative route: $e");
-            }
-          }
-        }
-        
-        // * TODO: Filter major roads for truck ban hours and tricycle restrictions
-        // * - EDSA
-        // * - National Highways
-        // * - Major Avenues
-        
-        setState(() {
-          _navigationRoute = routePoints;
-        });
-        
-        debugPrint("📍 [MapScreen] Route calculated: ${routePoints.length} points, ${distance.toStringAsFixed(2)} km, ${duration.toStringAsFixed(1)} min");
-        
-        if (avoidTollways || avoidMajorRoads) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Container(
-                  padding: const EdgeInsets.all(AppTheme.spacingMD),
-                  decoration: BoxDecoration(
-                    color: AppTheme.warningColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                    border: Border.all(
-                      color: AppTheme.warningColor.withOpacity(0.5),
-                      width: 1.5,
+      debugPrint("📍 [MapScreen] Route calculated: ${primaryRoute.geometry.length} points, "
+          "${_routeDistance.toStringAsFixed(2)} km, "
+          "${(_routeDuration.inMinutes).toStringAsFixed(1)} min");
+      
+      // * Show info if tolls are being avoided
+      if (avoidTolls && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Container(
+              padding: const EdgeInsets.all(AppTheme.spacingMD),
+              decoration: BoxDecoration(
+                color: AppTheme.infoColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                border: Border.all(
+                  color: AppTheme.infoColor.withOpacity(0.5),
+                  width: 1.5,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: AppTheme.infoColor,
+                    size: 20,
+                  ),
+                  const SizedBox(width: AppTheme.spacingMD),
+                  Expanded(
+                    child: Text(
+                      "Route calculated avoiding toll roads",
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.textPrimary,
+                      ),
                     ),
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        color: AppTheme.warningColor,
-                        size: 20,
-                      ),
-                      const SizedBox(width: AppTheme.spacingMD),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              routeNote,
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: AppTheme.textPrimary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: AppTheme.spacingSM),
-                            Text(
-                              "Note: Expressway/major road filtering requires PH road database. "
-                              "Route may include restricted roads.",
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                behavior: SnackBarBehavior.floating,
-                margin: const EdgeInsets.all(AppTheme.spacingMD),
-                duration: const Duration(seconds: 5),
+                ],
               ),
-            );
-          }
-        }
-      } else {
-        throw Exception("Failed to calculate route: ${response.data['code']}");
+            ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(AppTheme.spacingMD),
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
+      
     } catch (e) {
       debugPrint("❌ [MapScreen] Error calculating route: $e");
       if (mounted) {
@@ -1228,67 +1049,35 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                    Text(
-                      "Start Navigation",
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: AppTheme.spacingMD),
-                    Text(
-                      "Choose your vehicle type:",
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: AppTheme.spacingLG),
-                    // * Car mode
-                    _DirectionOption(
-                      icon: Icons.directions_car,
-                      title: "Car",
-                      subtitle: "Standard car navigation (Expressways allowed)",
-                      onTap: () => _startNavigation(destination, 'car'),
-                    ),
-                    const SizedBox(height: AppTheme.spacingMD),
-                    // * Motorcycle Sub-400cc (most common)
-                    _DirectionOption(
-                      icon: Icons.two_wheeler,
-                      title: "Motorcycle (Sub-400cc)",
-                      subtitle: "No expressways - for scooters & underbones",
-                      onTap: () => _startNavigation(destination, 'motorcycle_sub400'),
-                    ),
-                    const SizedBox(height: AppTheme.spacingMD),
-                    // * Motorcycle 400cc+
-                    _DirectionOption(
-                      icon: Icons.two_wheeler,
-                      title: "Motorcycle (400cc+)",
-                      subtitle: "Expressways allowed - for big bikes",
-                      onTap: () => _startNavigation(destination, 'motorcycle_400plus'),
-                    ),
-                    const SizedBox(height: AppTheme.spacingMD),
-                    // * Truck mode
-                    _DirectionOption(
-                      icon: Icons.local_shipping,
-                      title: "Truck",
-                      subtitle: "Truck ban hours considered",
-                      onTap: () => _startNavigation(destination, 'truck'),
-                    ),
-                    const SizedBox(height: AppTheme.spacingMD),
-                    // * Public Transit mode
-                    _DirectionOption(
-                      icon: Icons.directions_bus,
-                      title: "Public Transit",
-                      subtitle: "Jeepney, Bus, MRT/LRT routes",
-                      onTap: () => _startNavigation(destination, 'public_transit'),
-                    ),
-                    const SizedBox(height: AppTheme.spacingMD),
-                    // * Tricycle mode
-                    _DirectionOption(
-                      icon: Icons.pedal_bike,
-                      title: "Tricycle",
-                      subtitle: "No national highways - barangay roads only",
-                      onTap: () => _startNavigation(destination, 'tricycle'),
-                    ),
+                          Text(
+                            "Start Navigation",
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: AppTheme.spacingMD),
+                          Text(
+                            "Pick a preset that matches your ride.",
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: AppTheme.spacingLG),
+                          _DirectionOption(
+                            icon: Icons.directions_car,
+                            title: "Car",
+                            subtitle: "Fastest routes, tolls optional",
+                            isActive: _activeRoutingProfile == 'car',
+                            onTap: () => _startNavigation(destination, 'car'),
+                          ),
+                          const SizedBox(height: AppTheme.spacingMD),
+                          _DirectionOption(
+                            icon: Icons.two_wheeler,
+                            title: "Motorcycle",
+                            subtitle: "Automatically avoids toll roads",
+                            isActive: _activeRoutingProfile != 'car',
+                            onTap: () => _startNavigation(destination, 'motorcycle_sub400'),
+                          ),
                           const SizedBox(height: AppTheme.spacingXL),
                         ],
                       ),
@@ -1346,53 +1135,85 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
   
+  Future<void> _startLocationStream() async {
+    final locationService = LocationService();
+    bool hasPermission = await locationService.isPermissionGranted();
+    if (!hasPermission) {
+      hasPermission = await locationService.requestPermission();
+    }
+    if (!hasPermission) {
+      return;
+    }
+    
+    const settings = LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 5,
+    );
+    
+    await _positionSubscription?.cancel();
+    _positionSubscription = Geolocator.getPositionStream(locationSettings: settings).listen(
+      (position) {
+        final updated = LatLng(position.latitude, position.longitude);
+        if (!mounted) return;
+        setState(() {
+          _currentLocation = updated;
+          _hasPreciseLocation = true;
+        });
+        if (!_isNavigating) {
+          _mapController.move(updated, _mapController.camera.zoom);
+        }
+      },
+      onError: (error) => debugPrint("❌ [MapScreen] Location stream error: $error"),
+    );
+  }
+  
   Future<void> _loadCurrentLocation() async {
     try {
       debugPrint("📍 [MapScreen] Loading current location...");
-    final locationAsync = ref.read(currentLocationProvider);
-    locationAsync.whenData((position) {
-        if (mounted) {
-          if (position != null) {
-            final location = LatLng(position.latitude, position.longitude);
-            debugPrint("📍 [MapScreen] Got location: ${location.latitude}, ${location.longitude}");
-        setState(() {
-              _currentLocation = location;
-        });
-        // * Move map to current location
-            try {
-              _mapController.move(location, AppConstants.defaultZoom);
-              debugPrint("📍 [MapScreen] Map moved to current location");
-            } catch (e) {
-              debugPrint("❌ [MapScreen] Error moving map: $e");
-            }
-          } else {
-            debugPrint("📍 [MapScreen] No location available, using default (Manila)");
-            // * If location is not available, use default location (already set)
-            // * Just ensure map is centered
-            try {
-              _mapController.move(_currentLocation, AppConstants.defaultZoom);
-            } catch (e) {
-              debugPrint("❌ [MapScreen] Error moving map to default: $e");
-            }
-          }
-        }
-      });
+      final locationService = LocationService();
+      final position = await locationService.getCurrentPosition();
+      if (!mounted) return;
       
-      // * Check for errors
-      locationAsync.when(
-        data: (_) {}, // Already handled above
-        loading: () => debugPrint("📍 [MapScreen] Loading location..."),
-        error: (error, stackTrace) {
-          debugPrint("❌ [MapScreen] Error getting location: $error");
-          debugPrint("❌ [MapScreen] Stack: $stackTrace");
-        },
-      );
+      if (position != null) {
+        final location = LatLng(position.latitude, position.longitude);
+        setState(() {
+          _currentLocation = location;
+          _hasPreciseLocation = true;
+        });
+        try {
+          _mapController.move(location, AppConstants.defaultZoom);
+          debugPrint("📍 [MapScreen] Map moved to current location");
+        } catch (e) {
+          debugPrint("❌ [MapScreen] Error moving map: $e");
+        }
+      } else {
+        debugPrint("📍 [MapScreen] No location available, using default (Manila)");
+        _mapController.move(_currentLocation, AppConstants.defaultZoom);
+      }
     } catch (e) {
       debugPrint("❌ [MapScreen] Error loading location: $e");
       // * Ensure we have a valid location
       if (mounted) {
         _currentLocation = LatLng(AppConstants.defaultLatitude, AppConstants.defaultLongitude);
       }
+    }
+  }
+  
+  Future<void> _refreshLocation({bool centerOnMap = true}) async {
+    final locationService = LocationService();
+    final position = await locationService.getCurrentPosition();
+    if (!mounted) return;
+    if (position != null) {
+      final location = LatLng(position.latitude, position.longitude);
+      setState(() {
+        _currentLocation = location;
+        _hasPreciseLocation = true;
+      });
+      if (centerOnMap) {
+        _mapController.move(location, AppConstants.defaultZoom);
+      }
+    } else {
+      debugPrint("❌ [MapScreen] Unable to refresh location");
     }
   }
   
@@ -1725,18 +1546,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         hazards = [];
       }
       
-      // * Safely get location - ensure it's never null
-      AsyncValue<Position?> locationAsync;
-      try {
-        debugPrint("🗺️ [MapScreen] Watching currentLocationProvider...");
-        locationAsync = ref.watch(currentLocationProvider);
-        debugPrint("🗺️ [MapScreen] Location provider state: ${locationAsync.valueOrNull != null ? 'has value' : 'no value'}");
-      } catch (e, stackTrace) {
-        debugPrint("❌ [MapScreen] Error reading location provider: $e");
-        debugPrint("❌ [MapScreen] Stack: $stackTrace");
-        locationAsync = const AsyncValue.loading();
-      }
-      
       // * Ensure _currentLocation is always valid - validate coordinates
       if (!_currentLocation.latitude.isFinite || !_currentLocation.longitude.isFinite) {
         _currentLocation = LatLng(AppConstants.defaultLatitude, AppConstants.defaultLongitude);
@@ -1750,37 +1559,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           ? _currentLocation.longitude 
           : AppConstants.defaultLongitude;
       final safeCenter = LatLng(safeLat, safeLon);
-      
-      // * Update current location if we got actual user location
-      locationAsync.whenData((position) {
-        if (position != null && mounted) {
-          final newLocation = LatLng(position.latitude, position.longitude);
-          // * Only update if location actually changed (more than 100m difference)
-          final distance = Geolocator.distanceBetween(
-            _currentLocation.latitude,
-            _currentLocation.longitude,
-            newLocation.latitude,
-            newLocation.longitude,
-          );
-          if (distance > 100) {
-            debugPrint("📍 [MapScreen] Updating location to: ${newLocation.latitude}, ${newLocation.longitude}");
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                setState(() {
-                  _currentLocation = newLocation;
-                });
-                // * Smoothly move map to new location
-                _mapController.move(newLocation, AppConstants.defaultZoom);
-              }
-            });
-          }
-        }
-      });
-      
-      // * Get current location for marker (only show if we got actual user location)
-      final currentLocationForMarker = locationAsync.valueOrNull != null
-          ? _currentLocation
-          : null;
+      final currentLocationForMarker = _hasPreciseLocation ? _currentLocation : null;
     
     return Scaffold(
       body: Stack(
@@ -1962,16 +1741,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   // * Location Button
                   _MapControlButton(
                     icon: Icons.my_location,
-                    onPressed: locationAsync.valueOrNull != null
+                    onPressed: _hasPreciseLocation
                         ? () {
                             // * Center on current location
                             _mapController.move(_currentLocation, AppConstants.defaultZoom);
                           }
                         : _requestLocationPermission,
-                    tooltip: locationAsync.valueOrNull != null
+                    tooltip: _hasPreciseLocation
                         ? "Center on my location"
                         : "Get my location",
-                    backgroundColor: locationAsync.valueOrNull != null
+                    backgroundColor: _hasPreciseLocation
                         ? AppTheme.primaryColor
                         : AppTheme.textSecondary,
                   ),
@@ -2190,6 +1969,95 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   },
               ),
             ),
+          // * Bottom Toolbar
+          if (_selectedHazard == null && !_isNavigating)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                child: Container(
+                  margin: const EdgeInsets.all(AppTheme.spacingMD),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppTheme.spacingMD,
+                    vertical: AppTheme.spacingSM,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceColor,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                    border: Border.all(
+                      color: AppTheme.borderColor,
+                      width: 1.5,
+                    ),
+                    boxShadow: AppTheme.shadowLarge,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _ToolbarButton(
+                        icon: Icons.navigation_rounded,
+                        label: "Navigate",
+                        onTap: () {
+                          if (_searchResults.isNotEmpty) {
+                            _selectSearchResult(_searchResults[0]);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: const Text("Search for a destination first"),
+                                backgroundColor: AppTheme.warningColor,
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      _ToolbarButton(
+                        icon: Icons.report_problem_outlined,
+                        label: "Report",
+                        onTap: () {
+                          // * TODO: Navigate to report screen
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text("Report feature coming soon"),
+                              backgroundColor: AppTheme.infoColor,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                      _ToolbarButton(
+                        icon: Icons.layers_outlined,
+                        label: "Layers",
+                        onTap: () {
+                          // * TODO: Show map layers options
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text("Map layers coming soon"),
+                              backgroundColor: AppTheme.infoColor,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                      _ToolbarButton(
+                        icon: Icons.settings_outlined,
+                        label: "Settings",
+                        onTap: () {
+                          // * TODO: Navigate to settings
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text("Settings coming soon"),
+                              backgroundColor: AppTheme.infoColor,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
         ),
       );
@@ -2237,6 +2105,57 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ),
       );
     }
+  }
+}
+
+/// * Toolbar button widget
+class _ToolbarButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ToolbarButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: AppTheme.primaryColor,
+                size: 24,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AppTheme.textSecondary,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -45,13 +45,19 @@ class RoutingService {
   /// * [destination] - End point
   /// * [mode] - "car" or "motorcycle"
   /// * [avoidTolls] - Whether to avoid toll roads
-  /// 
+  /// * [userStickerIds] - List of active sticker IDs for permission-based routing
+  /// * 
   /// Returns list of routes (primary + 1 alternative)
+  /// 
+  /// Note: The userStickerIds parameter is prepared for future implementation
+  /// where GraphHopper will use sticker permissions to weight roads (e.g., 
+  /// if user has Sticker A, weight Road A as 0.0 for passable routes)
   Future<List<RouteResponse>> calculateRoute({
     required LatLng origin,
     required LatLng destination,
     required String mode,
     bool avoidTolls = false,
+    List<String> userStickerIds = const [],
   }) async {
     try {
       final response = await _dio.post(
@@ -67,6 +73,7 @@ class RoutingService {
           },
           "mode": mode,
           "avoid_tolls": avoidTolls,
+          "user_sticker_ids": userStickerIds, // * Prepared for future routing logic
         },
         options: Options(
           headers: {

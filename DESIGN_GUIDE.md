@@ -1,10 +1,12 @@
 # SmartRoad Design Guide
 ## The Heedful - First Project Design System
 
-**Version:** 2.1.0 - Refined Edition  
+**Version:** 2.2.0  
 **Last Updated:** 2025  
 **Purpose:** Comprehensive design system documentation for SmartRoad application  
 **Brand:** The Heedful - Premium Startup Experience
+
+> **Note**: This guide focuses exclusively on design patterns, visual elements, and UI/UX guidelines. For version updates, feature changes, and technical implementation details, see [CHANGELOG.md](../CHANGELOG.md).
 
 ---
 
@@ -842,36 +844,13 @@ AppTheme.animationCurve
 
 ## Version History
 
-### v2.0.0 - Premium Edition (2025)
-- **Premium UI Enhancements**
-  - Gradient buttons with glow effects
-  - Sophisticated screen entrance animations
-  - Haptic feedback integration
-  - Keyboard navigation support (Enter key)
-  - Enhanced transitions and micro-interactions
-  
-- **The Heedful Branding**
-  - Brand badge on authentication screens
-  - Consistent brand presence throughout
-  - Premium aesthetic aligned with startup identity
-  
-- **UX Improvements**
-  - Auto-focus on form fields
-  - Clear buttons in input fields
-  - Improved error handling with icons
-  - Floating snackbars with better styling
-  
-- **Enhanced Components**
-  - Premium login/signup screens
-  - Animated logo and brand elements
-  - Gradient FABs
-  - Enhanced card designs
+> **Note**: For detailed version updates and feature changes, see [CHANGELOG.md](../CHANGELOG.md)
 
-### v1.0.0 (2025)
-- Initial design system
-- Dark-first theme
-- Complete component library
-- Comprehensive documentation
+### Design System Evolution
+
+- **v2.2.0**: Added design patterns for Gate Security module (QR codes, scanner overlays, result feedback)
+- **v2.0.0**: Premium edition with gradient buttons, enhanced animations, haptic feedback, keyboard navigation
+- **v1.0.0**: Initial design system with dark-first theme and complete component library
 
 ---
 
@@ -895,33 +874,29 @@ For design system questions or updates, contact the design team or refer to this
 
 ---
 
-## Version 2.1.0 Updates (Latest)
+## Design Patterns for Gate Security Module
 
-### Login Screen Redesign
-- **Two-Panel Layout**: Split-screen design with story panel on left and login card on right (desktop) or stacked (mobile)
-- **Less AI-Generated Look**: Removed excessive gradients and animations, replaced with clean, professional design
-- **Story Panel**: Features The Heedful branding, value propositions, and key statistics
-- **Simplified Animations**: Subtle fade and slide transitions instead of complex animations
+### QR Code Display
+- **Layout**: Large, centered QR code on white background for optimal scanning
+- **Size**: 280x280px QR code with padding
+- **Container**: White background with rounded corners (radiusLG)
+- **Information Hierarchy**: HOA name (titleLarge) → "Gate Pass" (bodyMedium) → QR Code → Expiry info
 
-### Map Screen Enhancements
-- **Bottom Toolbar**: Added floating toolbar at bottom with quick access to:
-  - Navigate (opens search/directions)
-  - Report (hazard reporting)
-  - Layers (map layer options)
-  - Settings (app settings)
-- **Improved Top Bar**: Enhanced search bar with better visual hierarchy
-- **Location Accuracy**: Default location set to STI College Las Piñas (14.4244°N, 120.9883°E)
-- **High-Accuracy Location**: Using `bestForNavigation` accuracy mode for precise location tracking
+### Sticker Cards
+- **Layout**: Clean card layout showing HOA name, expiry, and status
+- **Spacing**: Consistent padding (spacingMD) with proper hierarchy
+- **Status Indicators**: Color-coded days remaining (warning for <30 days, success for >30 days)
+- **Typography**: TitleMedium for HOA name, bodyMedium for details
 
-### Routing Integration
-- **Backend-Powered Routing**: Integrated with SmartRoad backend API for route calculation
-- **MVP Routing**: Supports car and motorcycle modes with toll avoidance
-- **Simplified UI**: Cleaner navigation options with clear mode selection
+### Scanner Overlay
+- **Dark Overlay**: Black background with 50% opacity
+- **Scanning Frame**: 280x280px frame with primary color border (3px)
+- **Corner Indicators**: 40x40px corner brackets for visual guidance
+- **Instructions**: Centered text below frame with clear guidance
 
-### Design System Additions
-- **Spacing Constants**: Added spacing system (XS, SM, MD, LG, XL, XXL)
-- **Border Radius Constants**: Added radius system (SM, MD, LG, XL, Full)
-- **Shadow System**: Added shadow variants (Small, Medium, Large, Glow)
-- **Info Color**: Added info color for informational messages
-- **Border Color**: Added border color for consistent borders
+### Result Feedback
+- **Success Overlay**: Full-screen overlay with green border, check icon, and sticker details
+- **Error Overlay**: Full-screen overlay with red border, error icon, and error message
+- **Animation**: Smooth fade-in with haptic feedback
+- **Auto-dismiss**: Overlays automatically dismiss after 2-3 seconds
 

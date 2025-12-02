@@ -1,4 +1,5 @@
 import "package:flutter/material.dart";
+import "package:flutter/foundation.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:image_picker/image_picker.dart";
 import "dart:io";
@@ -7,6 +8,8 @@ import "../../services/supabase_service.dart";
 import "../../models/user_profile.dart";
 import "../../core/theme/app_theme.dart";
 import "../auth/login_screen.dart";
+import "../gate/gate_pass_screen.dart";
+import "../gate/guard_scanner_screen.dart";
 
 /// * Profile screen
 class ProfileScreen extends ConsumerWidget {
@@ -16,6 +19,13 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userId = ref.watch(currentUserIdProvider);
     final profileAsync = ref.watch(currentUserProfileProvider);
+    
+    debugPrint("🔍 [ProfileScreen] UserId: $userId");
+    debugPrint("🔍 [ProfileScreen] Profile state: ${profileAsync.valueOrNull?.name ?? 'null'}");
+    debugPrint("🔍 [ProfileScreen] Has error: ${profileAsync.hasError}");
+    if (profileAsync.hasError) {
+      debugPrint("🔍 [ProfileScreen] Error: ${profileAsync.error}");
+    }
     
     if (userId == null) {
       return Scaffold(
@@ -46,15 +56,78 @@ class ProfileScreen extends ConsumerWidget {
       body: profileAsync.when(
         data: (profile) {
           if (profile == null) {
-            return const Center(child: CircularProgressIndicator());
+            // * Profile is null - this shouldn't happen in demo mode
+            // * Try to refresh
+            debugPrint("⚠️ [ProfileScreen] Profile is null, attempting refresh");
+            Future.microtask(() {
+              ref.invalidate(currentUserProfileProvider);
+            });
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: AppTheme.spacingMD),
+                  Text("Loading profile..."),
+                ],
+              ),
+            );
           }
           
+          debugPrint("✅ [ProfileScreen] Profile loaded successfully: ${profile.name}");
           return _ProfileContent(profile: profile);
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Text("Error: $error"),
+        loading: () => const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: AppTheme.spacingMD),
+              Text("Loading profile..."),
+            ],
+          ),
         ),
+        error: (error, stack) {
+          debugPrint("Profile error: $error");
+          debugPrint("Stack: $stack");
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppTheme.spacingXL),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: AppTheme.errorColor,
+                  ),
+                  const SizedBox(height: AppTheme.spacingMD),
+                  Text(
+                    "Something went wrong",
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spacingSM),
+                  Text(
+                    "Please try again",
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spacingXL),
+                  ElevatedButton(
+                    onPressed: () {
+                      // * Refresh the profile
+                      ref.invalidate(currentUserProfileProvider);
+                    },
+                    child: const Text("Retry"),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -169,21 +242,24 @@ class _ProfileContentState extends State<_ProfileContent> {
                 child: CircleAvatar(
                   radius: 64,
                   backgroundColor: AppTheme.surfaceVariant,
-                backgroundImage: _selectedImage != null
-                    ? FileImage(_selectedImage!)
-                    : widget.profile.photoUrl != null
-                        ? NetworkImage(widget.profile.photoUrl!)
-                        : null,
-                onBackgroundImageError: (exception, stackTrace) {
-                  // * Handle image load error
-                },
-                child: widget.profile.photoUrl == null && _selectedImage == null
+                  backgroundImage: _selectedImage != null
+                      ? FileImage(_selectedImage!)
+                      : widget.profile.photoUrl != null
+                          ? NetworkImage(widget.profile.photoUrl!)
+                          : null,
+                  onBackgroundImageError: _selectedImage != null || widget.profile.photoUrl != null
+                      ? (exception, stackTrace) {
+                          // * Handle image load error
+                          debugPrint("Error loading profile image: $exception");
+                        }
+                      : null,
+                  child: widget.profile.photoUrl == null && _selectedImage == null
                       ? Icon(
                           Icons.person,
                           size: 64,
                           color: AppTheme.textSecondary,
                         )
-                    : null,
+                      : null,
                 ),
               ),
               Positioned(
@@ -293,6 +369,126 @@ class _ProfileContentState extends State<_ProfileContent> {
               ),
             ],
           ),
+          const SizedBox(height: AppTheme.spacingXL),
+          
+          // * Gate Pass Card
+          Card(
+            child: InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const GatePassScreen(),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+              child: Padding(
+                padding: const EdgeInsets.all(AppTheme.spacingMD),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(AppTheme.spacingMD),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                      ),
+                      child: Icon(
+                        Icons.qr_code_scanner,
+                        color: AppTheme.primaryColor,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: AppTheme.spacingMD),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Gate Pass",
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Show QR code for gate access",
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: AppTheme.textTertiary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppTheme.spacingMD),
+          // * Guard Scanner Card (for testing)
+          Card(
+            child: InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const GuardScannerScreen(),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+              child: Padding(
+                padding: const EdgeInsets.all(AppTheme.spacingMD),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(AppTheme.spacingMD),
+                      decoration: BoxDecoration(
+                        color: AppTheme.infoColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                      ),
+                      child: Icon(
+                        Icons.qr_code_scanner_outlined,
+                        color: AppTheme.infoColor,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: AppTheme.spacingMD),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Guard Scanner",
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Scan QR codes to validate gate passes",
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: AppTheme.textTertiary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          
           const SizedBox(height: AppTheme.spacingXL),
           // * Update Button
           SizedBox(

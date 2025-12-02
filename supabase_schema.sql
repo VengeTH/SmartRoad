@@ -173,3 +173,105 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- * INSERT INTO auth.users (email, encrypted_password, email_confirmed_at)
 -- * VALUES ('demo@smartroad.app', crypt('DemoPass123!', gen_salt('bf')), NOW());
 
+-- ============================================================================
+-- * STICKER & GATE SECURITY MODULE
+-- ============================================================================
+
+-- * Create HOAs (Homeowners Associations) table
+-- * Represents gates/communities that require stickers for access
+CREATE TABLE public.hoas (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- * Create user_stickers table
+-- * Represents digital stickers/permit that users can purchase from HOAs
+CREATE TABLE public.user_stickers (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  hoa_id UUID REFERENCES public.hoas(id) ON DELETE CASCADE NOT NULL,
+  issued_at TIMESTAMPTZ NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  -- * Prevent duplicate active stickers for same user + HOA
+  CONSTRAINT unique_active_user_hoa_sticker 
+    UNIQUE NULLS NOT DISTINCT (user_id, hoa_id, is_active)
+    WHERE is_active = true
+);
+
+-- * Create indexes for stickers
+CREATE INDEX idx_user_stickers_user_id ON public.user_stickers(user_id);
+CREATE INDEX idx_user_stickers_hoa_id ON public.user_stickers(hoa_id);
+CREATE INDEX idx_user_stickers_expires_at ON public.user_stickers(expires_at);
+CREATE INDEX idx_user_stickers_is_active ON public.user_stickers(is_active);
+CREATE INDEX idx_hoas_is_active ON public.hoas(is_active);
+
+-- * Enable Row Level Security for new tables
+ALTER TABLE public.hoas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_stickers ENABLE ROW LEVEL SECURITY;
+
+-- * RLS Policies for HOAs table
+-- * Anyone can read active HOAs (for gate pass display)
+CREATE POLICY "HOAs are viewable by everyone"
+  ON public.hoas FOR SELECT
+  USING (is_active = true);
+
+-- * Only admins can manage HOAs (insert/update/delete)
+CREATE POLICY "Admins can manage HOAs"
+  ON public.hoas FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND reporter_level = 'Admin'
+    )
+  );
+
+-- * RLS Policies for user_stickers table
+-- * Users can read their own stickers
+CREATE POLICY "Users can view own stickers"
+  ON public.user_stickers FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- * Guards/admins can read all stickers (for validation)
+CREATE POLICY "Guards can view all stickers for validation"
+  ON public.user_stickers FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND reporter_level IN ('Admin', 'Expert')
+    )
+  );
+
+-- * Only admins can insert/update/delete stickers (HOAs sell stickers)
+CREATE POLICY "Admins can manage stickers"
+  ON public.user_stickers FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND reporter_level = 'Admin'
+    )
+  );
+
+-- * Trigger for updated_at on new tables
+CREATE TRIGGER update_hoas_updated_at
+  BEFORE UPDATE ON public.hoas
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE TRIGGER update_user_stickers_updated_at
+  BEFORE UPDATE ON public.user_stickers
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- * Sample HOA data (optional - for testing)
+-- * INSERT INTO public.hoas (name, description, latitude, longitude)
+-- * VALUES 
+-- *   ('BF Resort', 'BF Resort Village', 14.4244, 120.9883),
+-- *   ('BF Homes', 'BF Homes Parañaque', 14.5000, 121.0000);
+

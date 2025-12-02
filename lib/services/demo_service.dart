@@ -17,6 +17,9 @@ class DemoService {
   /// * Enable demo mode
   void enableDemoMode() {
     _isDemoMode = true;
+    // * Auto-authenticate demo user
+    _demoUserId = demoUserId;
+    // * Initialize demo data (creates demo user profile)
     _initializeDemoData();
   }
   
@@ -31,6 +34,8 @@ class DemoService {
   
   /// * Initialize demo data
   void _initializeDemoData() {
+    // * Auto-authenticate in demo mode
+    _demoUserId = demoUserId;
     // * Create demo user profile
     _demoUser = UserProfile(
       id: demoUserId,

@@ -202,8 +202,10 @@ class _ReportHazardScreenState extends ConsumerState<ReportHazardScreen> {
                 spacing: AppTheme.spacingSM,
                 runSpacing: AppTheme.spacingSM,
                 children: HazardType.values.map((type) {
+                  // * Capitalize first letter for display
+                  final displayName = type.value[0].toUpperCase() + type.value.substring(1);
                   return FilterChip(
-                    label: Text(type.value),
+                    label: Text(displayName),
                     selected: _selectedType == type,
                     onSelected: (selected) {
                       setState(() => _selectedType = selected ? type : null);

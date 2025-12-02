@@ -1,4 +1,5 @@
 import "package:supabase_flutter/supabase_flutter.dart";
+import "package:flutter/foundation.dart";
 import "dart:io";
 import "dart:typed_data";
 import "../models/hazard.dart";
@@ -143,16 +144,14 @@ class SupabaseService {
   /// * Get current user
   User? get currentUser {
     if (_isDemoMode) {
-      if (_demoService.isAuthenticated) {
-        return User(
-          id: DemoService.demoUserId,
-          appMetadata: {},
-          userMetadata: {'name': DemoService.demoUserName},
-          aud: 'authenticated',
-          createdAt: DateTime.now().toIso8601String(),
-        );
-      }
-      return null;
+      // * In demo mode, always return demo user (auto-authenticated)
+      return User(
+        id: DemoService.demoUserId,
+        appMetadata: {},
+        userMetadata: {'name': DemoService.demoUserName},
+        aud: 'authenticated',
+        createdAt: DateTime.now().toIso8601String(),
+      );
     }
     return client?.auth.currentUser;
   }
@@ -160,7 +159,8 @@ class SupabaseService {
   /// * Get current user ID
   String? get currentUserId {
     if (_isDemoMode) {
-      return _demoService.currentUserId;
+      // * In demo mode, always return demo user ID (auto-authenticated)
+      return DemoService.demoUserId;
     }
     return client?.auth.currentUser?.id;
   }
@@ -168,7 +168,8 @@ class SupabaseService {
   /// * Check if user is authenticated
   bool get isAuthenticated {
     if (_isDemoMode) {
-      return _demoService.isAuthenticated;
+      // * In demo mode, always authenticated (auto-authenticated)
+      return true;
     }
     return client?.auth.currentUser != null;
   }
@@ -178,17 +179,63 @@ class SupabaseService {
   /// * Get user profile
   Future<UserProfile?> getProfile(String userId) async {
     if (_isDemoMode) {
-      return _demoService.demoUser;
+      // * Ensure demo mode is enabled
+      if (!_demoService.isDemoMode) {
+        _demoService.enableDemoMode();
+      }
+      
+      // * Ensure demo user is initialized
+      var demoUser = _demoService.demoUser;
+      if (demoUser == null) {
+        // * Re-initialize if needed
+        _demoService.enableDemoMode();
+        demoUser = _demoService.demoUser;
+      }
+      
+      // * If still null, create a default demo user as fallback
+      if (demoUser == null) {
+        debugPrint("⚠️ [SupabaseService] Demo user was null, creating fallback");
+        try {
+          return UserProfile(
+            id: DemoService.demoUserId,
+            email: DemoService.demoEmail,
+            name: DemoService.demoUserName,
+            photoUrl: null,
+            reporterLevel: ReporterLevel.expert,
+            validReportsCount: 42,
+            createdAt: DateTime.now().subtract(const Duration(days: 30)),
+            updatedAt: DateTime.now(),
+          );
+        } catch (e) {
+          debugPrint("❌ [SupabaseService] Error creating fallback user: $e");
+          rethrow;
+        }
+      }
+      
+      debugPrint("✅ [SupabaseService] Returning demo user: ${demoUser.name}");
+      return demoUser;
     }
     
-    final response = await client!
-        .from('profiles')
-        .select()
-        .eq('id', userId)
-        .maybeSingle();
-    
-    if (response == null) return null;
-    return UserProfile.fromJson(response as Map<String, dynamic>);
+    try {
+      final response = await client!
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+      
+      if (response == null) {
+        debugPrint("⚠️ [SupabaseService] Profile not found for userId: $userId");
+        return null;
+      }
+      
+      final profile = UserProfile.fromJson(response as Map<String, dynamic>);
+      debugPrint("✅ [SupabaseService] Profile loaded: ${profile.name}");
+      return profile;
+    } catch (e, stack) {
+      debugPrint("❌ [SupabaseService] Error getting profile from Supabase: $e");
+      debugPrint("❌ [SupabaseService] Stack: $stack");
+      rethrow;
+    }
   }
   
   /// * Update user profile

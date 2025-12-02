@@ -100,34 +100,41 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen>
           ),
         ),
         child: SafeArea(
-          child: Container(
-            height: 70,
-            padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMD),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _NavItem(
-                  icon: Icons.map_outlined,
-                  activeIcon: Icons.map,
-            label: "Map",
-                  isActive: _currentIndex == 0,
-                  onTap: () => _onTabTapped(0),
-          ),
-                _NavItem(
-                  icon: Icons.feed_outlined,
-                  activeIcon: Icons.feed,
-            label: "Feed",
-                  isActive: _currentIndex == 1,
-                  onTap: () => _onTabTapped(1),
-          ),
-                _NavItem(
-                  icon: Icons.person_outline,
-                  activeIcon: Icons.person,
-            label: "Profile",
-                  isActive: _currentIndex == 2,
-                  onTap: () => _onTabTapped(2),
-          ),
-        ],
+          top: false,
+          minimum: const EdgeInsets.only(bottom: 0),
+          child: IntrinsicHeight(
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppTheme.spacingMD,
+                vertical: 6,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _NavItem(
+                    icon: Icons.map_outlined,
+                    activeIcon: Icons.map,
+                    label: "Map",
+                    isActive: _currentIndex == 0,
+                    onTap: () => _onTabTapped(0),
+                  ),
+                  _NavItem(
+                    icon: Icons.feed_outlined,
+                    activeIcon: Icons.feed,
+                    label: "Feed",
+                    isActive: _currentIndex == 1,
+                    onTap: () => _onTabTapped(1),
+                  ),
+                  _NavItem(
+                    icon: Icons.person_outline,
+                    activeIcon: Icons.person,
+                    label: "Profile",
+                    isActive: _currentIndex == 2,
+                    onTap: () => _onTabTapped(2),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -213,16 +220,17 @@ class _NavItem extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppTheme.radiusMD),
           child: Container(
             padding: const EdgeInsets.symmetric(
-              vertical: AppTheme.spacingSM,
+              vertical: 4,
               horizontal: AppTheme.spacingXS,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 AnimatedContainer(
                   duration: AppTheme.animationNormal,
                   curve: AppTheme.animationCurve,
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(5),
                   decoration: BoxDecoration(
                     color: isActive
                         ? AppTheme.primaryColor.withOpacity(0.1)
@@ -234,22 +242,27 @@ class _NavItem extends StatelessWidget {
                     color: isActive
                         ? AppTheme.primaryColor
                         : AppTheme.textTertiary,
-                    size: 24,
+                    size: 20,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 AnimatedDefaultTextStyle(
                   duration: AppTheme.animationNormal,
                   curve: AppTheme.animationCurve,
                   style: TextStyle(
-                    fontSize: isActive ? 12 : 11,
+                    fontSize: 10,
                     fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                     color: isActive
                         ? AppTheme.primaryColor
                         : AppTheme.textTertiary,
-                    letterSpacing: 0.3,
+                    letterSpacing: 0.1,
+                    height: 1.1,
                   ),
-                  child: Text(label),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),

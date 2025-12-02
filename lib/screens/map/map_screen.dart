@@ -17,6 +17,7 @@ import "../../widgets/hazard_detail_sheet.dart";
 import "../../services/location_service.dart";
 import "../../services/routing_service.dart";
 import "../../providers/hazards_provider.dart" show MapHazardsNotifier;
+import "../../providers/sticker_provider.dart";
 
 /// * Navigation overlay widget
 class _NavigationOverlay extends StatelessWidget {
@@ -874,12 +875,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       
       debugPrint("📍 [MapScreen] Calculating route: mode=$backendMode, avoidTolls=$avoidTolls");
       
+      // * Get user sticker IDs for permission-based routing
+      final userStickerIds = ref.read(userStickerIdsProvider);
+      
       // * Call backend routing service
       final routes = await _routingService.calculateRoute(
         origin: origin,
         destination: destination,
         mode: backendMode,
         avoidTolls: avoidTolls,
+        userStickerIds: userStickerIds,
       );
       
       if (routes.isEmpty) {
@@ -1762,20 +1767,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               top: AppTheme.spacingMD,
               left: AppTheme.spacingMD,
               right: AppTheme.spacingMD,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceColor,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-                  border: Border.all(
-                    color: AppTheme.borderColor,
-                    width: 1.5,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceColor,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                    border: Border.all(
+                      color: AppTheme.borderColor,
+                      width: 1.5,
+                    ),
+                    boxShadow: AppTheme.shadowLarge,
                   ),
-                  boxShadow: AppTheme.shadowLarge,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
                       controller: _searchController,
                       focusNode: _searchFocusNode,
                       decoration: InputDecoration(
@@ -1856,6 +1863,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           ],
                         ),
                         border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: AppTheme.spacingMD,
                           vertical: AppTheme.spacingMD,
@@ -1938,10 +1950,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           },
                         ),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-          ),
+            ),
             // * Navigation overlay (when navigating)
             if (_isNavigating && _navigationDestination != null && _navigationMode != null)
               Positioned(
@@ -1969,95 +1982,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   },
               ),
             ),
-          // * Bottom Toolbar
-          if (_selectedHazard == null && !_isNavigating)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: SafeArea(
-                child: Container(
-                  margin: const EdgeInsets.all(AppTheme.spacingMD),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppTheme.spacingMD,
-                    vertical: AppTheme.spacingSM,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceColor,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-                    border: Border.all(
-                      color: AppTheme.borderColor,
-                      width: 1.5,
-                    ),
-                    boxShadow: AppTheme.shadowLarge,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _ToolbarButton(
-                        icon: Icons.navigation_rounded,
-                        label: "Navigate",
-                        onTap: () {
-                          if (_searchResults.isNotEmpty) {
-                            _selectSearchResult(_searchResults[0]);
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: const Text("Search for a destination first"),
-                                backgroundColor: AppTheme.warningColor,
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                          }
-                        },
-                      ),
-                      _ToolbarButton(
-                        icon: Icons.report_problem_outlined,
-                        label: "Report",
-                        onTap: () {
-                          // * TODO: Navigate to report screen
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text("Report feature coming soon"),
-                              backgroundColor: AppTheme.infoColor,
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                      ),
-                      _ToolbarButton(
-                        icon: Icons.layers_outlined,
-                        label: "Layers",
-                        onTap: () {
-                          // * TODO: Show map layers options
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text("Map layers coming soon"),
-                              backgroundColor: AppTheme.infoColor,
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                      ),
-                      _ToolbarButton(
-                        icon: Icons.settings_outlined,
-                        label: "Settings",
-                        onTap: () {
-                          // * TODO: Navigate to settings
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text("Settings coming soon"),
-                              backgroundColor: AppTheme.infoColor,
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          // * Bottom Toolbar (removed - using main navigation bar instead)
+          // * Note: Bottom toolbar removed to avoid conflict with MainNavigationScreen's bottomNavigationBar
         ],
         ),
       );
@@ -2108,54 +2034,5 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 }
 
-/// * Toolbar button widget
-class _ToolbarButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _ToolbarButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          onTap();
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 8,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                color: AppTheme.primaryColor,
-                size: 24,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AppTheme.textSecondary,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+// * Toolbar button widget removed - no longer used
 

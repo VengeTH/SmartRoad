@@ -4,6 +4,30 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
+## Version 2.3.1 - Branding Update
+
+**Release Date:** 2025  
+**Focus:** Consistent Branding Across All Platforms
+
+### Changes
+
+- **App Name Standardization**: Updated all user-facing display names to "SmartRoad" (proper capitalization)
+  - Web app title and manifest
+  - Android app label
+  - iOS display name and bundle name
+  - Windows window title and product information
+  - Linux window title
+  - All platform-specific metadata
+
+### Technical Notes
+
+- Package names and bundle identifiers remain lowercase (`smartroad`, `com.example.smartroad`) per platform conventions
+- Email addresses remain lowercase (`demo@smartroad.app`) per email format standards
+- Binary/executable names remain lowercase for file system compatibility
+- No breaking changes to package structure or identifiers
+
+---
+
 ## Version 2.3.0 - Physical Sticker Upload & HOA Access Types
 
 **Release Date:** 2025  
@@ -353,6 +377,14 @@ This document tracks all version updates, feature additions, and significant cha
 
 ## Migration Notes
 
+### Upgrading to Version 2.3.1
+
+1. **No Action Required**: This is a branding update only
+   - App will display "SmartRoad" on all platforms
+   - No database changes
+   - No code changes required
+   - Rebuild app to see updated branding
+
 ### Upgrading to Version 2.3.0
 
 1. **Database Migration**:
@@ -417,6 +449,9 @@ This document tracks all version updates, feature additions, and significant cha
 ---
 
 ## Breaking Changes
+
+### Version 2.3.1
+- None (branding update only)
 
 ### Version 2.3.0
 - None (additive changes only)

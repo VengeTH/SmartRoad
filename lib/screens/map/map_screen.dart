@@ -1629,7 +1629,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             children: [
               TileLayer(
                 urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                userAgentPackageName: "com.smartroad.app",
+                userAgentPackageName: "com.smartroad.app", // * Package name stays lowercase (technical identifier)
                 maxZoom: 19,
               ),
               // * Navigation route polyline

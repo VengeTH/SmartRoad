@@ -48,7 +48,7 @@ class RoutingService {
   /// * [userStickerIds] - List of active sticker IDs for permission-based routing
   /// * [hoaAccessTypes] - Map of HOA IDs to their access types for routing logic
   /// * 
-  /// Returns list of routes (primary + 1 alternative)
+  /// Returns list of routes (primary + 4 alternatives = 5 total)
   /// 
   /// Routing Logic:
   /// - If user has sticker for HOA -> Route through (Cost = 0.0)
@@ -83,6 +83,8 @@ class RoutingService {
           headers: {
             "Content-Type": "application/json",
           },
+          receiveTimeout: const Duration(seconds: 30),
+          sendTimeout: const Duration(seconds: 10),
         ),
       );
 
@@ -94,6 +96,22 @@ class RoutingService {
       } else {
         throw Exception("Route calculation failed: ${response.statusCode}");
       }
+    } on DioException catch (e) {
+      // * Handle specific Dio errors
+      String errorMessage = "Error calculating route";
+      
+      if (e.type == DioExceptionType.connectionError || 
+          e.type == DioExceptionType.connectionTimeout) {
+        errorMessage = "Cannot connect to routing service. Please ensure the backend server is running at $_baseUrl";
+      } else if (e.type == DioExceptionType.receiveTimeout) {
+        errorMessage = "Route calculation timed out. Please try again.";
+      } else if (e.type == DioExceptionType.badResponse) {
+        errorMessage = "Route calculation failed: ${e.response?.statusCode}";
+      } else {
+        errorMessage = "Network error: ${e.message}";
+      }
+      
+      throw Exception(errorMessage);
     } catch (e) {
       throw Exception("Error calculating route: $e");
     }

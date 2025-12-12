@@ -66,7 +66,7 @@ app.post("/route", async (req, res) => {
       type: "json",
       instructions: "false",
       points_encoded: "false",
-      alternatives: "1", // * Get 1 alternative route
+      alternatives: "4", // * Get 4 alternative routes (5 total routes)
     });
 
     if (avoidParams.length > 0) {
@@ -126,6 +126,7 @@ app.listen(PORT, () => {
   console.log(`SmartRoad Routing Backend running on port ${PORT}`);
   console.log(`GraphHopper URL: ${GRAPHHOPPER_URL}`);
 });
+
 
 
 

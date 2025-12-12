@@ -20,17 +20,26 @@ import "../../services/routing_service.dart";
 import "../../providers/hazards_provider.dart" show MapHazardsNotifier;
 import "../../providers/sticker_provider.dart";
 import "../../models/sticker.dart";
+import "../../utils/route_utils.dart";
 
 /// * Navigation overlay widget
 class _NavigationOverlay extends StatelessWidget {
   final String mode;
   final LatLng destination;
   final VoidCallback onStop;
+  final VoidCallback? onChangeRoute;
+  final double? remainingDistance;
+  final Duration? remainingDuration;
+  final bool isOffRoute;
 
   const _NavigationOverlay({
     required this.mode,
     required this.destination,
     required this.onStop,
+    this.onChangeRoute,
+    this.remainingDistance,
+    this.remainingDuration,
+    this.isOffRoute = false,
   });
 
   String _getModeName(String mode) {
@@ -122,22 +131,101 @@ class _NavigationOverlay extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  "Navigating (${_getModeName(mode)})",
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        "Navigating (${_getModeName(mode)})",
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    if (isOffRoute)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.spacingSM,
+                          vertical: AppTheme.spacingXS,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.errorColor.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(AppTheme.radiusSM),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              size: 14,
+                              color: AppTheme.errorColor,
+                            ),
+                            const SizedBox(width: AppTheme.spacingXS),
+                            Text(
+                              "Off Route",
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppTheme.errorColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
-                Text(
-                  "${destination.latitude.toStringAsFixed(4)}, ${destination.longitude.toStringAsFixed(4)}",
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textSecondary,
-                    fontFamily: 'monospace',
+                if (remainingDistance != null && remainingDistance! > 0) ...[
+                  const SizedBox(height: AppTheme.spacingXS),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.straighten,
+                        size: 14,
+                        color: AppTheme.textSecondary,
+                      ),
+                      const SizedBox(width: AppTheme.spacingXS),
+                      Text(
+                        "${remainingDistance!.toStringAsFixed(1)} km remaining",
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                      if (remainingDuration != null && remainingDuration!.inMinutes > 0) ...[
+                        const SizedBox(width: AppTheme.spacingMD),
+                        Icon(
+                          Icons.access_time,
+                          size: 14,
+                          color: AppTheme.textSecondary,
+                        ),
+                        const SizedBox(width: AppTheme.spacingXS),
+                        Text(
+                          "${remainingDuration!.inMinutes} min",
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ),
+                ] else
+                  Text(
+                    "${destination.latitude.toStringAsFixed(4)}, ${destination.longitude.toStringAsFixed(4)}",
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.textSecondary,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
               ],
             ),
           ),
+          if (onChangeRoute != null)
+            IconButton(
+              icon: const Icon(Icons.route),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                onChangeRoute!();
+              },
+              tooltip: "Change Route",
+              color: AppTheme.textSecondary,
+            ),
           IconButton(
             icon: const Icon(Icons.close),
             onPressed: () {
@@ -695,6 +783,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   String? _navigationMode; // 'car', 'motorcycle_sub400', 'motorcycle_400plus', 'truck', 'public_transit', 'tricycle'
   List<LatLng>? _navigationRoute;
   
+  // * Route selection state
+  List<RouteResponse> _availableRoutes = [];
+  int _selectedRouteIndex = 0;
+  
+  // * Route color coding state
+  List<LatLng> _traveledRoute = [];
+  List<LatLng> _upcomingRoute = [];
+  double _traveledDistance = 0.0;
+  
+  // * Off-route detection state
+  bool _isOffRoute = false;
+  double _offRouteDistance = 0.0;
+  bool _isRerouting = false;
+  DateTime? _lastRerouteTime;
+  
+  // * Route progress state
+  double _remainingDistance = 0.0;
+  Duration _remainingDuration = Duration.zero;
+  
   /// * Get navigation mode display name
   String _getNavigationModeName(String mode) {
     switch (mode) {
@@ -852,9 +959,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   
   
   /// * Calculate route using SmartRoad backend API (MVP)
-  Future<void> _calculateRoute(LatLng destination, String mode) async {
+  /// * 
+  /// * [destination] - Destination point
+  /// * [mode] - Navigation mode
+  /// * [origin] - Optional origin point (defaults to current location)
+  Future<void> _calculateRoute(LatLng destination, String mode, {LatLng? origin}) async {
     try {
-      final origin = _currentLocation;
+      final routeOrigin = origin ?? _currentLocation;
       
       // * Map mode to backend API format
       String backendMode;
@@ -893,7 +1004,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       
       // * Call backend routing service
       final routes = await _routingService.calculateRoute(
-        origin: origin,
+        origin: routeOrigin,
         destination: destination,
         mode: backendMode,
         avoidTolls: avoidTolls,
@@ -905,18 +1016,29 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         throw Exception("No routes returned from backend");
       }
       
-      // * Use primary route (first one)
-      final primaryRoute = routes[0];
-      
+      // * Store all available routes
       setState(() {
+        _availableRoutes = routes;
+        _selectedRouteIndex = 0;
+        
+        // * Use primary route (first one) by default
+        final primaryRoute = routes[0];
         _navigationRoute = primaryRoute.geometry;
         _routeDistance = primaryRoute.distanceMeters / 1000; // * Convert to km
         _routeDuration = Duration(seconds: primaryRoute.durationSeconds);
+        
+        // * Initialize route segments
+        _updateRouteSegments();
       });
       
-      debugPrint("📍 [MapScreen] Route calculated: ${primaryRoute.geometry.length} points, "
+      debugPrint("📍 [MapScreen] Route calculated: ${routes.length} routes available, "
           "${_routeDistance.toStringAsFixed(2)} km, "
           "${(_routeDuration.inMinutes).toStringAsFixed(1)} min");
+      
+      // * Show route selection UI if multiple routes available
+      if (routes.length > 1 && mounted) {
+        _showRouteSelectionSheet();
+      }
       
       // * Show info if tolls are being avoided
       if (avoidTolls && mounted) {
@@ -964,6 +1086,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     } catch (e) {
       debugPrint("❌ [MapScreen] Error calculating route: $e");
       if (mounted) {
+        final errorMessage = e.toString();
+        final isConnectionError = errorMessage.contains("Cannot connect") || 
+                                  errorMessage.contains("connection error") ||
+                                  errorMessage.contains("connection timeout");
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Container(
@@ -976,23 +1103,53 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   width: 1.5,
                 ),
               ),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.error_outline,
-                    color: AppTheme.errorColor,
-                    size: 20,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        color: AppTheme.errorColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: AppTheme.spacingMD),
+                      Expanded(
+                        child: Text(
+                          isConnectionError
+                              ? "Routing service unavailable"
+                              : "Could not calculate route",
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppTheme.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: AppTheme.spacingMD),
-                  Expanded(
-                    child: Text(
-                      "Could not calculate route: ${e.toString()}",
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.textPrimary,
+                  if (isConnectionError) ...[
+                    const SizedBox(height: AppTheme.spacingSM),
+                    Text(
+                      "Please start the backend server:\n"
+                      "1. Run 'docker-compose up -d' in project root\n"
+                      "2. Or start backend manually: 'cd backend && npm start'",
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.textSecondary,
+                        fontFamily: 'monospace',
+                        fontSize: 11,
                       ),
                     ),
-                  ),
+                  ] else ...[
+                    const SizedBox(height: AppTheme.spacingSM),
+                    Text(
+                      errorMessage,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1000,10 +1157,356 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             elevation: 0,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(AppTheme.spacingMD),
-            duration: const Duration(seconds: 4),
+            duration: Duration(seconds: isConnectionError ? 8 : 4),
           ),
         );
       }
+    }
+  }
+  
+  /// * Update route segments (traveled vs upcoming) based on current position
+  void _updateRouteSegments() {
+    if (_navigationRoute == null || _navigationRoute!.isEmpty || !_isNavigating) {
+      _traveledRoute = [];
+      _upcomingRoute = _navigationRoute ?? [];
+      return;
+    }
+    
+    final splitResult = splitRouteAtPoint(
+      _navigationRoute!,
+      _currentLocation,
+      thresholdKm: 1.0,
+    );
+    
+    setState(() {
+      _traveledRoute = splitResult['traveled'] ?? [];
+      _upcomingRoute = splitResult['upcoming'] ?? [];
+      
+      // * Calculate remaining distance and duration
+      if (_upcomingRoute.isNotEmpty) {
+        _remainingDistance = calculateRemainingDistance(_upcomingRoute, _currentLocation);
+        
+        // * Estimate remaining time based on average speed
+        if (_routeDistance > 0 && _routeDuration.inSeconds > 0) {
+          final avgSpeedKmh = (_routeDistance / _routeDuration.inHours);
+          if (avgSpeedKmh > 0) {
+            final remainingHours = (_remainingDistance / 1000) / avgSpeedKmh;
+            _remainingDuration = Duration(seconds: (remainingHours * 3600).round());
+          }
+        }
+      }
+    });
+  }
+  
+  /// * Check if user is off-route
+  /// * Returns true if distance to route > 100m
+  bool _checkOffRoute(LatLng currentPosition) {
+    if (_navigationRoute == null || _navigationRoute!.isEmpty || !_isNavigating) {
+      return false;
+    }
+    
+    final distanceToRoute = calculateDistanceToRoute(currentPosition, _navigationRoute!);
+    
+    setState(() {
+      _offRouteDistance = distanceToRoute;
+      _isOffRoute = distanceToRoute > 100.0; // * 100m threshold
+    });
+    
+    return _isOffRoute;
+  }
+  
+  /// * Recalculate route from current position
+  Future<void> _recalculateRouteFromCurrentPosition() async {
+    if (_isRerouting || _navigationDestination == null || _navigationMode == null) {
+      return;
+    }
+    
+    // * Debounce: Don't reroute if last reroute was less than 3 seconds ago
+    if (_lastRerouteTime != null) {
+      final timeSinceLastReroute = DateTime.now().difference(_lastRerouteTime!);
+      if (timeSinceLastReroute.inSeconds < 3) {
+        debugPrint("📍 [MapScreen] Reroute debounced (${timeSinceLastReroute.inSeconds}s ago)");
+        return;
+      }
+    }
+    
+    setState(() {
+      _isRerouting = true;
+      _lastRerouteTime = DateTime.now();
+    });
+    
+    // * Show rerouting notification
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: AppTheme.spacingMD),
+              const Expanded(
+                child: Text("Recalculating route..."),
+              ),
+            ],
+          ),
+          backgroundColor: AppTheme.infoColor,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+    
+    try {
+      // * Update traveled route to include path to current position
+      if (_navigationRoute != null && _navigationRoute!.isNotEmpty) {
+        final splitResult = splitRouteAtPoint(_navigationRoute!, _currentLocation);
+        _traveledRoute = splitResult['traveled'] ?? [];
+      }
+      
+      // * Recalculate route from current position
+      await _calculateRoute(
+        _navigationDestination!,
+        _navigationMode!,
+        origin: _currentLocation,
+      );
+      
+      // * Update route segments after recalculation
+      _updateRouteSegments();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Route recalculated"),
+            backgroundColor: AppTheme.successColor,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("❌ [MapScreen] Error recalculating route: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Could not recalculate route: ${e.toString()}"),
+            backgroundColor: AppTheme.errorColor,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isRerouting = false;
+      });
+    }
+  }
+  
+  /// * Show route selection bottom sheet
+  void _showRouteSelectionSheet() {
+    if (!mounted || _availableRoutes.isEmpty) {
+      return;
+    }
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppTheme.radiusXL),
+          ),
+          boxShadow: AppTheme.shadowLarge,
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // * Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: AppTheme.spacingMD),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.borderColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(AppTheme.spacingXL),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Select Route",
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacingSM),
+                    Text(
+                      "${_availableRoutes.length} routes available",
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacingLG),
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: _availableRoutes.length,
+                        separatorBuilder: (context, index) => const SizedBox(height: AppTheme.spacingMD),
+                        itemBuilder: (context, index) {
+                          final route = _availableRoutes[index];
+                          final isSelected = index == _selectedRouteIndex;
+                          final distanceKm = route.distanceMeters / 1000;
+                          final durationMin = route.durationSeconds ~/ 60;
+                          
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () {
+                                HapticFeedback.mediumImpact();
+                                _selectRoute(index);
+                                Navigator.of(context).pop();
+                              },
+                              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                              child: Container(
+                                padding: const EdgeInsets.all(AppTheme.spacingMD),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? AppTheme.primaryColor
+                                        : AppTheme.borderColor,
+                                    width: isSelected ? 2.0 : 1.5,
+                                  ),
+                                  borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                                  color: isSelected
+                                      ? AppTheme.primaryColor.withOpacity(0.1)
+                                      : null,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? AppTheme.primaryColor
+                                            : AppTheme.primaryColor.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          "${index + 1}",
+                                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                            color: isSelected ? Colors.white : AppTheme.primaryColor,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppTheme.spacingMD),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Route ${index + 1}",
+                                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: AppTheme.spacingXS),
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.straighten,
+                                                size: 16,
+                                                color: AppTheme.textSecondary,
+                                              ),
+                                              const SizedBox(width: AppTheme.spacingXS),
+                                              Text(
+                                                "${distanceKm.toStringAsFixed(1)} km",
+                                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                  color: AppTheme.textSecondary,
+                                                ),
+                                              ),
+                                              const SizedBox(width: AppTheme.spacingMD),
+                                              Icon(
+                                                Icons.access_time,
+                                                size: 16,
+                                                color: AppTheme.textSecondary,
+                                              ),
+                                              const SizedBox(width: AppTheme.spacingXS),
+                                              Text(
+                                                "$durationMin min",
+                                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                  color: AppTheme.textSecondary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      Icon(
+                                        Icons.check_circle,
+                                        color: AppTheme.primaryColor,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  /// * Select a route from available options
+  void _selectRoute(int index) {
+    if (index < 0 || index >= _availableRoutes.length) {
+      return;
+    }
+    
+    final selectedRoute = _availableRoutes[index];
+    
+    setState(() {
+      _selectedRouteIndex = index;
+      _navigationRoute = selectedRoute.geometry;
+      _routeDistance = selectedRoute.distanceMeters / 1000;
+      _routeDuration = Duration(seconds: selectedRoute.durationSeconds);
+      
+      // * Update route segments
+      _updateRouteSegments();
+    });
+    
+    // * Move map to show selected route
+    if (_navigationRoute != null && _navigationRoute!.isNotEmpty) {
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints(_navigationRoute!),
+          padding: const EdgeInsets.all(100),
+        ),
+      );
     }
   }
   
@@ -1014,6 +1517,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _navigationDestination = null;
       _navigationMode = null;
       _navigationRoute = null;
+      _availableRoutes = [];
+      _selectedRouteIndex = 0;
+      _traveledRoute = [];
+      _upcomingRoute = [];
+      _traveledDistance = 0.0;
+      _isOffRoute = false;
+      _offRouteDistance = 0.0;
+      _isRerouting = false;
+      _remainingDistance = 0.0;
+      _remainingDuration = Duration.zero;
     });
     
     if (mounted) {
@@ -1178,7 +1691,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           _currentLocation = updated;
           _hasPreciseLocation = true;
         });
-        if (!_isNavigating) {
+        
+        if (_isNavigating) {
+          // * Update route segments based on current position
+          _updateRouteSegments();
+          
+          // * Check if user is off-route
+          final isOffRoute = _checkOffRoute(updated);
+          
+          // * Trigger rerouting if off-route
+          if (isOffRoute && !_isRerouting) {
+            _recalculateRouteFromCurrentPosition();
+          }
+        } else {
+          // * Only move map when not navigating
           _mapController.move(updated, _mapController.camera.zoom);
         }
       },
@@ -1632,19 +2158,46 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 userAgentPackageName: "com.smartroad.app", // * Package name stays lowercase (technical identifier)
                 maxZoom: 19,
               ),
-              // * Navigation route polyline
+              // * Navigation route polylines (traveled and upcoming)
               if (_navigationRoute != null && _navigationRoute!.isNotEmpty)
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: _navigationRoute!,
-                      strokeWidth: 6.0,
-                      color: _getRouteColor(_navigationMode ?? 'car'),
-                      borderStrokeWidth: 2.0,
-                      borderColor: Colors.white.withOpacity(0.8),
-                    ),
-                  ],
-                ),
+                if (_isNavigating && (_traveledRoute.isNotEmpty || _upcomingRoute.isNotEmpty))
+                  PolylineLayer(
+                    polylines: [
+                      // * Traveled route (light blue)
+                      if (_traveledRoute.isNotEmpty)
+                        Polyline(
+                          points: _traveledRoute,
+                          strokeWidth: 6.0,
+                          color: _getRouteColor(_navigationMode ?? 'car').withOpacity(0.3),
+                          borderStrokeWidth: 2.0,
+                          borderColor: Colors.white.withOpacity(0.4),
+                        ),
+                      // * Upcoming route (full blue)
+                      if (_upcomingRoute.isNotEmpty)
+                        Polyline(
+                          points: _upcomingRoute,
+                          strokeWidth: 6.0,
+                          color: _isOffRoute
+                              ? AppTheme.errorColor
+                              : _getRouteColor(_navigationMode ?? 'car'),
+                          borderStrokeWidth: 2.0,
+                          borderColor: Colors.white.withOpacity(0.8),
+                        ),
+                    ],
+                  )
+                else
+                  // * Fallback: Show full route if not navigating or segments not calculated
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: _navigationRoute!,
+                        strokeWidth: 6.0,
+                        color: _getRouteColor(_navigationMode ?? 'car'),
+                        borderStrokeWidth: 2.0,
+                        borderColor: Colors.white.withOpacity(0.8),
+                      ),
+                    ],
+                  ),
               // * Navigation destination marker
               if (_navigationDestination != null && _navigationMode != null)
                 MarkerLayer(
@@ -1981,6 +2534,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   mode: _navigationMode!,
                   destination: _navigationDestination!,
                   onStop: _stopNavigation,
+                  onChangeRoute: _availableRoutes.length > 1 ? _showRouteSelectionSheet : null,
+                  remainingDistance: _remainingDistance > 0 ? _remainingDistance / 1000 : null,
+                  remainingDuration: _remainingDuration,
+                  isOffRoute: _isOffRoute,
                 ),
           ),
           // * Hazard detail bottom sheet

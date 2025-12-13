@@ -1,9 +1,11 @@
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
+import "package:supabase_flutter/supabase_flutter.dart";
 import "../../services/supabase_service.dart";
 import "../../core/constants/app_constants.dart";
 import "../../core/theme/app_theme.dart";
+import "../../providers/auth_provider.dart";
 import "../map/map_screen.dart";
 
 /// * Premium login screen with animations and branding
@@ -143,47 +145,115 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     HapticFeedback.mediumImpact();
     
     try {
-      await SupabaseService().signIn(
-        AppConstants.demoEmail,
-        AppConstants.demoPassword,
-      );
+      final service = SupabaseService();
       
-      if (mounted) {
-        HapticFeedback.lightImpact();
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const MapScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 300),
-          ),
+      // * Check if in demo mode
+      if (service.isDemoMode) {
+        // * Create a demo user
+        final demoUser = User(
+          id: "demo-user-id",
+          appMetadata: {},
+          userMetadata: {
+            'name': 'Demo User',
+            'email': AppConstants.demoEmail,
+          },
+          aud: 'authenticated',
+          createdAt: DateTime.now().toIso8601String(),
         );
+        
+        // * Set demo user in state
+        ref.read(demoUserStateProvider.notifier).state = demoUser;
+        
+        // * Small delay for better UX
+        await Future.delayed(const Duration(milliseconds: 300));
+        
+        if (mounted) {
+          HapticFeedback.lightImpact();
+          Navigator.of(context).pushReplacement(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => const MapScreen(),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: child,
+                );
+              },
+              transitionDuration: const Duration(milliseconds: 300),
+            ),
+          );
+        }
+      } else {
+        // * Regular login
+        await service.signIn(
+          AppConstants.demoEmail,
+          AppConstants.demoPassword,
+        );
+        
+        if (mounted) {
+          HapticFeedback.lightImpact();
+          Navigator.of(context).pushReplacement(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => const MapScreen(),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: child,
+                );
+              },
+              transitionDuration: const Duration(milliseconds: 300),
+            ),
+          );
+        }
       }
     } catch (e) {
-      if (mounted) {
-        HapticFeedback.heavyImpact();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text("Demo login failed: ${e.toString()}"),
-                ),
-              ],
-            ),
-            backgroundColor: AppTheme.errorColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-            ),
-          ),
+      // * Check if it's the special demo mode exception
+      if (e.toString().contains("DEMO_MODE_LOGIN")) {
+        // * This shouldn't happen, but handle it just in case
+        final demoUser = User(
+          id: "demo-user-id",
+          appMetadata: {},
+          userMetadata: {
+            'name': 'Demo User',
+            'email': AppConstants.demoEmail,
+          },
+          aud: 'authenticated',
+          createdAt: DateTime.now().toIso8601String(),
         );
+        ref.read(demoUserStateProvider.notifier).state = demoUser;
+        
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => const MapScreen(),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+              transitionDuration: const Duration(milliseconds: 300),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          HapticFeedback.heavyImpact();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text("Demo login failed: ${e.toString()}"),
+                  ),
+                ],
+              ),
+              backgroundColor: AppTheme.errorColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+              ),
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) {

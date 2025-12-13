@@ -1,0 +1,111 @@
+version: "3.8"
+
+# * SmartRoad Backend Services
+# * Unified Docker Compose for all backend services
+# * 
+# * Services:
+# * - graphhopper: Self-hosted routing engine
+# * - api: SmartRoad API (placeholder - not implemented in MVP)
+
+services:
+  # * GraphHopper Routing Engine
+  # * Self-hosted routing service for motorcycle navigation
+  graphhopper:
+    # * Using pre-built image (no build step needed)
+    image: ghcr.io/gis-ops/docker-graphhopper:latest
+    container_name: smartroad-graphhopper
+    ports:
+      - "8989:8989"  # GraphHopper API
+    environment:
+      - JAVA_OPTS=-Xmx2g -Xms2g
+      - SCRIPT=web
+      - PBF_URL=https://download.geofabrik.de/asia/philippines-latest.osm.pbf
+      - PROFILES=motorcycle
+      - PROFILES_CH=fastest
+      - GRAPHOPPER_PROFILE_MOTORCYCLE=fastest
+      - GRAPHOPPER_AVOID_TOLL=true
+      - GRAPHOPPER_GRAPHCACHE=mmap
+      - GRAPHOPPER_WEB_CORS=*
+      - GRAPHOPPER_WEB_ACCESS=*
+    volumes:
+      - graphhopper-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8989/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    networks:
+      - smartroad-backend
+
+  # * SmartRoad API Service
+  # * FUTURE FEATURE - Not implemented in MVP
+  # * This will be the main backend API for the SmartRoad app
+  # * 
+  # * When implemented, this service will:
+  # * - Handle user authentication
+  # * - Process route requests (calling GraphHopper)
+  # * - Apply business logic (permissions, HOA restrictions)
+  # * - Manage hazard data
+  # * - Handle route selling logic
+  #
+  # api:
+  #   build:
+  #     context: ./api
+  #     dockerfile: Dockerfile
+  #   container_name: smartroad-api
+  #   ports:
+  #     - "3000:3000"  # API port
+  #   environment:
+  #     - NODE_ENV=development
+  #     - GRAPHHOPPER_URL=http://graphhopper:8989
+  #     - DATABASE_URL=postgresql://user:pass@postgres:5432/smartroad
+  #   volumes:
+  #     - ./api:/app
+  #     - /app/node_modules
+  #   depends_on:
+  #     - graphhopper
+  #     - postgres
+  #   networks:
+  #     - smartroad-backend
+  #   restart: unless-stopped
+
+  # * PostgreSQL Database
+  # * FUTURE FEATURE - Not implemented in MVP
+  # * Will be used for:
+  # * - User data
+  # * - Route cache
+  # * - Analytics
+  #
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: smartroad-postgres
+  #   environment:
+  #     - POSTGRES_DB=smartroad
+  #     - POSTGRES_USER=smartroad
+  #     - POSTGRES_PASSWORD=change_me_in_production
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   networks:
+  #     - smartroad-backend
+  #   restart: unless-stopped
+
+volumes:
+  graphhopper-data:
+    driver: local
+  # postgres-data:
+  #   driver: local
+
+networks:
+  smartroad-backend:
+    driver: bridge
+

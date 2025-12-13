@@ -1,4 +1,3 @@
-import "package:flutter/foundation.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 import "../services/supabase_service.dart";
@@ -21,13 +20,6 @@ class HazardsNotifier extends StateNotifier<AsyncValue<List<Hazard>>> {
   
   Future<void> loadHazards({bool useCache = true}) async {
     try {
-      // * In demo mode, skip cache
-      if (_supabaseService.isDemoMode) {
-        final hazards = await _supabaseService.getHazards();
-        state = AsyncValue.data(hazards);
-        return;
-      }
-      
       // * Try to load from cache first if offline
       if (useCache) {
         final cached = _cacheService.getCachedHazards();
@@ -45,14 +37,12 @@ class HazardsNotifier extends StateNotifier<AsyncValue<List<Hazard>>> {
       state = AsyncValue.data(hazards);
     } catch (e, stack) {
       // * If online fetch fails, try cache
-      if (!_supabaseService.isDemoMode) {
       final cached = _cacheService.getCachedHazards();
       if (cached != null && cached.isNotEmpty) {
         state = AsyncValue.data(cached);
-          return;
-        }
+      } else {
+        state = AsyncValue.error(e, stack);
       }
-      state = AsyncValue.error(e, stack);
     }
   }
   
@@ -88,13 +78,8 @@ final mapHazardsProvider = StateNotifierProvider<MapHazardsNotifier, List<Hazard
 class MapHazardsNotifier extends StateNotifier<List<Hazard>> {
   MapHazardsNotifier() : super([]);
   
-  SupabaseService? _supabaseService;
+  final _supabaseService = SupabaseService();
   RealtimeChannel? _channel;
-  
-  SupabaseService get _service {
-    _supabaseService ??= SupabaseService();
-    return _supabaseService!;
-  }
   
   Future<void> loadHazardsInBounds(
     double minLat,
@@ -103,7 +88,7 @@ class MapHazardsNotifier extends StateNotifier<List<Hazard>> {
     double maxLon,
   ) async {
     try {
-      final hazards = await _service.getHazardsInBounds(
+      final hazards = await _supabaseService.getHazardsInBounds(
         minLat,
         minLon,
         maxLat,
@@ -111,22 +96,17 @@ class MapHazardsNotifier extends StateNotifier<List<Hazard>> {
       );
       state = hazards;
       
-      // * Subscribe to realtime updates (only if not in demo mode)
-      if (!_service.isDemoMode) {
+      // * Subscribe to realtime updates
       _subscribeToRealtime();
-      }
     } catch (e) {
-      // * On error, keep current state (empty list is fine)
-      debugPrint("Error loading hazards in bounds: $e");
-      state = [];
+      // * Handle error
     }
   }
   
   void _subscribeToRealtime() {
-    if (_channel != null || _service.isDemoMode) return;
+    if (_channel != null) return;
     
-    try {
-      _channel = _service.subscribeToHazards(
+    _channel = _supabaseService.subscribeToHazards(
       onInsert: (data) {
         try {
           final hazard = Hazard.fromJson(data);
@@ -152,9 +132,7 @@ class MapHazardsNotifier extends StateNotifier<List<Hazard>> {
         }
       },
     );
-    } catch (e) {
-      debugPrint("Error subscribing to realtime: $e");
-    }
+    // * Note: _channel may be null in demo mode, which is fine
   }
   
   void dispose() {

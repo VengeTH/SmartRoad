@@ -6,98 +6,66 @@ import "../models/hazard.dart";
 import "../models/user_profile.dart";
 import "../core/config/env.dart";
 import "../core/constants/app_constants.dart";
-import "demo_service.dart";
 
 /// * Supabase service for database operations
-/// * Falls back to demo mode if Supabase is not configured
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
   factory SupabaseService() => _instance;
-  SupabaseService._internal() {
-    // * Check immediately if we should use demo mode
-    if (!Env.validate()) {
-      _isDemoMode = true;
-      _demoService.enableDemoMode();
-    }
-  }
+  SupabaseService._internal();
   
-  bool _isDemoMode = false;
-  bool _supabaseInitialized = false;
-  final _demoService = DemoService();
+  bool _isInitialized = false;
   
+  /// * Check if running in demo mode (no database connection)
+  bool get isDemoMode => !_isInitialized || !Env.validate();
+  
+  /// * Get Supabase client (returns null in demo mode)
   SupabaseClient? get client {
-    // * Never access Supabase.instance if in demo mode
-    if (_isDemoMode) {
+    if (isDemoMode || !_isInitialized) {
       return null;
     }
-    
-    // * Only access Supabase if we've successfully initialized it
-    if (!_supabaseInitialized) {
+    try {
+      return Supabase.instance.client;
+    } catch (e) {
+      // * Supabase not initialized
       return null;
     }
-    
-    // * At this point, we know Supabase is initialized, so it's safe to access
-    return Supabase.instance.client;
   }
   
-  /// * Enable demo mode manually
-  void enableDemoMode() {
-    _isDemoMode = true;
-    _demoService.enableDemoMode();
-  }
-  
-  /// * Initialize Supabase or enable demo mode
+  /// * Initialize Supabase (optional - can skip in demo mode)
   Future<void> initialize() async {
-    // * If already in demo mode, don't try to initialize Supabase
-    if (_isDemoMode) {
-      return;
-    }
-    
     if (!Env.validate()) {
-      // * Enable demo mode if Supabase is not configured
-      enableDemoMode();
+      // * Demo mode - skip initialization
+      debugPrint("⚠️ Demo mode: Supabase not initialized (missing environment variables)");
+      _isInitialized = false;
       return;
     }
     
     try {
-    await Supabase.initialize(
-      url: Env.supabaseUrl,
-      anonKey: Env.supabaseAnonKey,
-    );
-      _supabaseInitialized = true;
-      _isDemoMode = false;
+      await Supabase.initialize(
+        url: Env.supabaseUrl,
+        anonKey: Env.supabaseAnonKey,
+      );
+      _isInitialized = true;
+      debugPrint("✅ Supabase initialized successfully");
     } catch (e) {
-      // * Fall back to demo mode on initialization error
-      enableDemoMode();
+      debugPrint("⚠️ Failed to initialize Supabase: $e");
+      _isInitialized = false;
+      // * Don't throw - allow demo mode
     }
   }
-  
-  /// * Check if in demo mode
-  bool get isDemoMode => _isDemoMode;
   
   // * Authentication Methods
   
   /// * Sign up with email and password
   Future<AuthResponse> signUp(String email, String password, String name) async {
-    if (_isDemoMode) {
-      final success = await _demoService.signUp(email, password, name);
-      if (!success) {
-        throw Exception("Demo signup failed");
-      }
-      // * Return mock AuthResponse
-      return AuthResponse(
-        session: null,
-        user: User(
-          id: DemoService.demoUserId,
-          appMetadata: {},
-          userMetadata: {'name': name},
-          aud: 'authenticated',
-          createdAt: DateTime.now().toIso8601String(),
-        ),
-      );
+    if (isDemoMode) {
+      throw Exception("Sign up not available in demo mode");
     }
-    
-    final response = await client!.auth.signUp(
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+    final response = await c.auth.signUp(
       email: email,
       password: password,
       data: {'name': name},
@@ -106,146 +74,101 @@ class SupabaseService {
   }
   
   /// * Sign in with email and password
+  /// * In demo mode, validates demo credentials and returns a mock response
   Future<AuthResponse> signIn(String email, String password) async {
-    if (_isDemoMode) {
-      final success = await _demoService.signIn(email, password);
-      if (!success) {
-        throw Exception("Invalid email or password");
+    if (isDemoMode) {
+      // * Check if using demo credentials
+      if (email == AppConstants.demoEmail && password == AppConstants.demoPassword) {
+        // * Create a mock user for demo mode
+        // * Note: This won't actually authenticate with Supabase, but allows demo flow
+        debugPrint("✅ Demo login successful");
+        // * Return a mock AuthResponse - the app will handle demo mode separately
+        throw Exception("DEMO_MODE_LOGIN"); // * Special exception to indicate demo login
+      } else {
+        throw Exception("Invalid credentials. Use demo credentials in demo mode.");
       }
-      // * Return mock AuthResponse
-      return AuthResponse(
-        session: null,
-        user: User(
-          id: DemoService.demoUserId,
-          appMetadata: {},
-          userMetadata: {'name': DemoService.demoUserName},
-          aud: 'authenticated',
-          createdAt: DateTime.now().toIso8601String(),
-        ),
-      );
     }
-    
-    return await client!.auth.signInWithPassword(
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+    return await c.auth.signInWithPassword(
       email: email,
       password: password,
     );
   }
   
   /// * Sign out
+  /// * In demo mode, clears the demo user state
   Future<void> signOut() async {
-    if (_isDemoMode) {
-      await _demoService.signOut();
+    if (isDemoMode) {
+      // * Demo mode sign out is handled by clearing demo user state
+      // * This is done in the UI layer (profile screen)
       return;
     }
-    
-    await client!.auth.signOut();
+    final c = client;
+    if (c == null) {
+      return;
+    }
+    await c.auth.signOut();
   }
   
-  /// * Get current user
+  /// * Get current user (returns null in demo mode)
   User? get currentUser {
-    if (_isDemoMode) {
-      // * In demo mode, always return demo user (auto-authenticated)
-      return User(
-        id: DemoService.demoUserId,
-        appMetadata: {},
-        userMetadata: {'name': DemoService.demoUserName},
-        aud: 'authenticated',
-        createdAt: DateTime.now().toIso8601String(),
-      );
-    }
-    return client?.auth.currentUser;
+    final c = client;
+    return c?.auth.currentUser;
   }
   
-  /// * Get current user ID
-  String? get currentUserId {
-    if (_isDemoMode) {
-      // * In demo mode, always return demo user ID (auto-authenticated)
-      return DemoService.demoUserId;
-    }
-    return client?.auth.currentUser?.id;
-  }
+  /// * Get current user ID (returns null in demo mode)
+  String? get currentUserId => currentUser?.id;
   
   /// * Check if user is authenticated
   bool get isAuthenticated {
-    if (_isDemoMode) {
-      // * In demo mode, always authenticated (auto-authenticated)
-      return true;
-    }
-    return client?.auth.currentUser != null;
+    if (isDemoMode) return false;
+    return currentUser != null;
   }
   
   // * Profile Methods
   
   /// * Get user profile
   Future<UserProfile?> getProfile(String userId) async {
-    if (_isDemoMode) {
-      // * Ensure demo mode is enabled
-      if (!_demoService.isDemoMode) {
-        _demoService.enableDemoMode();
-      }
-      
-      // * Ensure demo user is initialized
-      var demoUser = _demoService.demoUser;
-      if (demoUser == null) {
-        // * Re-initialize if needed
-        _demoService.enableDemoMode();
-        demoUser = _demoService.demoUser;
-      }
-      
-      // * If still null, create a default demo user as fallback
-      if (demoUser == null) {
-        debugPrint("⚠️ [SupabaseService] Demo user was null, creating fallback");
-        try {
-          return UserProfile(
-            id: DemoService.demoUserId,
-            email: DemoService.demoEmail,
-            name: DemoService.demoUserName,
-            photoUrl: null,
-            reporterLevel: ReporterLevel.expert,
-            validReportsCount: 42,
-            createdAt: DateTime.now().subtract(const Duration(days: 30)),
-            updatedAt: DateTime.now(),
-          );
-        } catch (e) {
-          debugPrint("❌ [SupabaseService] Error creating fallback user: $e");
-          rethrow;
-        }
-      }
-      
-      debugPrint("✅ [SupabaseService] Returning demo user: ${demoUser.name}");
-      return demoUser;
+    if (isDemoMode) {
+      // * Return demo profile
+      return UserProfile(
+        id: userId,
+        name: "Demo User",
+        email: "demo@smartroad.app",
+        photoUrl: null,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        reporterLevel: ReporterLevel.novice,
+        validReportsCount: 0,
+      );
     }
+    final c = client;
+    if (c == null) {
+      return null;
+    }
+    final response = await c
+        .from('profiles')
+        .select()
+        .eq('id', userId)
+        .maybeSingle();
     
-    try {
-      final response = await client!
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .maybeSingle();
-      
-      if (response == null) {
-        debugPrint("⚠️ [SupabaseService] Profile not found for userId: $userId");
-        return null;
-      }
-      
-      final profile = UserProfile.fromJson(response as Map<String, dynamic>);
-      debugPrint("✅ [SupabaseService] Profile loaded: ${profile.name}");
-      return profile;
-    } catch (e, stack) {
-      debugPrint("❌ [SupabaseService] Error getting profile from Supabase: $e");
-      debugPrint("❌ [SupabaseService] Stack: $stack");
-      rethrow;
-    }
+    if (response == null) return null;
+    return UserProfile.fromJson(response as Map<String, dynamic>);
   }
   
   /// * Update user profile
   Future<void> updateProfile(String userId, Map<String, dynamic> updates) async {
-    if (_isDemoMode) {
-      await _demoService.updateDemoProfile(updates);
-      return;
+    if (isDemoMode) {
+      return; // * No-op in demo mode
     }
-    
-    await client!
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+    await c
         .from('profiles')
         .update(updates)
         .eq('id', userId);
@@ -258,12 +181,14 @@ class SupabaseService {
     int limit = AppConstants.feedPageSize,
     int offset = 0,
   }) async {
-    if (_isDemoMode) {
-      final allHazards = _demoService.getDemoHazards();
-      return allHazards.skip(offset).take(limit).toList();
+    if (isDemoMode) {
+      return []; // * Return empty list in demo mode
     }
-    
-    final response = await client!
+    final c = client;
+    if (c == null) {
+      return [];
+    }
+    final response = await c
         .from('hazards')
         .select('''
           *,
@@ -300,10 +225,9 @@ class SupabaseService {
     double maxLat,
     double maxLon,
   ) async {
-    if (_isDemoMode) {
-      return _demoService.getDemoHazardsInBounds(minLat, minLon, maxLat, maxLon);
+    if (isDemoMode) {
+      return []; // * Return empty list in demo mode
     }
-    
     // * Fetch all hazards (limited) and filter client-side
     // * In production, use PostGIS RPC function
     final allHazards = await getHazards(limit: AppConstants.maxMapMarkers);
@@ -326,19 +250,15 @@ class SupabaseService {
     String? imageUrl,
     String? stickerFlag,
   }) async {
+    if (isDemoMode) {
+      throw Exception("Creating hazards not available in demo mode");
+    }
     if (!isAuthenticated) {
       throw Exception("User must be authenticated to create hazards");
     }
-    
-    if (_isDemoMode) {
-      return await _demoService.createDemoHazard(
-        type: type,
-        description: description,
-        severity: severity,
-        latitude: latitude,
-        longitude: longitude,
-        imageUrl: imageUrl,
-      );
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
     }
     
     final hazardData = {
@@ -350,7 +270,7 @@ class SupabaseService {
       if (stickerFlag != null) 'sticker_flag': stickerFlag,
     };
     
-    final response = await client!
+    final response = await c
         .from('hazards')
         .insert(hazardData)
         .select()
@@ -365,12 +285,14 @@ class SupabaseService {
     required Function(Map<String, dynamic>) onUpdate,
     required Function(Map<String, dynamic>) onDelete,
   }) {
-    if (_isDemoMode) {
-      // * Demo mode doesn't support realtime updates
+    if (isDemoMode) {
+      return null; // * No realtime in demo mode
+    }
+    final c = client;
+    if (c == null) {
       return null;
     }
-    
-    final channel = client!.channel('hazards_channel');
+    final channel = c.channel('hazards_channel');
     
     channel
         .onPostgresChanges(
@@ -400,19 +322,21 @@ class SupabaseService {
   
   /// * Upload image to Supabase Storage
   Future<String> uploadImage(File file, String fileName) async {
-    if (_isDemoMode) {
-      // * In demo mode, return a placeholder URL
-      return "https://via.placeholder.com/400x300?text=Demo+Image";
+    if (isDemoMode) {
+      // * Return a placeholder URL in demo mode
+      return "demo://$fileName";
     }
-    
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
     final bytes = await file.readAsBytes();
-    final uint8List = Uint8List.fromList(bytes);
-    await client!.storage
+    await c.storage
         .from(AppConstants.storageBucketName)
-        .uploadBinary(fileName, uint8List);
+        .uploadBinary(fileName, bytes);
     
     // * Get public URL
-    final url = client!.storage
+    final url = c.storage
         .from(AppConstants.storageBucketName)
         .getPublicUrl(fileName);
     
@@ -420,17 +344,21 @@ class SupabaseService {
   }
   
   /// * Upload image file bytes
-  Future<String> uploadImageBytes(Uint8List bytes, String fileName) async {
-    if (_isDemoMode) {
-      // * In demo mode, return a placeholder URL
-      return "https://via.placeholder.com/400x300?text=Demo+Image";
+  Future<String> uploadImageBytes(List<int> bytes, String fileName) async {
+    if (isDemoMode) {
+      // * Return a placeholder URL in demo mode
+      return "demo://$fileName";
     }
-    
-    await client!.storage
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+    final uint8Bytes = Uint8List.fromList(bytes);
+    await c.storage
         .from(AppConstants.storageBucketName)
-        .uploadBinary(fileName, bytes);
+        .uploadBinary(fileName, uint8Bytes);
     
-    final url = client!.storage
+    final url = c.storage
         .from(AppConstants.storageBucketName)
         .getPublicUrl(fileName);
     

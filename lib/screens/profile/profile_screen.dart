@@ -44,7 +44,13 @@ class ProfileScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              await SupabaseService().signOut();
+              final service = SupabaseService();
+              if (service.isDemoMode) {
+                // * Clear demo user state
+                ref.read(demoUserStateProvider.notifier).state = null;
+              } else {
+                await service.signOut();
+              }
               if (context.mounted) {
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(builder: (_) => const LoginScreen()),

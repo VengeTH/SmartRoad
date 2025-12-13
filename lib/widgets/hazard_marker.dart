@@ -13,15 +13,15 @@ class HazardMarker extends StatelessWidget {
   IconData _getIconForType(HazardType type) {
     switch (type) {
       case HazardType.pothole:
-        return Icons.report_problem; // * pothole icon not available, using warning
+        return Icons.pan_tool; // * Alternative icon for pothole (pothole icon doesn't exist)
       case HazardType.flood:
         return Icons.water_drop;
       case HazardType.accident:
-        return Icons.warning; // * car_crash not available
+        return Icons.car_crash;
       case HazardType.closure:
         return Icons.block;
       case HazardType.landslide:
-        return Icons.terrain; // * landslide not available
+        return Icons.landslide;
       case HazardType.roadblock:
         return Icons.construction;
     }
@@ -44,24 +44,13 @@ class HazardMarker extends StatelessWidget {
     final icon = _getIconForType(hazard.type);
     
     return Container(
-      width: 40,
-      height: 40,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white,
-          width: 3,
-        ),
+        border: Border.all(color: Colors.white, width: 2),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.4),
-            blurRadius: 8,
-            spreadRadius: 1,
-            offset: const Offset(0, 2),
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withOpacity(0.3),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -70,7 +59,7 @@ class HazardMarker extends StatelessWidget {
       child: Icon(
         icon,
         color: Colors.white,
-        size: 22,
+        size: 24,
       ),
     );
   }

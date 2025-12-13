@@ -1,12 +1,11 @@
 /// * Guard Scanner Screen
-/// * Allows guards to scan QR codes and validate gate passes
+/// * Allows security guards to scan QR codes from gate passes
 import "package:flutter/material.dart";
-import "package:flutter/services.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:mobile_scanner/mobile_scanner.dart";
 import "../../core/theme/app_theme.dart";
 import "../../models/sticker.dart";
-import "../../services/sticker_service.dart";
+import "../../providers/sticker_provider.dart";
 
 class GuardScannerScreen extends ConsumerStatefulWidget {
   const GuardScannerScreen({super.key});
@@ -17,7 +16,8 @@ class GuardScannerScreen extends ConsumerStatefulWidget {
 
 class _GuardScannerScreenState extends ConsumerState<GuardScannerScreen> {
   final MobileScannerController _scannerController = MobileScannerController();
-  bool _isScanning = true;
+  bool _isProcessing = false;
+  String? _lastScannedCode;
   Sticker? _validatedSticker;
   String? _errorMessage;
   
@@ -28,72 +28,78 @@ class _GuardScannerScreenState extends ConsumerState<GuardScannerScreen> {
   }
   
   /// * Handle QR code scan
-  Future<void> _handleScan(String rawValue) async {
-    if (!_isScanning) return;
+  Future<void> _handleScan(String code) async {
+    // * Prevent duplicate scans
+    if (_isProcessing || code == _lastScannedCode) {
+      return;
+    }
     
     setState(() {
-      _isScanning = false;
+      _isProcessing = true;
+      _lastScannedCode = code;
       _errorMessage = null;
       _validatedSticker = null;
     });
     
-    HapticFeedback.mediumImpact();
-    
     try {
       // * Parse QR code data
-      final gatePassData = GatePassData.fromJsonString(rawValue);
+      final gatePassData = GatePassData.fromJsonString(code);
       
       // * Validate gate pass
-      final stickerService = StickerService();
+      final stickerService = ref.read(stickerServiceProvider);
       final sticker = await stickerService.validateGatePass(gatePassData);
       
-      if (sticker == null) {
+      if (sticker != null) {
+        setState(() {
+          _validatedSticker = sticker;
+          _errorMessage = null;
+        });
+        
+        // * Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Valid gate pass for ${sticker.hoaName}"),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
         setState(() {
           _errorMessage = "Invalid or expired gate pass";
+          _validatedSticker = null;
         });
-        HapticFeedback.heavyImpact();
         
-        // * Resume scanning after 2 seconds
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            setState(() {
-              _isScanning = true;
-              _errorMessage = null;
-            });
-          }
-        });
-        return;
-      }
-      
-      // * Valid sticker
-      setState(() {
-        _validatedSticker = sticker;
-      });
-      HapticFeedback.heavyImpact();
-      
-      // * Show success and resume scanning after 3 seconds
-      Future.delayed(const Duration(seconds: 3), () {
+        // * Show error message
         if (mounted) {
-          setState(() {
-            _isScanning = true;
-            _validatedSticker = null;
-          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Invalid or expired gate pass"),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
         }
-      });
+      }
     } catch (e) {
       setState(() {
-        _errorMessage = "Invalid QR code format";
+        _errorMessage = "Error scanning QR code: $e";
+        _validatedSticker = null;
       });
-      HapticFeedback.heavyImpact();
       
-      // * Resume scanning after 2 seconds
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) {
-          setState(() {
-            _isScanning = true;
-            _errorMessage = null;
-          });
-        }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error: $e"),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isProcessing = false;
       });
     }
   }
@@ -106,324 +112,80 @@ class _GuardScannerScreenState extends ConsumerState<GuardScannerScreen> {
         title: const Text("Guard Scanner"),
         actions: [
           IconButton(
-            icon: Icon(
-              _scannerController.torchEnabled
-                  ? Icons.flash_on
-                  : Icons.flash_off,
-            ),
+            icon: Icon(_scannerController.torchEnabled 
+                ? Icons.flash_on 
+                : Icons.flash_off),
             onPressed: () {
               _scannerController.toggleTorch();
             },
-            tooltip: "Toggle Flash",
           ),
         ],
       ),
-      body: Stack(
+      body: Column(
         children: [
-          // * Camera Scanner
-          MobileScanner(
-            controller: _scannerController,
-            onDetect: (capture) {
-              final List<Barcode> barcodes = capture.barcodes;
-              if (barcodes.isNotEmpty && _isScanning) {
-                final barcode = barcodes.first;
-                if (barcode.rawValue != null) {
-                  _handleScan(barcode.rawValue!);
-                }
-              }
-            },
-          ),
-          
-          // * Overlay with scanning area
-          _buildScanningOverlay(),
-          
-          // * Result overlay
-          if (_validatedSticker != null)
-            _buildSuccessOverlay(),
-          
-          if (_errorMessage != null)
-            _buildErrorOverlay(),
-        ],
-      ),
-    );
-  }
-  
-  Widget _buildScanningOverlay() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.5),
-      ),
-      child: Column(
-        children: [
+          // * Scanner view
           Expanded(
-            child: Container(),
-          ),
-          // * Scanning area frame
-          Container(
-            width: 280,
-            height: 280,
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: _isScanning
-                    ? AppTheme.primaryColor
-                    : AppTheme.textTertiary,
-                width: 3,
-              ),
-              borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-            ),
             child: Stack(
               children: [
-                // * Corner indicators
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      border: Border(
-                        top: BorderSide(
-                          color: _isScanning
-                              ? AppTheme.primaryColor
-                              : AppTheme.textTertiary,
-                          width: 4,
-                        ),
-                        left: BorderSide(
-                          color: _isScanning
-                              ? AppTheme.primaryColor
-                              : AppTheme.textTertiary,
-                          width: 4,
-                        ),
-                      ),
+                MobileScanner(
+                  controller: _scannerController,
+                  onDetect: (capture) {
+                    final List<Barcode> barcodes = capture.barcodes;
+                    for (final barcode in barcodes) {
+                      if (barcode.rawValue != null) {
+                        _handleScan(barcode.rawValue!);
+                        break;
+                      }
+                    }
+                  },
+                ),
+                // * Scanning overlay
+                if (_isProcessing)
+                  Container(
+                    color: Colors.black.withOpacity(0.5),
+                    child: const Center(
+                      child: CircularProgressIndicator(),
                     ),
                   ),
-                ),
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      border: Border(
-                        top: BorderSide(
-                          color: _isScanning
-                              ? AppTheme.primaryColor
-                              : AppTheme.textTertiary,
-                          width: 4,
-                        ),
-                        right: BorderSide(
-                          color: _isScanning
-                              ? AppTheme.primaryColor
-                              : AppTheme.textTertiary,
-                          width: 4,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: _isScanning
-                              ? AppTheme.primaryColor
-                              : AppTheme.textTertiary,
-                          width: 4,
-                        ),
-                        left: BorderSide(
-                          color: _isScanning
-                              ? AppTheme.primaryColor
-                              : AppTheme.textTertiary,
-                          width: 4,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: _isScanning
-                              ? AppTheme.primaryColor
-                              : AppTheme.textTertiary,
-                          width: 4,
-                        ),
-                        right: BorderSide(
-                          color: _isScanning
-                              ? AppTheme.primaryColor
-                              : AppTheme.textTertiary,
-                          width: 4,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
-          Expanded(
-            child: Container(),
-          ),
-          // * Instructions
-          Container(
-            padding: const EdgeInsets.all(AppTheme.spacingXL),
-            child: Column(
-              children: [
-                Text(
-                  _isScanning
-                      ? "Position QR code within frame"
-                      : "Processing...",
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: AppTheme.spacingSM),
-                Text(
-                  "Scan the gate pass QR code",
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withOpacity(0.8),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+          // * Validation result
+          if (_validatedSticker != null || _errorMessage != null)
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: _validatedSticker != null 
+                  ? Colors.green.withOpacity(0.2)
+                  : Colors.red.withOpacity(0.2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_validatedSticker != null) ...[
+                    Text(
+                      "Valid Gate Pass",
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text("HOA: ${_validatedSticker!.hoaName}"),
+                    Text("Expires: ${_validatedSticker!.expiresAt.toLocal()}"),
+                    if (_validatedSticker!.isPhysicalSticker)
+                      const Text("Type: Physical Sticker"),
+                  ],
+                  if (_errorMessage != null)
+                    Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
-  }
-  
-  Widget _buildSuccessOverlay() {
-    return Container(
-      color: Colors.black.withOpacity(0.7),
-      child: Center(
-        child: Container(
-          margin: const EdgeInsets.all(AppTheme.spacingXL),
-          padding: const EdgeInsets.all(AppTheme.spacingXL),
-          decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
-            borderRadius: BorderRadius.circular(AppTheme.radiusXL),
-            border: Border.all(
-              color: AppTheme.successColor,
-              width: 2,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.check_circle,
-                size: 80,
-                color: AppTheme.successColor,
-              ),
-              const SizedBox(height: AppTheme.spacingLG),
-              Text(
-                "Access Granted",
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.successColor,
-                ),
-              ),
-              const SizedBox(height: AppTheme.spacingMD),
-              Text(
-                _validatedSticker!.hoaName,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: AppTheme.spacingSM),
-              Text(
-                "Valid sticker verified",
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-              const SizedBox(height: AppTheme.spacingLG),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppTheme.spacingMD,
-                  vertical: AppTheme.spacingSM,
-                ),
-                decoration: BoxDecoration(
-                  color: AppTheme.successColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                ),
-                child: Text(
-                  "Expires: ${_formatDate(_validatedSticker!.expiresAt)}",
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.successColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-  
-  Widget _buildErrorOverlay() {
-    return Container(
-      color: Colors.black.withOpacity(0.7),
-      child: Center(
-        child: Container(
-          margin: const EdgeInsets.all(AppTheme.spacingXL),
-          padding: const EdgeInsets.all(AppTheme.spacingXL),
-          decoration: BoxDecoration(
-            color: AppTheme.surfaceColor,
-            borderRadius: BorderRadius.circular(AppTheme.radiusXL),
-            border: Border.all(
-              color: AppTheme.errorColor,
-              width: 2,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 80,
-                color: AppTheme.errorColor,
-              ),
-              const SizedBox(height: AppTheme.spacingLG),
-              Text(
-                "Access Denied",
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.errorColor,
-                ),
-              ),
-              const SizedBox(height: AppTheme.spacingMD),
-              Text(
-                _errorMessage ?? "Invalid gate pass",
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-  
-  String _formatDate(DateTime date) {
-    return "${date.day}/${date.month}/${date.year}";
   }
 }
 

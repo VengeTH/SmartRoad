@@ -1,3 +1,4 @@
+import "package:flutter/foundation.dart";
 import "package:geolocator/geolocator.dart";
 import "package:permission_handler/permission_handler.dart";
 
@@ -9,65 +10,69 @@ class LocationService {
   
   /// * Check and request location permissions
   Future<bool> requestPermission() async {
-    final status = await Permission.location.request();
-    return status.isGranted;
+    try {
+      final status = await Permission.location.request();
+      return status.isGranted;
+    } catch (e) {
+      debugPrint("❌ [LocationService] Error requesting permission: $e");
+      return false;
+    }
   }
   
   /// * Check if location permission is granted
   Future<bool> isPermissionGranted() async {
-    final status = await Permission.location.status;
-    return status.isGranted;
+    try {
+      final status = await Permission.location.status;
+      return status.isGranted;
+    } catch (e) {
+      debugPrint("❌ [LocationService] Error checking permission: $e");
+      return false;
+    }
   }
   
   /// * Get current position
   /// * Returns null if permission denied or location unavailable
   Future<Position?> getCurrentPosition() async {
     try {
+      debugPrint("📍 [LocationService] Getting current position...");
+      
       // * Check if permission is granted
       final hasPermission = await isPermissionGranted();
       if (!hasPermission) {
-        print("📍 [LocationService] Permission not granted, requesting...");
+        debugPrint("📍 [LocationService] Permission not granted, requesting...");
         final granted = await requestPermission();
         if (!granted) {
-          print("📍 [LocationService] Permission denied by user");
+          debugPrint("❌ [LocationService] Permission denied by user");
           return null;
         }
-        print("📍 [LocationService] Permission granted");
       }
       
-      // * Check if location services are enabled
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        print("📍 [LocationService] Location services not enabled");
-        return null;
+      // * On web, skip location service check (not always available)
+      if (!kIsWeb) {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          debugPrint("❌ [LocationService] Location services disabled");
+          return null;
+        }
       }
       
-      print("📍 [LocationService] Getting current position...");
-      // * Get current position with better error handling
-      // * Use bestForNavigation for highest accuracy (important for STI College Las Piñas)
+      // * Use appropriate accuracy and timeout for platform
+      // * Web needs more time and lower accuracy
+      final accuracy = kIsWeb ? LocationAccuracy.high : LocationAccuracy.bestForNavigation;
+      final timeout = kIsWeb ? const Duration(seconds: 15) : const Duration(seconds: 10);
+      
+      debugPrint("📍 [LocationService] Requesting position (accuracy: $accuracy, timeout: ${timeout.inSeconds}s)...");
+      
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.bestForNavigation,
-        timeLimit: const Duration(seconds: 20),
+        desiredAccuracy: accuracy,
+        timeLimit: timeout,
       );
       
-      print("📍 [LocationService] Position obtained: ${position.latitude}, ${position.longitude}");
+      debugPrint("✅ [LocationService] Got position: ${position.latitude}, ${position.longitude}");
       return position;
     } catch (e, stackTrace) {
-      print("❌ [LocationService] Error getting position: $e");
-      print("❌ [LocationService] Stack: $stackTrace");
-      
-      // * Try to get last known position as fallback
-      try {
-        print("📍 [LocationService] Trying last known position...");
-        final lastKnown = await Geolocator.getLastKnownPosition();
-        if (lastKnown != null) {
-          print("📍 [LocationService] Using last known position: ${lastKnown.latitude}, ${lastKnown.longitude}");
-          return lastKnown;
-        }
-      } catch (e2) {
-        print("❌ [LocationService] Error getting last known position: $e2");
-      }
-      
+      debugPrint("❌ [LocationService] Error getting position: $e");
+      debugPrint("❌ [LocationService] Stack: $stackTrace");
       return null;
     }
   }
@@ -75,8 +80,15 @@ class LocationService {
   /// * Get last known position (cached)
   Future<Position?> getLastKnownPosition() async {
     try {
-      return await Geolocator.getLastKnownPosition();
+      final position = await Geolocator.getLastKnownPosition();
+      if (position != null) {
+        debugPrint("📍 [LocationService] Got last known position: ${position.latitude}, ${position.longitude}");
+      } else {
+        debugPrint("📍 [LocationService] No last known position available");
+      }
+      return position;
     } catch (e) {
+      debugPrint("❌ [LocationService] Error getting last known position: $e");
       return null;
     }
   }

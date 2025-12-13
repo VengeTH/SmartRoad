@@ -4,6 +4,118 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
+## Version 2.4.0 - Navigation & Location Enhancements
+
+**Release Date:** 2025  
+**Focus:** Comprehensive Navigation System & Location Services
+
+### New Features
+
+#### Multi-Vehicle Routing System
+- **5 Vehicle Types Supported**:
+  - Big Bike (400cc+) - High displacement motorcycles, tolls optional
+  - Motorcycle (≤399cc) - Standard motorcycles, avoids tolls by default
+  - Car (Private) - Private vehicles, tolls optional
+  - Truck - Commercial vehicles
+  - Pedestrian - Walking routes
+- **GraphHopper Integration**: Full integration with self-hosted GraphHopper routing engine
+- **Route Calculation**: Real-time route calculation with distance and duration
+- **Toll Avoidance**: Configurable toll avoidance per vehicle type
+- **Route Visualization**: Color-coded route display with traveled/upcoming segments
+
+#### Location Search & Geocoding
+- **Nominatim Integration**: OpenStreetMap Nominatim API for free geocoding
+- **Location Search**: Search bar with autocomplete and debouncing
+- **Reverse Geocoding**: Get address from coordinates
+- **Philippines Focus**: Search optimized for Philippines locations
+- **Search Results**: Dropdown with location suggestions
+
+#### Real-time Navigation
+- **Live Location Updates**: 1-meter accuracy during navigation, 5-meter in normal mode
+- **Off-route Detection**: Automatic detection when user deviates from route
+- **Automatic Rerouting**: Recalculates route when off-route
+- **Route Progress**: Tracks traveled vs upcoming route segments
+- **Navigation Overlay**: Real-time navigation UI with distance, duration, and vehicle type
+- **Map Following**: Map automatically follows user during navigation
+
+#### Map Enhancements
+- **Long Press to Pin**: Long-press map to pin location and show options
+- **Location Options Sheet**: Get Directions, Save Location, View on Map, Share options
+- **Hazard Filtering**: Filter by type, severity, and expiry status
+- **Filter Panel**: Slide-out panel with filter controls
+- **Filter Indicators**: Visual indicators for active filters
+- **Current Location Button**: Quick access to center on current location
+
+#### Platform-Specific Optimizations
+- **Web Support**: Full web platform support with optimized location handling
+- **Platform Detection**: Automatic platform detection for location accuracy
+- **Web Location**: Uses `LocationAccuracy.high` with 15-second timeout for web
+- **Mobile Location**: Uses `LocationAccuracy.bestForNavigation` with 10-second timeout
+- **Last Known Position**: Prioritizes cached location for faster initial display
+
+### Technical Implementation
+
+#### New Services
+- **LocationSearchService**: OpenStreetMap Nominatim API integration
+- **RoutingService**: GraphHopper API integration with vehicle type support
+- **Enhanced LocationService**: Platform-specific location handling
+
+#### New Providers
+- **mapFilterProvider**: Manages hazard filtering state (type, severity, expiry)
+
+#### Enhanced Services
+- **LocationService**: 
+  - Platform-specific accuracy settings
+  - Better error handling and logging
+  - Last known position caching
+  - Web-optimized timeouts
+- **RoutingService**:
+  - Vehicle type enum with GraphHopper parameter mapping
+  - Icon support for each vehicle type
+  - Fallback route calculation
+  - Distance and duration calculation
+
+#### Map Screen Enhancements
+- **Location Stream**: Continuous location updates with dynamic distance filter
+- **Route Management**: Route splitting, progress tracking, off-route detection
+- **Navigation State**: Tracks navigation mode, destination, and route
+- **Utility Functions**: Haversine distance, route splitting, distance to route
+
+### UI/UX Improvements
+
+- **Search Bar**: Enhanced search bar with loading indicator and clear button
+- **Location Options**: Beautiful bottom sheet for location actions
+- **Route Selection**: Vehicle type selection with icons and descriptions
+- **Navigation Overlay**: Clean navigation UI with real-time updates
+- **Filter Panel**: Smooth slide-out animation with filter controls
+- **Error Messages**: Better error messages for location and routing failures
+
+### Bug Fixes
+
+- **Location Loading**: Fixed slow location loading by prioritizing last known position
+- **Web Location**: Fixed location not working on web with platform-specific handling
+- **Location Stream**: Fixed location stream errors with better error recovery
+- **Route Display**: Fixed route visualization with proper polyline rendering
+- **Map Interaction**: Changed tap to long-press for location pinning
+
+### Breaking Changes
+
+- None (all changes are additive)
+
+### Migration Notes
+
+1. **GraphHopper Setup** (Required for routing):
+   ```bash
+   cd backend
+   docker-compose up -d graphhopper
+   ```
+
+2. **No Database Changes**: All changes are client-side only
+
+3. **Dependencies**: No new dependencies required (uses existing `http` package)
+
+---
+
 ## Version 2.3.2 - UI/UX Improvements & Responsive Design
 
 **Release Date:** 2025  

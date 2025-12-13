@@ -1,5 +1,7 @@
 import "dart:async";
+import "dart:math" as math;
 
+import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
@@ -20,7 +22,7 @@ import "../../services/routing_service.dart";
 import "../../providers/hazards_provider.dart" show MapHazardsNotifier;
 import "../../providers/sticker_provider.dart";
 import "../../models/sticker.dart";
-import "../../utils/route_utils.dart";
+// * Route utilities removed - using inline functions
 
 /// * Navigation overlay widget
 class _NavigationOverlay extends StatelessWidget {
@@ -47,15 +49,13 @@ class _NavigationOverlay extends StatelessWidget {
       case 'car':
         return 'Car';
       case 'motorcycle_sub400':
-        return 'Motorcycle (Sub-400cc)';
+        return 'Motorcycle (≤399cc)';
       case 'motorcycle_400plus':
-        return 'Motorcycle (400cc+)';
+        return 'Big Bike (400cc+)';
       case 'truck':
         return 'Truck';
-      case 'public_transit':
-        return 'Public Transit';
-      case 'tricycle':
-        return 'Tricycle';
+      case 'pedestrian':
+        return 'Pedestrian';
       default:
         return 'Navigation';
     }
@@ -66,14 +66,13 @@ class _NavigationOverlay extends StatelessWidget {
       case 'car':
         return Icons.directions_car;
       case 'motorcycle_sub400':
-      case 'motorcycle_400plus':
         return Icons.two_wheeler;
+      case 'motorcycle_400plus':
+        return Icons.motorcycle;
       case 'truck':
         return Icons.local_shipping;
-      case 'public_transit':
-        return Icons.directions_bus;
-      case 'tricycle':
-        return Icons.pedal_bike;
+      case 'pedestrian':
+        return Icons.directions_walk;
       default:
         return Icons.navigation;
     }
@@ -89,9 +88,7 @@ class _NavigationOverlay extends StatelessWidget {
         return AppTheme.secondaryColor.withOpacity(0.8);
       case 'truck':
         return AppTheme.warningColor;
-      case 'public_transit':
-        return AppTheme.infoColor;
-      case 'tricycle':
+      case 'pedestrian':
         return AppTheme.successColor;
       default:
         return AppTheme.primaryColor;
@@ -618,7 +615,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _isSearching = false;
   bool _showSearchResults = false;
   final Dio _dio = Dio();
-  final RoutingService _routingService = RoutingService(baseUrl: AppConstants.routingApiUrl);
+  final RoutingService _routingService = RoutingService();
   StreamSubscription<Position>? _positionSubscription;
   bool _hasPreciseLocation = false;
   String _activeRoutingProfile = "car";
@@ -656,7 +653,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _searchController.dispose();
     _searchFocusNode.dispose();
     _dio.close();
-    _routingService.dispose();
+    // * RoutingService doesn't need dispose
     super.dispose();
   }
   
@@ -784,7 +781,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   List<LatLng>? _navigationRoute;
   
   // * Route selection state
-  List<RouteResponse> _availableRoutes = [];
+  List<RouteData> _availableRoutes = [];
   int _selectedRouteIndex = 0;
   
   // * Route color coding state
@@ -828,14 +825,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       case 'car':
         return Icons.directions_car;
       case 'motorcycle_sub400':
-      case 'motorcycle_400plus':
         return Icons.two_wheeler;
+      case 'motorcycle_400plus':
+        return Icons.motorcycle;
       case 'truck':
         return Icons.local_shipping;
-      case 'public_transit':
-        return Icons.directions_bus;
-      case 'tricycle':
-        return Icons.pedal_bike;
+      case 'pedestrian':
+        return Icons.directions_walk;
       default:
         return Icons.navigation;
     }
@@ -852,9 +848,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         return AppTheme.secondaryColor.withOpacity(0.8);
       case 'truck':
         return AppTheme.warningColor;
-      case 'public_transit':
-        return AppTheme.infoColor;
-      case 'tricycle':
+      case 'pedestrian':
         return AppTheme.successColor;
       default:
         return AppTheme.primaryColor;
@@ -977,9 +971,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           avoidTolls = _avoidTollsToggle;
           break;
         case 'motorcycle_sub400':
+          backendMode = 'motorcycle';
+          avoidTolls = true; // * Standard motorcycles always avoid tolls
+          break;
         case 'motorcycle_400plus':
           backendMode = 'motorcycle';
-          avoidTolls = true; // * Motorcycles always avoid tolls in MVP
+          avoidTolls = _avoidTollsToggle; // * Big bikes allow tolls like cars
+          break;
+        case 'truck':
+          backendMode = 'truck';
+          avoidTolls = _avoidTollsToggle;
+          break;
+        case 'pedestrian':
+          backendMode = 'foot';
+          avoidTolls = true; // * Pedestrians don't use tolls
           break;
         default:
           backendMode = 'car';
@@ -988,57 +993,59 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       
       debugPrint("📍 [MapScreen] Calculating route: mode=$backendMode, avoidTolls=$avoidTolls");
       
-      // * Get user sticker IDs for permission-based routing
-      final userStickerIds = ref.read(userStickerIdsProvider);
+      // * FUTURE: Get user sticker IDs for permission-based routing
+      // * final userStickerIds = ref.read(userStickerIdsProvider);
       
-      // * Get HOA access types for routing logic (hard/soft blocks)
-      final hoasAsync = ref.read(hoasProvider);
-      final hoaAccessTypes = <String, String>{};
-      hoasAsync.whenData((hoas) {
-        for (final hoa in hoas) {
-          hoaAccessTypes[hoa.id] = hoa.accessType == HOAAccessType.publicShortcut
-              ? 'public_shortcut'
-              : 'residents_only';
-        }
-      });
+      // * FUTURE: Get HOA access types for routing logic (hard/soft blocks)
+      // * final hoasAsync = ref.read(hoasProvider);
       
-      // * Call backend routing service
-      final routes = await _routingService.calculateRoute(
-        origin: routeOrigin,
-        destination: destination,
-        mode: backendMode,
-        avoidTolls: avoidTolls,
-        userStickerIds: userStickerIds,
-        hoaAccessTypes: hoaAccessTypes,
-      );
-      
-      if (routes.isEmpty) {
-        throw Exception("No routes returned from backend");
+      // * Map backend mode to VehicleType
+      VehicleType vehicleType;
+      switch (mode) {
+        case 'motorcycle_sub400':
+          vehicleType = VehicleType.motorcycle;
+          break;
+        case 'motorcycle_400plus':
+          vehicleType = VehicleType.bigBike;
+          break;
+        case 'car':
+          vehicleType = VehicleType.car;
+          break;
+        case 'truck':
+          vehicleType = VehicleType.truck;
+          break;
+        case 'pedestrian':
+          vehicleType = VehicleType.pedestrian;
+          break;
+        default:
+          vehicleType = VehicleType.car;
       }
       
-      // * Store all available routes
+      // * Call routing service
+      final route = await _routingService.calculateRoute(
+        start: routeOrigin,
+        end: destination,
+        vehicle: vehicleType,
+        avoidTolls: avoidTolls,
+      );
+      
+      // * Store route
       setState(() {
-        _availableRoutes = routes;
+        _availableRoutes = [route]; // * Single route for now
         _selectedRouteIndex = 0;
         
-        // * Use primary route (first one) by default
-        final primaryRoute = routes[0];
-        _navigationRoute = primaryRoute.geometry;
-        _routeDistance = primaryRoute.distanceMeters / 1000; // * Convert to km
-        _routeDuration = Duration(seconds: primaryRoute.durationSeconds);
+        // * Use primary route
+        _navigationRoute = route.points;
+        _routeDistance = route.distance; // * Already in km
+        _routeDuration = route.duration;
         
         // * Initialize route segments
         _updateRouteSegments();
       });
       
-      debugPrint("📍 [MapScreen] Route calculated: ${routes.length} routes available, "
+      debugPrint("📍 [MapScreen] Route calculated: "
           "${_routeDistance.toStringAsFixed(2)} km, "
           "${(_routeDuration.inMinutes).toStringAsFixed(1)} min");
-      
-      // * Show route selection UI if multiple routes available
-      if (routes.length > 1 && mounted) {
-        _showRouteSelectionSheet();
-      }
       
       // * Show info if tolls are being avoided
       if (avoidTolls && mounted) {
@@ -1172,7 +1179,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       return;
     }
     
-    final splitResult = splitRouteAtPoint(
+    // * Simple route splitting: find closest point on route
+    final splitResult = _splitRouteAtPoint(
       _navigationRoute!,
       _currentLocation,
       thresholdKm: 1.0,
@@ -1184,7 +1192,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       
       // * Calculate remaining distance and duration
       if (_upcomingRoute.isNotEmpty) {
-        _remainingDistance = calculateRemainingDistance(_upcomingRoute, _currentLocation);
+        _remainingDistance = _calculateRemainingDistance(_upcomingRoute, _currentLocation);
         
         // * Estimate remaining time based on average speed
         if (_routeDistance > 0 && _routeDuration.inSeconds > 0) {
@@ -1205,7 +1213,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       return false;
     }
     
-    final distanceToRoute = calculateDistanceToRoute(currentPosition, _navigationRoute!);
+    final distanceToRoute = _calculateDistanceToRoute(currentPosition, _navigationRoute!);
     
     setState(() {
       _offRouteDistance = distanceToRoute;
@@ -1264,7 +1272,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     try {
       // * Update traveled route to include path to current position
       if (_navigationRoute != null && _navigationRoute!.isNotEmpty) {
-        final splitResult = splitRouteAtPoint(_navigationRoute!, _currentLocation);
+        final splitResult = _splitRouteAtPoint(_navigationRoute!, _currentLocation);
         _traveledRoute = splitResult['traveled'] ?? [];
       }
       
@@ -1367,8 +1375,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         itemBuilder: (context, index) {
                           final route = _availableRoutes[index];
                           final isSelected = index == _selectedRouteIndex;
-                          final distanceKm = route.distanceMeters / 1000;
-                          final durationMin = route.durationSeconds ~/ 60;
+                          final distanceKm = route.distance; // * Already in km
+                          final durationMin = route.duration.inMinutes;
                           
                           return Material(
                             color: Colors.transparent,
@@ -1491,9 +1499,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     
     setState(() {
       _selectedRouteIndex = index;
-      _navigationRoute = selectedRoute.geometry;
-      _routeDistance = selectedRoute.distanceMeters / 1000;
-      _routeDuration = Duration(seconds: selectedRoute.durationSeconds);
+      _navigationRoute = selectedRoute.points;
+      _routeDistance = selectedRoute.distance; // * Already in km
+      _routeDuration = selectedRoute.duration;
       
       // * Update route segments
       _updateRouteSegments();
@@ -1528,6 +1536,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _remainingDistance = 0.0;
       _remainingDuration = Duration.zero;
     });
+    
+    // * Restart location stream with normal frequency (less frequent updates)
+    _startLocationStream();
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1595,20 +1606,49 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             ),
                           ),
                           const SizedBox(height: AppTheme.spacingLG),
+                          // * Big Bike (400cc+)
+                          _DirectionOption(
+                            icon: Icons.motorcycle,
+                            title: "Big Bike (400cc+)",
+                            subtitle: "High displacement motorcycles, tolls optional",
+                            isActive: _activeRoutingProfile == 'motorcycle_400plus',
+                            onTap: () => _startNavigation(destination, 'motorcycle_400plus'),
+                          ),
+                          const SizedBox(height: AppTheme.spacingMD),
+                          // * Motorcycle (≤399cc)
+                          _DirectionOption(
+                            icon: Icons.two_wheeler,
+                            title: "Motorcycle (≤399cc)",
+                            subtitle: "Standard motorcycles, automatically avoids toll roads",
+                            isActive: _activeRoutingProfile == 'motorcycle_sub400',
+                            onTap: () => _startNavigation(destination, 'motorcycle_sub400'),
+                          ),
+                          const SizedBox(height: AppTheme.spacingMD),
+                          // * Car (Private)
                           _DirectionOption(
                             icon: Icons.directions_car,
-                            title: "Car",
+                            title: "Car (Private)",
                             subtitle: "Fastest routes, tolls optional",
                             isActive: _activeRoutingProfile == 'car',
                             onTap: () => _startNavigation(destination, 'car'),
                           ),
                           const SizedBox(height: AppTheme.spacingMD),
+                          // * Truck
                           _DirectionOption(
-                            icon: Icons.two_wheeler,
-                            title: "Motorcycle",
-                            subtitle: "Automatically avoids toll roads",
-                            isActive: _activeRoutingProfile != 'car',
-                            onTap: () => _startNavigation(destination, 'motorcycle_sub400'),
+                            icon: Icons.local_shipping,
+                            title: "Truck",
+                            subtitle: "Commercial vehicles, respects truck ban hours",
+                            isActive: _activeRoutingProfile == 'truck',
+                            onTap: () => _startNavigation(destination, 'truck'),
+                          ),
+                          const SizedBox(height: AppTheme.spacingMD),
+                          // * Pedestrian
+                          _DirectionOption(
+                            icon: Icons.directions_walk,
+                            title: "Pedestrian",
+                            subtitle: "Walking routes, shortest paths",
+                            isActive: _activeRoutingProfile == 'pedestrian',
+                            onTap: () => _startNavigation(destination, 'pedestrian'),
                           ),
                           const SizedBox(height: AppTheme.spacingXL),
                         ],
@@ -1647,6 +1687,29 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
   
+  /// * Handle map long press - pin location and show options
+  void _onMapLongPressed(LatLng point) async {
+    try {
+      // * Get address for the point using reverse geocoding
+      final locationService = LocationService();
+      // * Use a simple mock result for now (can enhance with reverse geocoding later)
+      final mockResult = {
+        'display_name': '${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}',
+        'lat': point.latitude.toString(),
+        'lon': point.longitude.toString(),
+        'address': null,
+      };
+      
+      // * Move map to location
+      _mapController.move(point, 15.0);
+      
+      // * Show location options sheet (same as search result)
+      _showLocationOptionsSheet(mockResult, point);
+    } catch (e) {
+      debugPrint("❌ [MapScreen] Error handling long press: $e");
+    }
+  }
+  
   /// * Share location
   void _shareLocation(Map<String, dynamic> result, LatLng location) {
     // * TODO: Implement share functionality
@@ -1674,19 +1737,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       hasPermission = await locationService.requestPermission();
     }
     if (!hasPermission) {
+      debugPrint("📍 [MapScreen] Location permission not granted, cannot start stream");
       return;
     }
     
-    const settings = LocationSettings(
+    // * Use more frequent updates for navigation, less frequent for normal mode
+    final settings = LocationSettings(
       accuracy: LocationAccuracy.bestForNavigation,
-      distanceFilter: 5,
+      distanceFilter: _isNavigating ? 1 : 5, // * 1 meter for navigation, 5 meters for normal
     );
     
     await _positionSubscription?.cancel();
+    debugPrint("📍 [MapScreen] Starting location stream (distanceFilter: ${settings.distanceFilter}m)");
+    
     _positionSubscription = Geolocator.getPositionStream(locationSettings: settings).listen(
       (position) {
         final updated = LatLng(position.latitude, position.longitude);
         if (!mounted) return;
+        
         setState(() {
           _currentLocation = updated;
           _hasPreciseLocation = true;
@@ -1703,37 +1771,83 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           if (isOffRoute && !_isRerouting) {
             _recalculateRouteFromCurrentPosition();
           }
-        } else {
-          // * Only move map when not navigating
+          
+          // * During navigation, keep map centered on user with smooth following
           _mapController.move(updated, _mapController.camera.zoom);
+        } else {
+          // * Only move map when not navigating (user can pan freely)
+          // * Don't auto-center in normal mode to allow user exploration
         }
       },
-      onError: (error) => debugPrint("❌ [MapScreen] Location stream error: $error"),
+      onError: (error) {
+        debugPrint("❌ [MapScreen] Location stream error: $error");
+        // * Try to restart stream on error
+        if (mounted) {
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) {
+              _startLocationStream();
+            }
+          });
+        }
+      },
     );
+    
+    debugPrint("📍 [MapScreen] Location stream started successfully");
   }
   
   Future<void> _loadCurrentLocation() async {
     try {
       debugPrint("📍 [MapScreen] Loading current location...");
       final locationService = LocationService();
-      final position = await locationService.getCurrentPosition();
-      if (!mounted) return;
       
-      if (position != null) {
-        final location = LatLng(position.latitude, position.longitude);
+      // * First, try to get last known position for immediate display
+      final lastKnown = await locationService.getLastKnownPosition();
+      if (lastKnown != null && mounted) {
+        final location = LatLng(lastKnown.latitude, lastKnown.longitude);
         setState(() {
           _currentLocation = location;
           _hasPreciseLocation = true;
         });
         try {
           _mapController.move(location, AppConstants.defaultZoom);
-          debugPrint("📍 [MapScreen] Map moved to current location");
+          debugPrint("📍 [MapScreen] Map moved to last known location");
         } catch (e) {
           debugPrint("❌ [MapScreen] Error moving map: $e");
         }
-      } else {
-        debugPrint("📍 [MapScreen] No location available, using default (Manila)");
-        _mapController.move(_currentLocation, AppConstants.defaultZoom);
+      }
+      
+      // * Then get fresh position (await it to ensure we get location)
+      try {
+        final position = await locationService.getCurrentPosition();
+        if (!mounted) return;
+        if (position != null) {
+          final location = LatLng(position.latitude, position.longitude);
+          setState(() {
+            _currentLocation = location;
+            _hasPreciseLocation = true;
+          });
+          if (!_isNavigating) {
+            // * Only move map if not navigating (navigation mode follows user automatically)
+            try {
+              _mapController.move(location, _mapController.camera.zoom);
+              debugPrint("📍 [MapScreen] Map moved to fresh location");
+            } catch (e) {
+              debugPrint("❌ [MapScreen] Error moving map: $e");
+            }
+          }
+          debugPrint("📍 [MapScreen] Fresh location obtained: ${location.latitude}, ${location.longitude}");
+        } else {
+          debugPrint("⚠️ [MapScreen] Could not get fresh location, using last known or default");
+          if (lastKnown == null && mounted) {
+            // * Only use default if we have no location at all
+            _mapController.move(_currentLocation, AppConstants.defaultZoom);
+          }
+        }
+      } catch (e) {
+        debugPrint("❌ [MapScreen] Error getting fresh location: $e");
+        if (lastKnown == null && mounted) {
+          _mapController.move(_currentLocation, AppConstants.defaultZoom);
+        }
       }
     } catch (e) {
       debugPrint("❌ [MapScreen] Error loading location: $e");
@@ -2148,6 +2262,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       });
                     } catch (e) {
                       debugPrint("Error in onTap: $e");
+                    }
+                  }
+              },
+              onLongPress: (tapPosition, point) {
+                  // * Long press to pin location and show options
+                  if (mounted) {
+                    try {
+                      _onMapLongPressed(point);
+                    } catch (e) {
+                      debugPrint("Error in onLongPress: $e");
                     }
                   }
               },
@@ -2658,6 +2782,102 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       error: (error, stack) => const SizedBox.shrink(),
     );
   }
+  
+  /// * Split route at point (utility function)
+  Map<String, List<LatLng>> _splitRouteAtPoint(
+    List<LatLng> route,
+    LatLng point,
+    {double thresholdKm = 1.0}
+  ) {
+    if (route.isEmpty) {
+      return {'traveled': [], 'upcoming': route};
+    }
+    
+    // * Find closest point on route
+    double minDistance = double.infinity;
+    int closestIndex = 0;
+    
+    for (int i = 0; i < route.length; i++) {
+      final distance = _calculateHaversineDistance(point, route[i]);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i;
+      }
+    }
+    
+    // * If too far from route, return full route as upcoming
+    if (minDistance > thresholdKm * 1000) {
+      return {'traveled': [], 'upcoming': route};
+    }
+    
+    // * Split at closest point
+    return {
+      'traveled': route.sublist(0, closestIndex + 1),
+      'upcoming': route.sublist(closestIndex + 1),
+    };
+  }
+  
+  /// * Calculate remaining distance along route
+  double _calculateRemainingDistance(List<LatLng> route, LatLng currentLocation) {
+    if (route.isEmpty) return 0.0;
+    
+    double totalDistance = 0.0;
+    LatLng? prevPoint = currentLocation;
+    
+    for (final point in route) {
+      if (prevPoint != null) {
+        totalDistance += _calculateHaversineDistance(prevPoint, point);
+      }
+      prevPoint = point;
+    }
+    
+    return totalDistance; // * Returns in meters
+  }
+  
+  /// * Calculate distance to route (minimum distance from point to any segment)
+  double _calculateDistanceToRoute(LatLng point, List<LatLng> route) {
+    if (route.isEmpty) return double.infinity;
+    
+    double minDistance = double.infinity;
+    
+    for (int i = 0; i < route.length - 1; i++) {
+      final segmentStart = route[i];
+      final segmentEnd = route[i + 1];
+      
+      // * Calculate distance to line segment
+      final distance = _distanceToLineSegment(point, segmentStart, segmentEnd);
+      if (distance < minDistance) {
+        minDistance = distance;
+      }
+    }
+    
+    return minDistance; // * Returns in meters
+  }
+  
+  /// * Calculate distance to line segment
+  double _distanceToLineSegment(LatLng point, LatLng lineStart, LatLng lineEnd) {
+    // * Simplified: use distance to closest endpoint
+    final distToStart = _calculateHaversineDistance(point, lineStart);
+    final distToEnd = _calculateHaversineDistance(point, lineEnd);
+    return distToStart < distToEnd ? distToStart : distToEnd;
+  }
+  
+  /// * Calculate Haversine distance between two points (in meters)
+  double _calculateHaversineDistance(LatLng point1, LatLng point2) {
+    const double earthRadiusM = 6371000.0; // * Earth radius in meters
+    final double dLat = _toRadians(point2.latitude - point1.latitude);
+    final double dLon = _toRadians(point2.longitude - point1.longitude);
+    
+    final double a = 
+      math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(_toRadians(point1.latitude)) * math.cos(_toRadians(point2.latitude)) *
+      math.sin(dLon / 2) * math.sin(dLon / 2);
+    
+    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadiusM * c;
+  }
+  
+  double _toRadians(double degrees) => degrees * (math.pi / 180.0);
 }
 
 // * Toolbar button widget removed - no longer used

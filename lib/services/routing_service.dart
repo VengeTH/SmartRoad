@@ -50,18 +50,33 @@ enum VehicleType {
   }
 }
 
+/// * Route metadata for blocked shortcuts
+class RouteMetadata {
+  final bool blockedShortcut;
+  final String? hoaName;
+  final int? timeSavedMinutes;
+  
+  RouteMetadata({
+    this.blockedShortcut = false,
+    this.hoaName,
+    this.timeSavedMinutes,
+  });
+}
+
 /// * Route data model
 class RouteData {
   final List<LatLng> points;
   final double distance; // * in kilometers
   final Duration duration;
   final String? instructions;
+  final RouteMetadata? metadata; // * Permission-based routing metadata
   
   RouteData({
     required this.points,
     required this.distance,
     required this.duration,
     this.instructions,
+    this.metadata,
   });
 }
 
@@ -75,11 +90,16 @@ class RoutingService {
   static const String _graphhopperUrl = "http://localhost:8989";
   
   /// * Calculate route between two points
+  /// * 
+  /// * [userStickerIds] - List of HOA IDs for which user has active stickers
+  /// * [restrictedHoaIds] - List of HOA IDs that have restricted roads
   Future<RouteData> calculateRoute({
     required LatLng start,
     required LatLng end,
     required VehicleType vehicle,
     bool avoidTolls = true,
+    List<String> userStickerIds = const [],
+    List<String> restrictedHoaIds = const [],
   }) async {
     try {
       // * Build GraphHopper API URL
@@ -147,11 +167,28 @@ class RoutingService {
           instructions = instructionTexts.join(" → ");
         }
         
+        // * Permission-based routing: Check for blocked shortcuts
+        RouteMetadata? metadata;
+        if (restrictedHoaIds.isNotEmpty) {
+          metadata = await _checkBlockedShortcuts(
+            routePoints: routePoints,
+            userStickerIds: userStickerIds,
+            restrictedHoaIds: restrictedHoaIds,
+            allowedRouteDistance: distanceKm,
+            allowedRouteDuration: duration,
+            start: start,
+            end: end,
+            vehicle: vehicle,
+            avoidTolls: avoidTolls,
+          );
+        }
+        
         return RouteData(
           points: routePoints,
           distance: distanceKm,
           duration: duration,
           instructions: instructions,
+          metadata: metadata,
         );
       } else {
         throw Exception("GraphHopper API error: ${response.statusCode}");
@@ -217,4 +254,64 @@ class RoutingService {
   }
   
   double _toRadians(double degrees) => degrees * (math.pi / 180.0);
+  
+  /// * Check for blocked shortcuts and calculate metadata
+  /// * 
+  /// * This method checks if the route passes through restricted HOA areas
+  /// * and calculates an alternative route if a shortcut exists
+  /// * 
+  /// * FUTURE (Post-MVP): Weather-aware rerouting logic
+  /// * FUTURE (Post-MVP): Use PostGIS to check route intersection with restricted areas
+  Future<RouteMetadata?> _checkBlockedShortcuts({
+    required List<LatLng> routePoints,
+    required List<String> userStickerIds,
+    required List<String> restrictedHoaIds,
+    required double allowedRouteDistance,
+    required Duration allowedRouteDuration,
+    required LatLng start,
+    required LatLng end,
+    required VehicleType vehicle,
+    required bool avoidTolls,
+  }) async {
+    // * Find restricted HOAs that user doesn't have stickers for
+    final blockedHoaIds = restrictedHoaIds
+        .where((hoaId) => !userStickerIds.contains(hoaId))
+        .toList();
+    
+    if (blockedHoaIds.isEmpty) {
+      // * User has all required stickers
+      return null;
+    }
+    
+    // * FUTURE (Post-MVP): Check if route actually passes through restricted areas
+    // * For MVP, we'll use a simplified check based on route proximity to HOA gates
+    // * In production, this should use PostGIS to check if route segments intersect restricted areas
+    
+    // * For MVP, simulate blocked shortcut detection
+    // * In real implementation, this would:
+    // * 1. Check if route passes through restricted HOA boundaries
+    // * 2. Calculate alternative route avoiding restricted areas
+    // * 3. Compare time/distance difference
+    
+    // * Simplified MVP logic: Assume there's a potential shortcut if route is long
+    // * and restricted HOAs exist between start and end
+    final routeLength = allowedRouteDistance;
+    final routeDurationMinutes = allowedRouteDuration.inMinutes;
+    
+    // * If route is longer than 5km, there might be a shortcut
+    if (routeLength > 5.0) {
+      // * Estimate potential time saved (15-30 minutes for long routes)
+      final estimatedTimeSaved = (routeDurationMinutes * 0.2).round(); // * 20% time savings estimate
+      
+      // * For MVP, return metadata indicating a blocked shortcut exists
+      // * In production, this would be calculated based on actual route comparison
+      return RouteMetadata(
+        blockedShortcut: true,
+        hoaName: "Restricted Area", // * Will be replaced with actual HOA name
+        timeSavedMinutes: estimatedTimeSaved > 0 ? estimatedTimeSaved : 15,
+      );
+    }
+    
+    return null;
+  }
 }

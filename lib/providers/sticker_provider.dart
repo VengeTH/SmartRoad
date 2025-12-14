@@ -41,4 +41,11 @@ final activeUserStickersProvider = FutureProvider<List<Sticker>>((ref) async {
   return await stickerService.getActiveUserStickers(userId);
 });
 
+/// * User sticker IDs provider
+/// * Returns list of HOA IDs for which user has active stickers
+final userStickerIdsProvider = FutureProvider<List<String>>((ref) async {
+  final activeStickers = await ref.watch(activeUserStickersProvider.future);
+  return activeStickers.map((sticker) => sticker.hoaId).toList();
+});
+
 

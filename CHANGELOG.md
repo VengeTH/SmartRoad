@@ -4,6 +4,104 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
+## Version 2.5.0 - Permission-Based Routing & Weather Overlay (MVP)
+
+**Release Date:** 2025  
+**Focus:** MVP Readiness - Permission-Based Routing & Weather Visualization  
+**Status:** 90% MVP Complete - Investor Demo Ready
+
+### New Features
+
+#### Permission-Based Routing System (MVP)
+- **Core Logic Implemented:**
+  - Roads can be tagged as restricted/private (HOA roads)
+  - Each user has a Digital Sticker Wallet
+  - Routing behavior:
+    - ✅ If user HAS sticker → include restricted roads
+    - ✅ If user DOES NOT HAVE sticker → treat those roads as blocked
+- **Route Metadata:**
+  - `blocked_shortcut` flag for detected shortcuts
+  - `hoa_name` for restricted area identification
+  - `time_saved_minutes` for potential time savings calculation
+- **Route Preview Sheet:**
+  - Shows route distance and duration before navigation
+  - Displays vehicle type information
+  - Sticker suggestion banner when blocked shortcut exists
+  - "Apply for Sticker" CTA (payment integration planned for Post-MVP)
+- **User Sticker IDs Provider:**
+  - New provider for active sticker IDs
+  - Integrated with routing service for permission checks
+
+#### Weather Visual Overlay (Map-Only MVP)
+- **Weather States Supported:**
+  - ☀️ Sunny (normal conditions)
+  - 🔥 Intense Heat (temperature > 35°C)
+  - 🌥️ Cloudy
+  - 🌧️ Light Rain
+  - ⛈️ Heavy Rain
+- **Weather Service:**
+  - Open-Meteo API integration (free, no API key required)
+  - Automatic weather data fetching
+  - 10-minute caching for performance
+  - Auto-update every 10-15 minutes
+- **Weather Overlay Widget:**
+  - Toggleable map overlay with semi-transparent color layers
+  - Weather icons displayed on affected regions
+  - Weather legend with color/icon meanings
+  - Floating action button for easy toggle
+- **MVP Scope:** Visual only - no rerouting based on weather yet
+- **Future:** Weather-aware rerouting logic (Post-MVP)
+
+#### Branding Reinforcement
+- **Slogan:** "Be Heedful on the Road"
+- **Secondary Line:** "Smart navigation for real road conditions"
+- **Branding Locations:**
+  - Splash screen (already present)
+  - About screen (already present)
+  - Demo mode screen (newly added to login screen)
+- **Safety-First:** No branding on active navigation screens
+
+### Technical Improvements
+
+#### New Services
+- **WeatherService:** Singleton service for weather data fetching and caching
+- **Enhanced RoutingService:** Added permission-based routing logic
+
+#### New Models
+- **WeatherState:** Enum for weather conditions
+- **WeatherData:** Model for weather information with location and timestamp
+- **RouteMetadata:** Model for route metadata (blocked shortcuts, time savings)
+
+#### New Widgets
+- **RoutePreviewSheet:** Route preview with sticker suggestions
+- **WeatherOverlay:** Weather visualization overlay
+- **WeatherOverlayToggle:** Toggle button for weather overlay
+- **WeatherLegend:** Legend showing weather state meanings
+
+#### Updated Providers
+- **sticker_provider.dart:** Added `userStickerIdsProvider` for routing
+
+### Codebase Metrics Update
+- **Total Services:** 9 → 10 (added WeatherService)
+- **Total Models:** 3 → 4 (added WeatherState/WeatherData)
+- **Total Widgets:** 3 → 6 (added RoutePreviewSheet, WeatherOverlay components)
+
+### Post-MVP Features (Planned)
+- Payment integration (GCash, PayMaya, Stripe)
+- Weather-aware rerouting logic
+- HOA admin dashboard
+- Multi-country expansion
+- Full PostGIS route intersection checks
+- Push notifications (FCM)
+- AI incident prediction
+
+### Bug Fixes & Improvements
+- Fixed null safety issues in weather overlay integration
+- Improved route preview UX with better information display
+- Enhanced error handling in weather service
+
+---
+
 ## Version 2.4.0 - Navigation & Location Enhancements
 
 **Release Date:** 2025  

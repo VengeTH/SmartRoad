@@ -17,6 +17,8 @@ import "../../core/theme/app_theme.dart";
 import "../../widgets/hazard_marker.dart";
 import "../../widgets/hazard_detail_sheet.dart";
 import "../../widgets/hoa_gate_marker.dart";
+import "../../widgets/route_preview_sheet.dart";
+import "../../widgets/weather_overlay.dart";
 import "../../services/location_service.dart";
 import "../../services/routing_service.dart";
 import "../../providers/hazards_provider.dart" show MapHazardsNotifier;
@@ -789,6 +791,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   List<LatLng> _upcomingRoute = [];
   double _traveledDistance = 0.0;
   
+  // * Weather overlay state
+  bool _weatherOverlayEnabled = false;
+  
   // * Off-route detection state
   bool _isOffRoute = false;
   double _offRouteDistance = 0.0;
@@ -855,54 +860,139 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
   
-  /// * Start navigation
+  /// * Start navigation (shows route preview first)
   Future<void> _startNavigation(LatLng destination, String mode) async {
     try {
       if (mounted) {
         Navigator.of(context).pop(); // * Close location options sheet
         
-        setState(() {
-          _isNavigating = true;
-          _navigationDestination = destination;
-          _navigationMode = mode;
-          _activeRoutingProfile = mode == 'car' ? 'car' : 'motorcycle_sub400';
-        });
-        
-        // * Calculate route
+        // * Calculate route first
         await _calculateRoute(destination, mode);
         
-        // * Move map to show route
-        if (_navigationRoute != null && _navigationRoute!.isNotEmpty) {
-          _mapController.fitCamera(
-            CameraFit.bounds(
-              bounds: LatLngBounds.fromPoints(_navigationRoute!),
-              padding: const EdgeInsets.all(100),
+        // * Show route preview sheet
+        if (_availableRoutes.isNotEmpty && mounted) {
+          final route = _availableRoutes[_selectedRouteIndex];
+          final vehicleType = _getVehicleTypeFromMode(mode);
+          final vehicleModeName = _getNavigationModeName(mode);
+          
+          // * Get HOA name for sticker suggestion
+          String? hoaName;
+          if (route.metadata?.blockedShortcut ?? false) {
+            final hoasAsync = ref.read(hoasProvider);
+            final hoas = await hoasAsync.when(
+              data: (hoaList) => hoaList,
+              loading: () => <HOA>[],
+              error: (_, __) => <HOA>[],
+            );
+            // * Find first restricted HOA (for MVP, use first one)
+            final restrictedHoa = hoas.firstWhere(
+              (hoa) => hoa.isResidentsOnly,
+              orElse: () => hoas.isNotEmpty ? hoas.first : HOA(
+                id: "",
+                name: "Restricted Area",
+                isActive: true,
+                createdAt: DateTime.now(),
+                updatedAt: DateTime.now(),
+              ),
+            );
+            hoaName = restrictedHoa.name;
+          }
+          
+          showModalBottomSheet(
+            context: context,
+            backgroundColor: Colors.transparent,
+            isScrollControlled: true,
+            builder: (context) => RoutePreviewSheet(
+              route: route,
+              vehicleType: vehicleType,
+              vehicleModeName: vehicleModeName,
+              onStartNavigation: () {
+                Navigator.of(context).pop(); // * Close preview sheet
+                _beginNavigation(destination, mode);
+              },
+              onCancel: () {
+                Navigator.of(context).pop(); // * Close preview sheet
+              },
+              onApplyForSticker: route.metadata?.blockedShortcut ?? false
+                  ? () {
+                      Navigator.of(context).pop(); // * Close preview sheet
+                      // * Navigate to stickers screen
+                      // * FUTURE (Post-MVP): Navigate to sticker purchase/application screen
+                      // * FUTURE (Post-MVP): Payment integration (GCash, PayMaya, Stripe)
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("Navigate to sticker application for $hoaName"),
+                          backgroundColor: AppTheme.infoColor,
+                        ),
+                      );
+                    }
+                  : null,
             ),
           );
         }
-        
-        // * Show navigation started message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(
-                  _getNavigationModeIcon(mode),
-                  color: Colors.white,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text("Navigation started (${_getNavigationModeName(mode)} mode)"),
-                ),
-              ],
-            ),
-            backgroundColor: AppTheme.successColor,
-            duration: const Duration(seconds: 2),
-          ),
-        );
       }
     } catch (e) {
       debugPrint("❌ [MapScreen] Error starting navigation: $e");
+    }
+  }
+  
+  /// * Begin actual navigation (after preview confirmed)
+  void _beginNavigation(LatLng destination, String mode) {
+    setState(() {
+      _isNavigating = true;
+      _navigationDestination = destination;
+      _navigationMode = mode;
+      _activeRoutingProfile = mode == 'car' ? 'car' : 'motorcycle_sub400';
+    });
+    
+    // * Move map to show route
+    if (_navigationRoute != null && _navigationRoute!.isNotEmpty) {
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints(_navigationRoute!),
+          padding: const EdgeInsets.all(100),
+        ),
+      );
+    }
+    
+    // * Show navigation started message
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                _getNavigationModeIcon(mode),
+                color: Colors.white,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text("Navigation started (${_getNavigationModeName(mode)} mode)"),
+              ),
+            ],
+          ),
+          backgroundColor: AppTheme.successColor,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+  
+  /// * Get VehicleType from mode string
+  VehicleType _getVehicleTypeFromMode(String mode) {
+    switch (mode) {
+      case 'motorcycle_sub400':
+        return VehicleType.motorcycle;
+      case 'motorcycle_400plus':
+        return VehicleType.bigBike;
+      case 'car':
+        return VehicleType.car;
+      case 'truck':
+        return VehicleType.truck;
+      case 'pedestrian':
+        return VehicleType.pedestrian;
+      default:
+        return VehicleType.car;
     }
   }
   
@@ -993,11 +1083,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       
       debugPrint("📍 [MapScreen] Calculating route: mode=$backendMode, avoidTolls=$avoidTolls");
       
-      // * FUTURE: Get user sticker IDs for permission-based routing
-      // * final userStickerIds = ref.read(userStickerIdsProvider);
+      // * Get user sticker IDs for permission-based routing
+      final userStickerIdsAsync = ref.read(userStickerIdsProvider);
+      final userStickerIds = await userStickerIdsAsync.when(
+        data: (ids) => ids,
+        loading: () => <String>[],
+        error: (_, __) => <String>[],
+      );
       
-      // * FUTURE: Get HOA access types for routing logic (hard/soft blocks)
-      // * final hoasAsync = ref.read(hoasProvider);
+      // * Get HOA IDs for restricted roads
+      final hoasAsync = ref.read(hoasProvider);
+      final hoas = await hoasAsync.when(
+        data: (hoaList) => hoaList,
+        loading: () => <HOA>[],
+        error: (_, __) => <HOA>[],
+      );
+      // * Get restricted HOA IDs (HOAs with residents_only access type)
+      final restrictedHoaIds = hoas
+          .where((hoa) => hoa.isResidentsOnly)
+          .map((hoa) => hoa.id)
+          .toList();
       
       // * Map backend mode to VehicleType
       VehicleType vehicleType;
@@ -1021,12 +1126,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           vehicleType = VehicleType.car;
       }
       
-      // * Call routing service
+      // * Call routing service with permission-based routing
       final route = await _routingService.calculateRoute(
         start: routeOrigin,
         end: destination,
         vehicle: vehicleType,
         avoidTolls: avoidTolls,
+        userStickerIds: userStickerIds,
+        restrictedHoaIds: restrictedHoaIds,
       );
       
       // * Store route
@@ -2677,6 +2784,37 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       setState(() => _selectedHazard = null);
                     }
                   },
+              ),
+            ),
+          // * Weather overlay toggle button
+          Positioned(
+            bottom: 100, // * Above bottom navigation
+            right: AppTheme.spacingMD,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                WeatherOverlayToggle(
+                  isEnabled: _weatherOverlayEnabled,
+                  onToggle: () {
+                    setState(() {
+                      _weatherOverlayEnabled = !_weatherOverlayEnabled;
+                    });
+                  },
+                ),
+                if (_weatherOverlayEnabled) ...[
+                  const SizedBox(height: AppTheme.spacingMD),
+                  WeatherLegend(),
+                ],
+              ],
+            ),
+          ),
+          // * Weather overlay
+          if (_weatherOverlayEnabled)
+            Positioned.fill(
+              child: WeatherOverlay(
+                center: _currentLocation,
+                bounds: _mapController.camera.visibleBounds,
+                isVisible: _weatherOverlayEnabled,
               ),
             ),
           // * Bottom Toolbar (removed - using main navigation bar instead)

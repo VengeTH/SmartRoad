@@ -615,6 +615,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           ),
                         ),
             const SizedBox(height: AppTheme.spacingMD),
+            // * Demo Mode Branding
+            const SizedBox(height: AppTheme.spacingXL),
+            Container(
+              padding: const EdgeInsets.all(AppTheme.spacingMD),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceColor,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                border: Border.all(
+                  color: AppTheme.borderColor,
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    "Be Heedful on the Road",
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w300,
+                      color: AppTheme.textTertiary,
+                      fontStyle: FontStyle.italic,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spacingXS),
+                  Text(
+                    "Smart navigation for real road conditions",
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppTheme.spacingMD),
             // * Demo Credentials Info - Premium Card
             Container(
                           padding: const EdgeInsets.all(AppTheme.spacingMD),

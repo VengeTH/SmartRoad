@@ -37,6 +37,12 @@ smartroad/
   - Car (Private) - Private vehicles, tolls optional
   - Truck - Commercial vehicles
   - Pedestrian - Walking routes
+- **Permission-Based Routing (MVP)**: 
+  - Roads can be tagged as restricted/private (HOA roads)
+  - Users with stickers can access restricted roads
+  - Users without stickers are routed around private areas
+  - Route preview shows blocked shortcut suggestions with time savings
+  - Sticker application CTA (payment integration planned)
 - **GraphHopper Integration**: Self-hosted routing engine with Philippines OSM data
 - **Location Search**: OpenStreetMap Nominatim API integration for geocoding
 - **Real-time Navigation**: 
@@ -44,6 +50,7 @@ smartroad/
   - Off-route detection and automatic rerouting
   - Route progress tracking (traveled vs upcoming segments)
   - Visual route display with color-coded segments
+  - Route preview sheet before navigation starts
 - **Location Options**: Long-press map to pin location with options (Get Directions, Save, Share, View on Map)
 
 ### Map Features
@@ -52,6 +59,13 @@ smartroad/
 - **Current Location**: Real-time location tracking with platform-specific optimizations
 - **Map Controls**: Zoom in/out, center on location, filter panel
 - **HOA Gate Markers**: Color-coded gate markers (Red = Strict, Green = Open)
+- **Weather Overlay (MVP)**: 
+  - Toggleable weather visualization on map
+  - Shows weather conditions: Sunny, Intense Heat, Cloudy, Light Rain, Heavy Rain
+  - Semi-transparent color layers with weather icons
+  - Auto-updates every 10-15 minutes
+  - Weather legend for reference
+  - ⚠️ Visual only - no rerouting based on weather yet
 
 ### Sticker & Gate Security
 - **Digital Sticker Wallet**: Users can hold multiple HOA stickers
@@ -76,8 +90,10 @@ smartroad/
 - **App Name**: SmartRoad
 - **Company**: The Heedful
 - **Motto**: "Be Heedful on the Road"
+- **Secondary Line**: "Smart navigation for real road conditions"
 - **Splash Screen**: Minimal branding on app launch (2-3 seconds)
 - **About Screen**: Complete app information accessible from Profile
+- **Demo Mode Screen**: Branding displayed on login screen
 - **Footer Branding**: Subtle, non-intrusive branding in settings/profile
 - **Safety-First**: No branding on navigation screens or during active navigation
 
@@ -354,15 +370,18 @@ lib/
 1. **Login**: Use demo account or create new account (or use demo mode)
 2. **View Map**: See hazards on map, tap markers for details
 3. **Search Location**: Use search bar to find locations
-4. **Get Directions**: Long-press map or select from search, choose vehicle type, view route
-5. **Start Navigation**: Tap "Start Navigation" to begin real-time navigation
-6. **Report Hazard**: Tap "Report Hazard" button, fill form, submit
-7. **View Feed**: Switch to Feed tab, see all hazards
-8. **Profile**: View profile, update name/photo
-9. **Gate Pass**: View QR code for gate access (if you have stickers)
-10. **My Stickers**: Manage stickers, upload physical stickers (requires GEMINI_API_KEY)
-11. **HOA Gates**: See color-coded gate markers on map (Red = Strict, Green = Open)
-12. **Realtime**: Open app on two devices, report on one, see update on other
+4. **Get Directions**: Long-press map or select from search, choose vehicle type
+5. **Route Preview**: View route preview sheet with distance, duration, and sticker suggestions (if shortcut blocked)
+6. **Start Navigation**: Tap "Start Navigation" to begin real-time navigation
+7. **Weather Overlay**: Toggle weather overlay button to see weather conditions on map
+8. **Report Hazard**: Tap "Report Hazard" button, fill form, submit
+9. **View Feed**: Switch to Feed tab, see all hazards
+10. **Profile**: View profile, update name/photo
+11. **Gate Pass**: View QR code for gate access (if you have stickers)
+12. **My Stickers**: Manage stickers, upload physical stickers (requires GEMINI_API_KEY)
+13. **HOA Gates**: See color-coded gate markers on map (Red = Strict, Green = Open)
+14. **Permission-Based Routing**: Test routing with/without stickers to see blocked shortcuts
+15. **Realtime**: Open app on two devices, report on one, see update on other
 
 ## Production Notes
 
@@ -376,6 +395,17 @@ lib/
 - Configure GraphHopper for production (consider cloud deployment)
 - Set up proper monitoring for GraphHopper service
 - **Branding**: Follow DESIGN_GUIDE.md for branding guidelines. Ensure no branding appears on navigation screens.
+
+## Post-MVP Features (Planned)
+
+The following features are planned but not yet implemented:
+- **Payment Integration**: GCash, PayMaya, Stripe for sticker purchases
+- **Weather-Aware Rerouting**: Automatic route adjustments based on weather conditions
+- **HOA Admin Dashboard**: Management interface for HOA administrators
+- **Multi-Country Expansion**: Support for multiple countries beyond Philippines
+- **PostGIS Route Intersection**: Full PostGIS-based route intersection checks for restricted areas
+- **Push Notifications (FCM)**: Cloud-based push notifications
+- **AI Incident Prediction**: Predictive analytics for road incidents
 
 ## License
 

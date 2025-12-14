@@ -1,7 +1,6 @@
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "core/theme/app_theme.dart";
-import "core/config/env.dart";
 import "services/supabase_service.dart";
 import "services/offline_cache_service.dart";
 import "services/notification_service.dart";
@@ -9,6 +8,7 @@ import "providers/auth_provider.dart";
 import "screens/auth/login_screen.dart";
 import "screens/auth/signup_screen.dart";
 import "screens/main_navigation_screen.dart";
+import "screens/splash/splash_screen.dart";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,12 +29,42 @@ void main() async {
   );
 }
 
-class SmartRoadApp extends ConsumerWidget {
+class SmartRoadApp extends ConsumerStatefulWidget {
   const SmartRoadApp({super.key});
   
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SmartRoadApp> createState() => _SmartRoadAppState();
+}
+
+class _SmartRoadAppState extends ConsumerState<SmartRoadApp> {
+  bool _showSplash = true;
+  
+  @override
+  void initState() {
+    super.initState();
+    // * Show splash screen for 2-3 seconds
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _showSplash = false;
+        });
+      }
+    });
+  }
+  
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
+    
+    // * Show splash screen first
+    if (_showSplash) {
+      return MaterialApp(
+        title: "SmartRoad",
+        theme: AppTheme.darkTheme,
+        debugShowCheckedModeBanner: false,
+        home: const SplashScreen(),
+      );
+    }
     
     return MaterialApp(
       title: "SmartRoad",

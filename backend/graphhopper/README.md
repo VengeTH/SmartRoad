@@ -188,3 +188,4 @@ Update `GRAPHOPPER_WEB_CORS` in `docker-compose.yml`:
 GraphHopper is licensed under Apache License 2.0.
 OpenStreetMap data is licensed under ODbL.
 
+

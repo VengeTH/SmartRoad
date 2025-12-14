@@ -60,3 +60,4 @@ postgres:
 - All data currently stored in Supabase
 - Future database setup will be documented here
 
+

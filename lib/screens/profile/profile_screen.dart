@@ -11,6 +11,7 @@ import "../auth/login_screen.dart";
 import "../gate/gate_pass_screen.dart";
 import "../gate/guard_scanner_screen.dart";
 import "../stickers/manage_stickers_screen.dart";
+import "../about/about_screen.dart";
 
 /// * Profile screen
 class ProfileScreen extends ConsumerWidget {
@@ -578,6 +579,65 @@ class _ProfileContentState extends State<_ProfileContent> {
               ),
             ),
           ),
+          const SizedBox(height: AppTheme.spacingMD),
+          // * About SmartRoad Card
+          Card(
+            child: InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AboutScreen(),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+              child: Padding(
+                padding: const EdgeInsets.all(AppTheme.spacingMD),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(AppTheme.spacingMD),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                      ),
+                      child: Icon(
+                        Icons.info_outline,
+                        color: AppTheme.primaryColor,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: AppTheme.spacingMD),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "About SmartRoad",
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Learn more about the app",
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: AppTheme.textTertiary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
           
           const SizedBox(height: AppTheme.spacingXL),
           // * Update Button
@@ -609,6 +669,19 @@ class _ProfileContentState extends State<_ProfileContent> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+            ),
+          ),
+          const SizedBox(height: AppTheme.spacingXL),
+          // * Footer Branding
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppTheme.spacingMD),
+            child: Text(
+              "SmartRoad · by The Heedful",
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppTheme.textTertiary.withOpacity(0.7),
+                letterSpacing: 0.3,
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
             ],

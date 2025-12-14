@@ -11,8 +11,8 @@ class LocationService {
   /// * Check and request location permissions
   Future<bool> requestPermission() async {
     try {
-      final status = await Permission.location.request();
-      return status.isGranted;
+    final status = await Permission.location.request();
+    return status.isGranted;
     } catch (e) {
       debugPrint("❌ [LocationService] Error requesting permission: $e");
       return false;
@@ -22,8 +22,8 @@ class LocationService {
   /// * Check if location permission is granted
   Future<bool> isPermissionGranted() async {
     try {
-      final status = await Permission.location.status;
-      return status.isGranted;
+    final status = await Permission.location.status;
+    return status.isGranted;
     } catch (e) {
       debugPrint("❌ [LocationService] Error checking permission: $e");
       return false;
@@ -49,11 +49,11 @@ class LocationService {
       
       // * On web, skip location service check (not always available)
       if (!kIsWeb) {
-        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-        if (!serviceEnabled) {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
           debugPrint("❌ [LocationService] Location services disabled");
-          return null;
-        }
+        return null;
+      }
       }
       
       // * Use appropriate accuracy and timeout for platform

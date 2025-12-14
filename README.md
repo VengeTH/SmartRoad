@@ -72,6 +72,15 @@ smartroad/
 - **Web**: Full web support with platform-specific location handling
 - **Responsive Design**: Optimized for all screen sizes (mobile, tablet, desktop)
 
+### Branding & Identity
+- **App Name**: SmartRoad
+- **Company**: The Heedful
+- **Motto**: "Be Heedful on the Road"
+- **Splash Screen**: Minimal branding on app launch (2-3 seconds)
+- **About Screen**: Complete app information accessible from Profile
+- **Footer Branding**: Subtle, non-intrusive branding in settings/profile
+- **Safety-First**: No branding on navigation screens or during active navigation
+
 ## Prerequisites
 
 ### Mobile Development
@@ -246,6 +255,8 @@ lib/
 │   └── sticker_provider.dart
 ├── screens/             # UI screens
 │   ├── auth/           # Login, Signup
+│   ├── splash/          # Splash screen with branding
+│   ├── about/           # About SmartRoad screen
 │   ├── map/            # Map screen with routing
 │   ├── feed/            # Feed screen
 │   ├── profile/         # Profile screen
@@ -364,6 +375,7 @@ lib/
 - Implement proper offline queue for pending reports
 - Configure GraphHopper for production (consider cloud deployment)
 - Set up proper monitoring for GraphHopper service
+- **Branding**: Follow DESIGN_GUIDE.md for branding guidelines. Ensure no branding appears on navigation screens.
 
 ## License
 

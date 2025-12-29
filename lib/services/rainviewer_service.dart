@@ -3,6 +3,7 @@
 import "dart:convert";
 import "package:flutter/foundation.dart";
 import "package:http/http.dart" as http;
+import "../config/weather_config.dart";
 
 /// * RainViewer service for fetching available radar timestamps
 class RainViewerService {
@@ -12,6 +13,14 @@ class RainViewerService {
   
   // * RainViewer API endpoint
   static const String _apiUrl = "https://api.rainviewer.com/public/weather-maps.json";
+  
+  // * Get the URL to use (proxy or direct)
+  String get _effectiveUrl {
+    if (WeatherConfig.useProxy) {
+      return "${WeatherConfig.proxyBaseUrl}/rainviewer/weather-maps";
+    }
+    return _apiUrl;
+  }
   
   // * Cache for available timestamps
   List<int>? _cachedTimestamps;
@@ -36,7 +45,7 @@ class RainViewerService {
     for (int attempt = 0; attempt < maxRetries; attempt++) {
       try {
         final response = await http.get(
-          Uri.parse(_apiUrl),
+          Uri.parse(_effectiveUrl),
           headers: {
             'User-Agent': 'SmartRoad App',
             'Accept': 'application/json',

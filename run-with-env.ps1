@@ -1,0 +1,68 @@
+# Load .env file and run Flutter with environment variables (Windows PowerShell)
+# Usage: .\run-with-env.ps1
+
+# Check if .env exists
+if (-not (Test-Path .env)) {
+    Write-Host "⚠️  .env file not found!" -ForegroundColor Yellow
+    Write-Host "Creating .env.example template..."
+    
+    @"
+# Weather API Configuration
+OPENWEATHERMAP_API_KEY=your_openweathermap_api_key_here
+WEATHER_PROXY_URL=
+
+# Traffic API Configuration
+TOMTOM_API_KEY=your_tomtom_api_key_here
+
+# Supabase (if needed)
+# SUPABASE_URL=your_supabase_url
+# SUPABASE_ANON_KEY=your_supabase_anon_key
+"@ | Out-File -FilePath .env.example -Encoding utf8
+    
+    Write-Host "✅ Created .env.example" -ForegroundColor Green
+    Write-Host "📝 Copy .env.example to .env and fill in your API keys"
+    exit 1
+}
+
+# Load .env file
+Get-Content .env | ForEach-Object {
+    if ($_ -match '^\s*([^#][^=]*)=(.*)$') {
+        $key = $matches[1].Trim()
+        $value = $matches[2].Trim()
+        [Environment]::SetEnvironmentVariable($key, $value, "Process")
+    }
+}
+
+# Check if API key is set
+if (-not $env:OPENWEATHERMAP_API_KEY) {
+    Write-Host "⚠️  OPENWEATHERMAP_API_KEY not set in .env" -ForegroundColor Yellow
+    Write-Host "Please add it to your .env file"
+    exit 1
+}
+
+# Build dart-define arguments
+$dartDefines = "--dart-define=OPENWEATHERMAP_API_KEY=$env:OPENWEATHERMAP_API_KEY"
+
+if ($env:WEATHER_PROXY_URL) {
+    $dartDefines += " --dart-define=WEATHER_PROXY_URL=$env:WEATHER_PROXY_URL"
+}
+
+if ($env:TOMTOM_API_KEY) {
+    $dartDefines += " --dart-define=TOMTOM_API_KEY=$env:TOMTOM_API_KEY"
+}
+
+# Run Flutter
+Write-Host "Running Flutter with environment variables from .env" -ForegroundColor Green
+$keyPreview = $env:OPENWEATHERMAP_API_KEY.Substring(0, [Math]::Min(10, $env:OPENWEATHERMAP_API_KEY.Length))
+Write-Host "API Key: ${keyPreview}... (hidden)"
+if ($env:WEATHER_PROXY_URL) {
+    Write-Host "Proxy URL: $env:WEATHER_PROXY_URL"
+}
+if ($env:TOMTOM_API_KEY) {
+    $tomtomPreview = $env:TOMTOM_API_KEY.Substring(0, [Math]::Min(10, $env:TOMTOM_API_KEY.Length))
+    Write-Host "TomTom API Key: ${tomtomPreview}... (hidden)"
+}
+Write-Host ""
+
+flutter run $dartDefines $args
+

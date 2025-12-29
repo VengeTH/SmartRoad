@@ -25,10 +25,14 @@ import "../../config/weather_config.dart";
 import "../../services/location_service.dart";
 import "../../services/routing_service.dart";
 import "../../services/route_distance_tracker.dart";
+import "../../services/location_search_service.dart";
 import "../../providers/hazards_provider.dart" show MapHazardsNotifier;
 import "../../providers/sticker_provider.dart";
 import "../../models/sticker.dart";
 import "../../widgets/distance_indicator_widget.dart";
+import "../../widgets/traffic_layer.dart";
+import "../../widgets/map_filter_panel.dart";
+import "../../providers/map_filter_provider.dart";
 // * Route utilities removed - using inline functions
 
 /// * Navigation overlay widget
@@ -621,12 +625,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
   bool _showSearchResults = false;
+  bool _showFilterPanel = false;
+  int _visibleSearchResults = 10; // * Show first 10 results initially
   final Dio _dio = Dio();
+  // * Cache route distances for search results
+  final Map<String, double?> _searchResultDistances = {};
+  final Map<String, bool> _searchResultDistanceLoading = {};
   final RoutingService _routingService = RoutingService();
   final RouteDistanceTracker _distanceTracker = RouteDistanceTracker();
   final WeatherLayerManager _weatherLayerManager = WeatherLayerManager();
+  final LocationSearchService _locationSearchService = LocationSearchService();
   StreamSubscription<Position>? _positionSubscription;
   bool _hasPreciseLocation = false;
+  // * Cache country code to avoid repeated reverse geocoding calls
+  String? _cachedCountryCode;
+  LatLng? _countryCodeLocation; // * Location where country code was detected
   String _activeRoutingProfile = "car";
   bool _avoidTollsToggle = false;
   double _routeDistance = 0.0;
@@ -674,7 +687,72 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     super.dispose();
   }
   
+  /// * Detect country code from current location
+  /// * Caches the result to avoid repeated reverse geocoding calls
+  Future<void> _detectCountryCode() async {
+    // * Skip if we already have a cached country code for this location
+    if (_cachedCountryCode != null && 
+        _countryCodeLocation != null &&
+        _currentLocation.latitude == _countryCodeLocation!.latitude &&
+        _currentLocation.longitude == _countryCodeLocation!.longitude) {
+      return;
+    }
+    
+    // * Skip if location is at default (0,0) or invalid
+    if (_currentLocation.latitude == 0.0 && _currentLocation.longitude == 0.0) {
+      return;
+    }
+    
+    if (_currentLocation.latitude == AppConstants.defaultLatitude && 
+        _currentLocation.longitude == AppConstants.defaultLongitude) {
+      return;
+    }
+    
+    try {
+      final countryCode = await _locationSearchService.getCountryCodeFromCoordinates(
+        _currentLocation.latitude,
+        _currentLocation.longitude,
+      );
+      
+      if (countryCode != null && mounted) {
+        setState(() {
+          _cachedCountryCode = countryCode;
+          _countryCodeLocation = _currentLocation;
+        });
+        debugPrint("🌍 [MapScreen] Detected country code: $countryCode");
+      }
+    } catch (e) {
+      debugPrint("❌ [MapScreen] Error detecting country code: $e");
+    }
+  }
+  
+  /// * Check if a result is a main city/town (for filtering global results)
+  bool _isMainCity(Map<String, dynamic> result) {
+    final type = result['type']?.toString().toLowerCase() ?? '';
+    final classType = result['class']?.toString().toLowerCase() ?? '';
+    final importance = (result['importance'] as num?)?.toDouble() ?? 0.0;
+    
+    // * Main city types
+    final mainCityTypes = [
+      'city', 'town', 'village', 'municipality', 'administrative',
+      'state', 'province', 'region', 'country'
+    ];
+    
+    // * Check if it's a main city type
+    if (mainCityTypes.contains(type) || mainCityTypes.contains(classType)) {
+      return true;
+    }
+    
+    // * Also accept places with high importance (typically cities)
+    if (importance > 0.5) {
+      return true;
+    }
+    
+    return false;
+  }
+  
   /// * Search for locations using Nominatim API
+  /// * Prioritizes current country results, then shows global main cities
   Future<void> _searchLocation(String query) async {
     if (query.trim().isEmpty) {
       setState(() {
@@ -690,33 +768,104 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _showSearchResults = true;
     });
     
+    // * Ensure country code is detected before searching
+    if (_cachedCountryCode == null) {
+      await _detectCountryCode();
+    }
+    
     try {
-      final response = await _dio.get(
-        'https://nominatim.openstreetmap.org/search',
-        queryParameters: {
-          'q': query,
-          'format': 'json',
-          'limit': 5,
-          'addressdetails': 1,
-        },
-        options: Options(
-          headers: {
-            'User-Agent': 'SmartRoad App',
-          },
-        ),
-      );
+      final allResults = <Map<String, dynamic>>[];
       
-      if (response.statusCode == 200 && response.data is List) {
-        setState(() {
-          _searchResults = List<Map<String, dynamic>>.from(response.data);
-          _isSearching = false;
-        });
-      } else {
-        setState(() {
-          _searchResults = [];
-          _isSearching = false;
-        });
+      // * Step 1: Search in current country first (prioritized)
+      if (_cachedCountryCode != null && _cachedCountryCode!.isNotEmpty) {
+        try {
+          final countryResponse = await _dio.get(
+            'https://nominatim.openstreetmap.org/search',
+            queryParameters: {
+              'q': query,
+              'format': 'json',
+              'limit': 20, // * Get more results from current country
+              'addressdetails': 1,
+              'countrycodes': _cachedCountryCode!.toLowerCase(),
+            },
+            options: Options(
+              headers: {
+                'User-Agent': 'SmartRoad App',
+              },
+            ),
+          );
+          
+          if (countryResponse.statusCode == 200 && countryResponse.data is List) {
+            final countryResults = List<Map<String, dynamic>>.from(countryResponse.data);
+            allResults.addAll(countryResults);
+            debugPrint("🔍 [MapScreen] Found ${countryResults.length} results in ${_cachedCountryCode!.toUpperCase()}");
+          }
+        } catch (e) {
+          debugPrint("⚠️ [MapScreen] Error searching in current country: $e");
+        }
       }
+      
+      // * Step 2: Search globally but filter to main cities only
+      try {
+        final globalResponse = await _dio.get(
+          'https://nominatim.openstreetmap.org/search',
+          queryParameters: {
+            'q': query,
+            'format': 'json',
+            'limit': 30, // * Get more to filter
+            'addressdetails': 1,
+          },
+          options: Options(
+            headers: {
+              'User-Agent': 'SmartRoad App',
+            },
+          ),
+        );
+        
+        if (globalResponse.statusCode == 200 && globalResponse.data is List) {
+          final globalResults = List<Map<String, dynamic>>.from(globalResponse.data);
+          
+          // * Filter to only main cities and exclude current country (already added)
+          final filteredGlobal = globalResults.where((result) {
+            // * Skip if already in results (from current country search)
+            final resultKey = "${result['lat']}_${result['lon']}";
+            final alreadyExists = allResults.any((r) => 
+              "${r['lat']}_${r['lon']}" == resultKey
+            );
+            if (alreadyExists) return false;
+            
+            // * Only include main cities
+            return _isMainCity(result);
+          }).toList();
+          
+          allResults.addAll(filteredGlobal);
+          debugPrint("🔍 [MapScreen] Found ${filteredGlobal.length} global main city results");
+        }
+      } catch (e) {
+        debugPrint("⚠️ [MapScreen] Error searching globally: $e");
+      }
+      
+      // * Remove duplicates based on coordinates
+      final uniqueResults = <String, Map<String, dynamic>>{};
+      for (final result in allResults) {
+        final key = "${result['lat']}_${result['lon']}";
+        if (!uniqueResults.containsKey(key)) {
+          uniqueResults[key] = result;
+        }
+      }
+      
+      final finalResults = uniqueResults.values.toList();
+      
+      setState(() {
+        _searchResults = finalResults;
+        _isSearching = false;
+        _visibleSearchResults = 10; // * Reset to show first 10 results
+      });
+      
+      debugPrint("✅ [MapScreen] Total unique results: ${finalResults.length}");
+      
+      // * Calculate route distances for each result
+      _calculateSearchResultDistances(finalResults);
     } catch (e) {
       debugPrint("❌ [MapScreen] Error searching location: $e");
       setState(() {
@@ -743,6 +892,127 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (address['state'] != null) parts.add(address['state']);
     if (address['country'] != null) parts.add(address['country']);
     return parts.join(', ');
+  }
+  
+  /// * Calculate route distances for search results
+  /// * Uses actual route distance (not straight-line) from current location
+  Future<void> _calculateSearchResultDistances(List<Map<String, dynamic>> results) async {
+    // * Always calculate distances - use current location (even if it's default)
+    // * This allows distance to show for all search results
+    
+    debugPrint("📍 [MapScreen] Calculating distances for ${results.length} search results from location: (${_currentLocation.latitude}, ${_currentLocation.longitude})");
+    
+    // * Clear previous distances
+    setState(() {
+      _searchResultDistances.clear();
+      _searchResultDistanceLoading.clear();
+    });
+    
+    // * Calculate distance for each result
+    for (final result in results) {
+      try {
+        final lat = double.tryParse(result['lat']?.toString() ?? '');
+        final lon = double.tryParse(result['lon']?.toString() ?? '');
+        
+        if (lat == null || lon == null) continue;
+        
+        final resultKey = "${result['lat']}_${result['lon']}";
+        final destination = LatLng(lat, lon);
+        
+        // * Calculate fallback distance immediately (straight-line) so it shows right away
+        final fallbackDistance = _calculateStraightLineDistance(_currentLocation, destination);
+        
+        // * Mark as loading and show fallback distance immediately
+        setState(() {
+          _searchResultDistanceLoading[resultKey] = true;
+          _searchResultDistances[resultKey] = fallbackDistance; // * Show fallback while calculating route
+        });
+        
+        // * Calculate route distance in background
+        try {
+          debugPrint("📍 [MapScreen] Calculating route distance from (${_currentLocation.latitude}, ${_currentLocation.longitude}) to ($lat, $lon)");
+          final route = await _routingService.calculateRoute(
+            start: _currentLocation,
+            end: destination,
+            vehicle: VehicleType.car, // * Use car as default for search results
+            avoidTolls: _avoidTollsToggle,
+          );
+          
+          debugPrint("✅ [MapScreen] Route distance calculated: ${route.distance.toStringAsFixed(2)} km");
+          // * Store actual route distance in km (replaces fallback)
+          if (mounted) {
+            setState(() {
+              _searchResultDistances[resultKey] = route.distance;
+              _searchResultDistanceLoading[resultKey] = false;
+            });
+          }
+        } catch (e) {
+          // * If route calculation fails, keep the fallback distance
+          debugPrint("⚠️ [MapScreen] Route calculation failed for search result: $e");
+          debugPrint("⚠️ [MapScreen] Using fallback straight-line distance: ${fallbackDistance.toStringAsFixed(2)} km");
+          if (mounted) {
+            setState(() {
+              // * Keep fallback distance, just stop loading
+              _searchResultDistanceLoading[resultKey] = false;
+            });
+          }
+        }
+      } catch (e) {
+        debugPrint("❌ [MapScreen] Error calculating distance for search result: $e");
+        final resultKey = "${result['lat']}_${result['lon']}";
+        // * On error, calculate fallback straight-line distance
+        try {
+          final lat = double.tryParse(result['lat']?.toString() ?? '');
+          final lon = double.tryParse(result['lon']?.toString() ?? '');
+          if (lat != null && lon != null) {
+            final destination = LatLng(lat, lon);
+            final fallbackDistance = _calculateStraightLineDistance(_currentLocation, destination);
+            debugPrint("📍 [MapScreen] Using fallback distance: ${fallbackDistance.toStringAsFixed(2)} km");
+            if (mounted) {
+              setState(() {
+                _searchResultDistances[resultKey] = fallbackDistance;
+                _searchResultDistanceLoading[resultKey] = false;
+              });
+            }
+          }
+        } catch (fallbackError) {
+          debugPrint("❌ [MapScreen] Fallback distance calculation also failed: $fallbackError");
+          if (mounted) {
+            setState(() {
+              _searchResultDistanceLoading[resultKey] = false;
+            });
+          }
+        }
+      }
+    }
+  }
+  
+  /// * Calculate straight-line distance (Haversine formula) as fallback
+  double _calculateStraightLineDistance(LatLng start, LatLng end) {
+    const double earthRadiusKm = 6371.0;
+    final double dLat = (end.latitude - start.latitude) * (math.pi / 180.0);
+    final double dLon = (end.longitude - start.longitude) * (math.pi / 180.0);
+    
+    final double a = 
+      math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(start.latitude * (math.pi / 180.0)) * math.cos(end.latitude * (math.pi / 180.0)) *
+      math.sin(dLon / 2) * math.sin(dLon / 2);
+    
+    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadiusKm * c;
+  }
+  
+  /// * Format distance for display
+  String _formatDistance(double? distanceKm) {
+    if (distanceKm == null) return "";
+    
+    if (distanceKm < 1.0) {
+      return "${(distanceKm * 1000).round()} m";
+    } else if (distanceKm < 10.0) {
+      return "${distanceKm.toStringAsFixed(1)} km";
+    } else {
+      return "${distanceKm.round()} km";
+    }
   }
   
   /// * Select a search result and show options
@@ -1916,6 +2186,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           _hasPreciseLocation = true;
         });
         
+        // * Detect country code when location is updated (only once per significant move)
+        _detectCountryCode();
+        
         if (_isNavigating) {
           // * Update route segments based on current position
           _updateRouteSegments();
@@ -1973,6 +2246,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         try {
           _mapController.move(location, AppConstants.defaultZoom);
           debugPrint("📍 [MapScreen] Map moved to last known location");
+          // * Detect country code when location is updated
+          _detectCountryCode();
         } catch (e) {
           debugPrint("❌ [MapScreen] Error moving map: $e");
         }
@@ -1998,6 +2273,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             }
           }
           debugPrint("📍 [MapScreen] Fresh location obtained: ${location.latitude}, ${location.longitude}");
+          // * Detect country code when location is updated
+          _detectCountryCode();
         } else {
           debugPrint("⚠️ [MapScreen] Could not get fresh location, using last known or default");
           if (lastKnown == null && mounted) {
@@ -2388,10 +2665,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
-                initialCenter: safeCenter,
+              initialCenter: safeCenter,
               initialZoom: AppConstants.defaultZoom,
               minZoom: AppConstants.minZoom,
               maxZoom: AppConstants.maxZoom,
+              // * Enable infinite horizontal scrolling (map wrapping)
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all,
+              ),
+              // * Explicitly set CRS to enable map wrapping
+              // * Epsg3857 (Web Mercator) supports infinite horizontal scrolling
+              crs: const Epsg3857(),
+              // * Remove any bounds restrictions to allow infinite wrapping
+              // * Don't set maxBounds - this would limit panning
                 onMapReady: () {
                   // * Wrap in try-catch to prevent crashes
                   if (mounted) {
@@ -2444,6 +2730,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                 userAgentPackageName: "com.smartroad.app", // * Package name stays lowercase (technical identifier)
                 maxZoom: 19,
+                // * Enable tile wrapping for infinite horizontal scrolling
+                // * flutter_map handles wrapping automatically for Epsg3857 (Web Mercator)
+                // * Tiles will wrap horizontally when panning left/right
+              ),
+              // * Traffic layer (above base map, below weather)
+              Consumer(
+                builder: (context, ref, child) {
+                  final filterState = ref.watch(mapFilterProvider);
+                  return TrafficLayer(
+                    enabled: filterState.showTraffic,
+                    opacity: 0.7,
+                  );
+                },
               ),
               // * Weather tile layers (above base map, below routes)
               // * On web, only available if backend proxy is configured (see WEATHER_LAYERS_TROUBLESHOOTING.md)
@@ -2451,7 +2750,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               if (WeatherConfig.areLayersAvailable && _weatherLayerManager.getLayerConfig(WeatherLayerType.rain).enabled)
                 RainLayer(
                   manager: _weatherLayerManager,
-                  frame: _weatherLayerManager.getRainFrame(),
                 ),
               if (WeatherConfig.areLayersAvailable && _weatherLayerManager.getLayerConfig(WeatherLayerType.heat).enabled)
                 HeatLayer(
@@ -2693,44 +2991,74 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                 },
                                 tooltip: "Clear",
                               ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppTheme.spacingSM,
-                                vertical: AppTheme.spacingXS,
-                              ),
-                              margin: const EdgeInsets.only(right: AppTheme.spacingSM),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(AppTheme.radiusSM),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.warning_amber_rounded,
-                                    size: 16,
-                                    color: AppTheme.warningColor,
-                                  ),
-                                  const SizedBox(width: AppTheme.spacingXS),
-                                  Text(
-                                    "${hazards.length}",
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: AppTheme.textPrimary,
-                                      fontWeight: FontWeight.w700,
+                            Tooltip(
+                              message: "Hazards in view: ${hazards.length}",
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppTheme.spacingSM,
+                                  vertical: AppTheme.spacingXS,
+                                ),
+                                margin: const EdgeInsets.only(right: AppTheme.spacingSM),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(AppTheme.radiusSM),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.warning_amber_rounded,
+                                      size: 16,
+                                      color: AppTheme.warningColor,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: AppTheme.spacingXS),
+                                    Text(
+                                      "${hazards.length}",
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: AppTheme.textPrimary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.filter_list,
-                                color: AppTheme.textSecondary,
-                              ),
-                              onPressed: () {
-                                // * TODO: Add filter functionality
+                            Consumer(
+                              builder: (context, ref, child) {
+                                final filterState = ref.watch(mapFilterProvider);
+                                return IconButton(
+                                  icon: Stack(
+                                    children: [
+                                      Icon(
+                                        Icons.filter_list,
+                                        color: filterState.hasActiveFilters
+                                            ? AppTheme.primaryColor
+                                            : AppTheme.textSecondary,
+                                      ),
+                                      if (filterState.hasActiveFilters)
+                                        Positioned(
+                                          right: 0,
+                                          top: 0,
+                                          child: Container(
+                                            width: 8,
+                                            height: 8,
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.primaryColor,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  onPressed: () {
+                                    HapticFeedback.lightImpact();
+                                    setState(() {
+                                      _showFilterPanel = !_showFilterPanel;
+                                    });
+                                  },
+                                  tooltip: "Filter hazards & traffic",
+                                );
                               },
-                              tooltip: "Filter hazards",
                             ),
                           ],
                         ),
@@ -2768,9 +3096,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           });
                         }
                       },
-                    ),
-                    // * Search Results Dropdown
-                    if (_showSearchResults && _searchResults.isNotEmpty)
+                      ),
+                      // * Search Results Dropdown
+                      if (_showSearchResults && _searchResults.isNotEmpty)
                       Container(
                         margin: const EdgeInsets.only(top: AppTheme.spacingXS),
                         decoration: BoxDecoration(
@@ -2782,16 +3110,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           ),
                           boxShadow: AppTheme.shadowLarge,
                         ),
-                        constraints: const BoxConstraints(maxHeight: 300),
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: _searchResults.length,
-                          separatorBuilder: (context, index) => Divider(
-                            height: 1,
-                            color: AppTheme.borderColor,
-                          ),
-                          itemBuilder: (context, index) {
+                        constraints: const BoxConstraints(maxHeight: 400),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: _visibleSearchResults.clamp(0, _searchResults.length),
+                                separatorBuilder: (context, index) => Divider(
+                                  height: 1,
+                                  color: AppTheme.borderColor,
+                                ),
+                                itemBuilder: (context, index) {
                             final result = _searchResults[index];
+                            final resultKey = "${result['lat']}_${result['lon']}";
+                            final distance = _searchResultDistances[resultKey];
+                            final isLoading = _searchResultDistanceLoading[resultKey] ?? false;
+                            
                             return ListTile(
                               leading: Icon(
                                 Icons.place,
@@ -2816,10 +3152,79 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                       overflow: TextOverflow.ellipsis,
                                     )
                                   : null,
+                              trailing: distance != null
+                                  ? Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          _formatDistance(distance),
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: AppTheme.primaryColor,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        if (isLoading) ...[
+                                          const SizedBox(width: 8),
+                                          const SizedBox(
+                                            width: 12,
+                                            height: 12,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    )
+                                  : isLoading
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                                          ),
+                                        )
+                                      : null,
                               onTap: () => _selectSearchResult(result),
                               dense: true,
                             );
                           },
+                              ),
+                            ),
+                            // * Show More button if there are more results
+                            if (_visibleSearchResults < _searchResults.length)
+                              Container(
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    top: BorderSide(
+                                      color: AppTheme.borderColor,
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                                child: ListTile(
+                                  leading: Icon(
+                                    Icons.expand_more,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                  title: Text(
+                                    "Show More (${_searchResults.length - _visibleSearchResults} more)",
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: AppTheme.primaryColor,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  onTap: () {
+                                    setState(() {
+                                      // * Show 10 more results each time
+                                      _visibleSearchResults = (_visibleSearchResults + 10).clamp(0, _searchResults.length);
+                                    });
+                                  },
+                                  dense: true,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     ],
@@ -2855,9 +3260,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   ),
                 ),
             ],
-          // * Hazard detail bottom sheet
-          if (_selectedHazard != null)
-            Positioned(
+            // * Hazard detail bottom sheet
+            if (_selectedHazard != null)
+              Positioned(
               bottom: 0,
               left: 0,
               right: 0,
@@ -2868,6 +3273,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       setState(() => _selectedHazard = null);
                     }
                   },
+              ),
+            ),
+          // * Filter Panel
+          if (_showFilterPanel)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: MapFilterPanel(
+                onClose: () {
+                  setState(() {
+                    _showFilterPanel = false;
+                  });
+                },
               ),
             ),
           // * Weather layer controls toggle button
@@ -3100,4 +3519,3 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 }
 
 // * Toolbar button widget removed - no longer used
-

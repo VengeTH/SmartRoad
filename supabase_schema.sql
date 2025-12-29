@@ -299,4 +299,3 @@ CREATE TRIGGER update_user_stickers_updated_at
 -- * VALUES 
 -- *   ('BF Resort', 'BF Resort Village', 14.4244, 120.9883),
 -- *   ('BF Homes', 'BF Homes Parañaque', 14.5000, 121.0000);
-

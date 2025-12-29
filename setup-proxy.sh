@@ -212,4 +212,3 @@ echo "  pm2 logs weather-proxy - View logs"
 echo "  pm2 restart weather-proxy - Restart server"
 echo "  pm2 stop weather-proxy - Stop server"
 echo ""
-

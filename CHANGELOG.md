@@ -4,6 +4,200 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
+## Version 2.6.3 - Smart Country-Prioritized Location Search (Latest)
+
+**Release Date:** December 2025  
+**Focus:** Search Optimization & Bug Fixes  
+**Status:** Production Ready
+
+### New Features
+
+#### Smart Country-Prioritized Location Search
+- **Intelligent Search Prioritization:**
+  - ✅ Automatically detects user's country from current location using reverse geocoding
+  - ✅ **Prioritizes current country results** - shows results from user's country first (e.g., Philippines)
+  - ✅ **Global main cities support** - also searches globally but only shows main cities (cities, towns, municipalities) from other countries
+  - ✅ Prevents showing random streets or small places from other countries
+  - ✅ Works globally - if user is in Japan, prioritizes Japan; if in Europe, prioritizes Europe
+  - ✅ Country code caching to avoid repeated reverse geocoding API calls
+  - ✅ Faster, more relevant search results by prioritizing local results
+
+### Bug Fixes
+- **Search Results Display:**
+  - ✅ Fixed RangeError: "Index out of range" when accessing search results
+  - ✅ Added proper bounds checking for `itemCount` in ListView to prevent index errors
+  - ✅ Ensured `itemCount` never exceeds available search results
+
+### Technical Changes
+- **Location Search Service:**
+  - Added `getCountryCodeFromCoordinates()` method for reverse geocoding
+  - Updated `searchLocation()` to accept optional `countryCode` parameter
+  - Country code restriction uses Nominatim's `countrycodes` query parameter
+
+- **Map Screen:**
+  - Added `_detectCountryCode()` method to detect and cache country code
+  - Updated `_searchLocation()` to use two-phase search:
+    1. First searches in current country (prioritized, up to 20 results)
+    2. Then searches globally but filters to main cities only (up to 30 results)
+  - Added `_isMainCity()` method to filter global results to only main cities/towns
+  - Country code detection triggered when location is updated
+  - Increased search result limit and improved result deduplication
+  - Fixed ListView `itemCount` to use `.clamp()` to prevent index out of range errors
+
+### Performance Improvements
+- **Search Optimization:**
+  - Faster search results by prioritizing local results
+  - Better relevance for local users while maintaining global city search capability
+  - Optimized result deduplication to prevent duplicate entries
+
+---
+
+## Version 2.6.2 - Live Traffic Layer Integration
+
+### New Features
+
+#### Live Traffic Layer
+- **Traffic Flow Visualization:**
+  - ✅ Real-time traffic conditions overlay on map
+  - ✅ Toggleable traffic layer in map filter panel
+  - ✅ Color-coded traffic flow indicators:
+    - Green: Free flow (fast)
+    - Yellow: Moderate traffic
+    - Red: Heavy traffic / Slow
+    - Dark red: Very slow / Standstill
+  - ✅ Transparent PNG overlay that doesn't obstruct map visibility
+  - ✅ Integrated with existing map filter system
+
+### Technical Changes
+- **Traffic Layer Implementation:**
+  - Created `TrafficLayer` widget using `TileLayer` from `flutter_map`
+  - Implemented `TrafficTileProvider` for TomTom Traffic Flow API integration
+  - Added `TrafficConfig` class for API key management and URL construction
+  - URL format: `https://api.tomtom.com/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key={apiKey}`
+  - Integer coordinate enforcement (z, x, y converted to ints to prevent API errors)
+  - Added traffic toggle to `MapFilterProvider` and `MapFilterPanel`
+  - Removed technical API key warning messages for non-technical users
+
+### Bug Fixes
+- **Traffic API Integration:**
+  - Fixed URL format to include `/relative/` path segment
+  - Fixed coordinate type conversion (ensured integers, not floats)
+  - Fixed coordinate order verification (z, x, y)
+  - Resolved 400 "Bad Request" errors by enforcing integer coordinates
+  - Improved error handling with transparent placeholder tiles
+
+### Configuration
+- **Environment Variables:**
+  - Added `TOMTOM_API_KEY` support in `.env` file
+  - Updated `run.bat`, `run-with-env.ps1`, and `run-with-env.sh` scripts
+  - Updated `ENV_SETUP.md` documentation
+
+---
+
+## Version 2.6.1 - Search Results Distance Display
+
+**Release Date:** December 2025  
+**Focus:** Search Results Enhancement  
+**Status:** Production Ready
+
+### New Features
+
+#### Search Results Distance Display
+- **Route Distance Indicators:**
+  - ✅ Search results now display route-based distances on the right side
+  - ✅ Distances calculated using actual route (GraphHopper) with fallback to straight-line distance
+  - ✅ Fallback distance shows immediately for instant feedback
+  - ✅ Distance auto-updates from fallback to actual route distance when calculation completes
+  - ✅ Loading spinner appears next to distance while route is being calculated
+  - ✅ Graceful error handling with fallback to straight-line distance if route calculation fails
+
+### Technical Changes
+- **Search Results UI:**
+  - Added `_searchResultDistances` map to store calculated distances
+  - Added `_searchResultDistanceLoading` map to track loading states
+  - Implemented `_calculateSearchResultDistances()` method for async distance calculation
+  - Updated `ListTile` trailing widget to display distance with loading indicator
+  - Distance formatting: shows meters for <1km, kilometers for ≥1km
+
+### Bug Fixes
+- **Distance Display:**
+  - Fixed issue where distance wasn't showing when `isLoading` was true
+  - Distance now always displays if available, even during loading state
+  - Improved error handling to always show fallback distance on calculation failure
+
+---
+
+## Version 2.6.0 - Weather Layers Fix & Map Wrapping
+
+**Release Date:** December 2025  
+**Focus:** Weather Layer Improvements & Map Enhancements  
+**Status:** Production Ready
+
+### Bug Fixes & Improvements
+
+#### Weather Layers
+- **Fixed Weather Layer Display:**
+  - ✅ All three weather layers (rain, heat, clouds) now working correctly
+  - ✅ Migrated from RainViewer to OpenWeatherMap for all layers
+  - ✅ Heat layer opacity capped at 60% to prevent solid color overlay
+  - ✅ Improved tile loading and error handling
+  - ✅ Better debugging and logging for weather tile requests
+  - ✅ Fixed layer availability checks for all three weather types
+
+#### Map Wrapping
+- **Infinite Horizontal Scrolling:**
+  - ✅ Upgraded `flutter_map` from 7.0.2 to 8.2.0 for infinite horizontal scrolling support
+  - ✅ Map now wraps infinitely when panning left/right
+  - ✅ No boundaries or limits on horizontal panning
+  - ✅ Proper CRS configuration (Epsg3857) for wrapping support
+
+#### UI Improvements
+- **Login Screen:**
+  - ✅ Made right panel (login card) more compact
+  - ✅ Reduced spacing between elements (XL → MD, LG → MD, MD → SM)
+  - ✅ Reduced container padding for better space utilization
+  - ✅ Improved visual hierarchy with smaller subtitle text
+  - ✅ Reduced button padding for more compact layout
+
+#### Configuration & Setup
+- **Environment Variables:**
+  - ✅ Added `.env` file support with helper scripts (`run.bat`, `run-with-env.sh`)
+  - ✅ Secure API key handling via `--dart-define`
+  - ✅ OpenWeatherMap API key configuration
+  - ✅ Backend proxy support for web platform
+  - ✅ Automatic API key detection and validation
+
+### Technical Changes
+- **Dependencies:**
+  - Upgraded `flutter_map` to `^8.2.0` for map wrapping support
+- **Weather System:**
+  - Updated weather tile providers to use OpenWeatherMap
+  - Removed RainViewer integration (migrated to OpenWeatherMap)
+  - Improved error handling and logging for weather layers
+  - Added rate limiting and circuit breaker for API calls
+- **Code Quality:**
+  - Enhanced UI spacing and padding in login screen
+  - Improved code organization and documentation
+
+### Documentation
+- Added `MAP_WRAP_INSTRUCTIONS.md` for map wrapping setup
+- Added `HEAT_AND_WRAP_FIX.md` for troubleshooting
+- Updated `OPENWEATHERMAP_SETUP.md` with API key instructions
+- Added `ENV_SETUP.md` for environment variable configuration
+- Added `AUTO_RUN_SETUP.md` for automatic API key loading
+- Added `MAP_WRAP_UPGRADE.md` for flutter_map upgrade guide
+
+### Breaking Changes
+- **Weather Layers:** Changed from RainViewer to OpenWeatherMap (requires API key for web)
+- **flutter_map:** Upgraded from 7.0.2 to 8.2.0 (check for breaking changes in your code)
+
+### Migration Guide
+- **Weather Layers:** Get OpenWeatherMap API key from https://openweathermap.org/api
+- **Map Wrapping:** Run `flutter pub get` to upgrade dependencies
+- **Environment Variables:** Use `.env` file with helper scripts or `--dart-define` flags
+
+---
+
 ## Version 2.5.0 - Permission-Based Routing & Weather Overlay (MVP)
 
 **Release Date:** 2025  

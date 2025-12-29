@@ -8,11 +8,13 @@ class MapFilterState {
   final Set<HazardType> selectedTypes;
   final Set<SeverityLevel> selectedSeverities;
   final bool showExpired; // * Show hazards older than 24 hours
+  final bool showTraffic; // * Show live traffic overlay
   
   MapFilterState({
     Set<HazardType>? selectedTypes,
     Set<SeverityLevel>? selectedSeverities,
     this.showExpired = true,
+    this.showTraffic = false, // * Traffic off by default
   })  : selectedTypes = selectedTypes ?? Set.from(HazardType.values),
         selectedSeverities = selectedSeverities ?? Set.from(SeverityLevel.values);
   
@@ -20,11 +22,13 @@ class MapFilterState {
     Set<HazardType>? selectedTypes,
     Set<SeverityLevel>? selectedSeverities,
     bool? showExpired,
+    bool? showTraffic,
   }) {
     return MapFilterState(
       selectedTypes: selectedTypes ?? this.selectedTypes,
       selectedSeverities: selectedSeverities ?? this.selectedSeverities,
       showExpired: showExpired ?? this.showExpired,
+      showTraffic: showTraffic ?? this.showTraffic,
     );
   }
   
@@ -55,7 +59,8 @@ class MapFilterState {
   bool get hasActiveFilters {
     return selectedTypes.length < HazardType.values.length ||
         selectedSeverities.length < SeverityLevel.values.length ||
-        !showExpired;
+        !showExpired ||
+        showTraffic;
   }
 }
 
@@ -89,6 +94,14 @@ class MapFilterNotifier extends StateNotifier<MapFilterState> {
   
   void setShowExpired(bool value) {
     state = state.copyWith(showExpired: value);
+  }
+  
+  void setShowTraffic(bool value) {
+    state = state.copyWith(showTraffic: value);
+  }
+  
+  void toggleTraffic() {
+    state = state.copyWith(showTraffic: !state.showTraffic);
   }
   
   void resetFilters() {

@@ -83,4 +83,3 @@ None - All changes are backward compatible. Weather layers gracefully disable on
 - Rate limiting implemented to protect against API limits
 - Circuit breaker prevents cascading failures
 ```
-

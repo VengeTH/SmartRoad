@@ -242,4 +242,3 @@ For production builds, add to your build script or CI/CD pipeline.
 - ❌ Test endpoints and verify everything works
 
 Once you complete these steps, weather layers will work on all platforms including web! 🎉
-

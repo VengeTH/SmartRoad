@@ -45,6 +45,10 @@ smartroad/
   - Sticker application CTA (payment integration planned)
 - **GraphHopper Integration**: Self-hosted routing engine with Philippines OSM data
 - **Location Search**: OpenStreetMap Nominatim API integration for geocoding
+  - **Route Distance Display**: Search results show route-based distances on the right side
+  - **Real-time Calculation**: Distances calculated using actual route (GraphHopper) with fallback to straight-line distance
+  - **Instant Display**: Fallback distance shows immediately while route calculation completes in background
+  - **Auto-update**: Distance updates from fallback to actual route distance when calculation completes
 - **Real-time Navigation**: 
   - Live location updates during navigation (1m accuracy)
   - Off-route detection and automatic rerouting
@@ -56,17 +60,39 @@ smartroad/
 ### Map Features
 - **Hazard Filtering**: Filter by type, severity, and expiry status
 - **Search Bar**: Location search with autocomplete and debouncing
+  - **Smart Country-Prioritized Search**: 
+    - Prioritizes search results from user's current country (e.g., Philippines)
+    - Also searches globally but only shows main cities (cities, towns, municipalities) from other countries
+    - Prevents showing random streets or small places from other countries
+    - Works globally: if user is in Japan, prioritizes Japan; if in Europe, prioritizes Europe
+  - **Dynamic Country Detection**: Detects country code from current location using reverse geocoding
+  - **Distance Indicators**: Each search result displays route distance on the right side
+  - **Loading State**: Small spinner appears next to distance while route is being calculated
+  - **Fallback Distance**: Straight-line distance shown immediately, replaced by route distance when available
 - **Current Location**: Real-time location tracking with platform-specific optimizations
 - **Map Controls**: Zoom in/out, center on location, filter panel
 - **HOA Gate Markers**: Color-coded gate markers (Red = Strict, Green = Open)
 - **Weather Tile Layers**: 
   - Real-time weather visualization as map tile overlays
-  - Three weather layers: Rain (RainViewer radar), Heat (temperature), Clouds (cloud coverage)
-  - Toggleable layers with opacity control
-  - Real-time data from RainViewer and Open-Meteo APIs
+  - Three weather layers: Rain (precipitation), Heat (temperature), Clouds (cloud coverage)
+  - Toggleable layers with opacity control (heat layer capped at 60% for better visibility)
+  - Real-time data from OpenWeatherMap API
   - Works on mobile/desktop natively
-  - **Web Support**: Requires backend proxy (see Weather Layers Setup below)
+  - **Web Support**: Requires API key via `--dart-define` or backend proxy (see Weather Layers Setup below)
+  - Uses OpenWeatherMap tile service for all layers
   - ⚠️ Visual only - no rerouting based on weather yet
+- **Live Traffic Layer**: 
+  - Real-time traffic flow visualization using TomTom Traffic Flow API
+  - Toggleable traffic overlay in map filter panel
+  - Color-coded traffic conditions:
+    - 🟢 Green: Free flow (fast)
+    - 🟡 Yellow: Moderate traffic
+    - 🔴 Red: Heavy traffic / Slow
+    - ⚫ Dark red: Very slow / Standstill
+  - Transparent PNG overlay that doesn't obstruct map visibility
+  - **API Key Required**: Set `TOMTOM_API_KEY` in `.env` file (see Environment Setup)
+  - Free tier: 2,500 requests/day
+  - ⚠️ Visual only - no rerouting based on traffic yet
 
 ### Sticker & Gate Security
 - **Digital Sticker Wallet**: Users can hold multiple HOA stickers
@@ -114,6 +140,8 @@ smartroad/
 - **GraphHopper**: Required for routing features (can run without for basic map)
 - **Supabase**: Required for production, optional for demo mode
 - **Google Gemini API**: Required for physical sticker AI verification
+- **OpenWeatherMap API**: Required for weather layers (free tier available)
+- **TomTom Traffic API**: Required for live traffic layer (free tier: 2,500 requests/day)
 - **Weather Proxy Server**: Required for weather layers on web (optional, see setup below)
 
 ## Setup Instructions
@@ -168,11 +196,39 @@ flutter pub get
 
 **Note:** If Supabase is not configured, the app will automatically use **Demo Mode** with sample data.
 
-### 5. Weather Proxy Setup (Optional - Required for Web Weather Layers)
+### 5. Weather Layers Setup
 
-Weather layers work natively on mobile/desktop, but require a backend proxy on web due to CORS restrictions and rate limiting.
+Weather layers work natively on mobile/desktop. On web, you need either an OpenWeatherMap API key or a backend proxy.
 
-**Quick Setup (Self-Hosted Server):**
+**Option 1: OpenWeatherMap API Key (Recommended for Web)**
+
+1. **Get a free API key** from [OpenWeatherMap](https://openweathermap.org/api)
+   - Free tier: 1,000 calls/day, 60 calls/minute
+
+2. **Set up API key using one of these methods:**
+
+   **Method A: Using `.env` file (Easiest)**
+   ```bash
+   # Create .env file in project root
+   OPENWEATHERMAP_API_KEY=your_api_key_here
+   ```
+   
+   Then run:
+   - Windows: `run.bat`
+   - Linux/Mac: `./run-with-env.sh`
+
+   **Method B: Using `--dart-define`**
+   ```bash
+   flutter run --dart-define=OPENWEATHERMAP_API_KEY=your_api_key_here
+   ```
+
+   **Method C: Configure in Android Studio**
+   - Run → Edit Configurations...
+   - Additional run args: `--dart-define=OPENWEATHERMAP_API_KEY=your_api_key_here`
+
+**Option 2: Backend Proxy (Alternative for Web)**
+
+If you prefer using a backend proxy instead of direct API access:
 
 1. **Upload setup script to your server:**
    ```bash
@@ -194,36 +250,48 @@ Weather layers work natively on mobile/desktop, but require a backend proxy on w
    ```
 
 **For detailed instructions**, see:
-- `SELF_HOSTED_SETUP.md` - Complete step-by-step guide
-- `QUICK_START.md` - Quick reference
-- `BACKEND_PROXY_SETUP.md` - General backend proxy guide
+- `OPENWEATHERMAP_SETUP.md` - OpenWeatherMap API key setup
+- `ENV_SETUP.md` - Environment variable configuration
+- `SELF_HOSTED_SETUP.md` - Backend proxy setup guide
 - `WEATHER_LAYERS_TROUBLESHOOTING.md` - Troubleshooting guide
 
-**Note:** Weather layers are automatically disabled on web if no proxy is configured (no errors, graceful fallback).
+**Note:** Weather layers are automatically disabled on web if neither API key nor proxy is configured (no errors, graceful fallback).
 
 ### 6. Environment Configuration
 
-Create a `.env` file in the project root (or use `--dart-define` flags):
+Create a `.env` file in the project root (see `.env.example` for template):
 
 ```bash
+# Supabase (Optional - Demo mode available)
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
 STORAGE_BUCKET_NAME=hazard-images
-GEMINI_API_KEY=your_gemini_api_key  # Required for physical sticker AI verification
-WEATHER_PROXY_URL=http://your-server-ip:3000  # Optional: For weather layers on web
+
+# Google Gemini (Required for physical sticker AI verification)
+GEMINI_API_KEY=your_gemini_api_key
+
+# Weather Layers (Required for web, optional for mobile/desktop)
+OPENWEATHERMAP_API_KEY=your_openweathermap_api_key  # Get from https://openweathermap.org/api
+WEATHER_PROXY_URL=http://your-server-ip:3000  # Alternative: Backend proxy URL
 ```
 
-**For Flutter, use `--dart-define` flags instead:**
+**Running with `.env` file:**
+
+- **Windows:** Use `run.bat` (automatically loads `.env` and runs Flutter)
+- **Linux/Mac:** Use `./run-with-env.sh` (automatically loads `.env` and runs Flutter)
+
+**Or use `--dart-define` flags directly:**
 
 ```bash
 flutter run \
   --dart-define=SUPABASE_URL=your_url \
   --dart-define=SUPABASE_ANON_KEY=your_key \
   --dart-define=GEMINI_API_KEY=your_gemini_key \
+  --dart-define=OPENWEATHERMAP_API_KEY=your_openweathermap_key \
   --dart-define=WEATHER_PROXY_URL=http://your-server-ip:3000
 ```
 
-Or create a script to run with environment variables (see `.env.example` for reference).
+**See `ENV_SETUP.md` for detailed instructions on environment variable configuration.**
 
 **Demo Mode:** If environment variables are not set, the app automatically runs in demo mode with sample data.
 
@@ -359,11 +427,19 @@ lib/
 ## Troubleshooting
 
 ### Weather Layer Issues
-- **Web**: Weather layers require backend proxy (see Weather Proxy Setup above)
-- **Mobile/Desktop**: Weather layers work natively without proxy
+- **Web**: Weather layers require OpenWeatherMap API key or backend proxy (see Weather Layers Setup above)
+- **Mobile/Desktop**: Weather layers work natively with OpenWeatherMap API key
 - **CORS Errors**: Set up backend proxy for web support
 - **Rate Limiting**: Backend proxy includes caching to reduce API calls
 - **See**: `WEATHER_LAYERS_TROUBLESHOOTING.md` for detailed troubleshooting
+
+### Traffic Layer Issues
+- **400 Errors**: Ensure `TOMTOM_API_KEY` is set correctly in `.env` file
+- **No Traffic Display**: Check that Traffic API service is enabled for your TomTom API key
+- **API Key**: Get free API key from https://developer.tomtom.com/ (2,500 requests/day free tier)
+- **Coordinate Errors**: Ensure coordinates are integers (z, x, y) - automatically handled in code
+- **URL Format**: Must use `/tile/flow/relative/{z}/{x}/{y}.png` format (already implemented)
+- **See**: `ENV_SETUP.md` for API key configuration instructions
 
 ### Location Permission Issues
 - Ensure permissions are added to AndroidManifest.xml and Info.plist
@@ -425,19 +501,27 @@ lib/
 1. **Login**: Use demo account or create new account (or use demo mode)
 2. **View Map**: See hazards on map, tap markers for details
 3. **Search Location**: Use search bar to find locations
+   - Notice route distances displayed on the right side of each search result
+   - Distance updates from fallback (straight-line) to actual route distance when calculation completes
 4. **Get Directions**: Long-press map or select from search, choose vehicle type
 5. **Route Preview**: View route preview sheet with distance, duration, and sticker suggestions (if shortcut blocked)
 6. **Start Navigation**: Tap "Start Navigation" to begin real-time navigation
 7. **Distance Indicators**: View remaining distance to destination, next turn, gate, and delivery entrance during navigation
 8. **Weather Layers**: Toggle weather layers (Rain, Heat, Clouds) to see real-time weather conditions on map
-9. **Report Hazard**: Tap "Report Hazard" button, fill form, submit
-10. **View Feed**: Switch to Feed tab, see all hazards
-11. **Profile**: View profile, update name/photo
-12. **Gate Pass**: View QR code for gate access (if you have stickers)
-13. **My Stickers**: Manage stickers, upload physical stickers (requires GEMINI_API_KEY)
-14. **HOA Gates**: See color-coded gate markers on map (Red = Strict, Green = Open)
-15. **Permission-Based Routing**: Test routing with/without stickers to see blocked shortcuts
-16. **Realtime**: Open app on two devices, report on one, see update on other
+   - Heat layer opacity is capped at 60% for better visibility
+   - All layers use OpenWeatherMap tile service
+9. **Traffic Layer**: Open map filter panel, toggle "Live Traffic" to see real-time traffic flow
+   - Color-coded traffic conditions: Green (free flow), Yellow (moderate), Red (heavy), Dark red (standstill)
+   - Transparent overlay that doesn't obstruct map visibility
+   - Requires TOMTOM_API_KEY (see Environment Setup)
+10. **Report Hazard**: Tap "Report Hazard" button, fill form, submit
+11. **View Feed**: Switch to Feed tab, see all hazards
+12. **Profile**: View profile, update name/photo
+13. **Gate Pass**: View QR code for gate access (if you have stickers)
+14. **My Stickers**: Manage stickers, upload physical stickers (requires GEMINI_API_KEY)
+15. **HOA Gates**: See color-coded gate markers on map (Red = Strict, Green = Open)
+16. **Permission-Based Routing**: Test routing with/without stickers to see blocked shortcuts
+17. **Realtime**: Open app on two devices, report on one, see update on other
 
 ## Production Notes
 

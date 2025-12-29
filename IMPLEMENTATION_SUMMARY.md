@@ -3,7 +3,7 @@
 **Project:** SmartRoad - Road Hazard Reporting & Navigation App  
 **Company:** The Heedful  
 **Motto:** "Be Heedful on the Road"  
-**Version:** 2.4.0  
+**Version:** 2.6.3  
 **Platform:** Flutter (Android, iOS, Web)  
 **Backend:** Supabase + Self-hosted GraphHopper
 
@@ -153,8 +153,23 @@ lib/
 - ✅ Reverse geocoding (coordinates → address)
 - ✅ Autocomplete with debouncing
 - ✅ Search results dropdown
-- ✅ Philippines location optimization
+- ✅ **Smart Country-Prioritized Search**: 
+  - Prioritizes search results from user's current country (e.g., Philippines first)
+  - Also searches globally but only shows main cities (cities, towns, municipalities) from other countries
+  - Prevents showing random streets or small places from other countries
+  - Dynamic country detection from current location using reverse geocoding
+  - Works globally (Japan, Europe, Philippines, etc.)
+  - Country code caching to avoid repeated API calls
+  - Two-phase search: current country first, then global main cities
+  - Result deduplication to prevent duplicate entries
 - ✅ Search history (via state management)
+- ✅ **Route Distance Display**: Search results show route-based distances
+- ✅ **Error Handling**: Fixed RangeError by properly clamping ListView itemCount
+  - Calculated using actual route (GraphHopper) with fallback to straight-line distance
+  - Fallback distance displays immediately while route calculation runs in background
+  - Distance auto-updates from fallback to actual route distance when available
+  - Loading spinner appears next to distance during calculation
+  - Graceful error handling with fallback distance on route calculation failure
 
 ---
 
@@ -442,35 +457,83 @@ lib/
 ## 🌤️ WEATHER TILE LAYERS (MAP-ONLY MVP)
 
 ### Weather Layers Implemented
-- ✅ **Rain Layer**: Real-time precipitation radar from RainViewer API
-  - Animated radar tiles showing current and past rain patterns
-  - Frame-based animation system
-  - Real-time timestamp synchronization
-- ✅ **Heat Layer**: Temperature visualization from Open-Meteo API
-  - Color-coded temperature gradients (blue = cold, red = hot)
-  - Grid-based sampling with bilinear interpolation
-  - Smooth gradient rendering
-- ✅ **Cloud Layer**: Cloud coverage visualization from Open-Meteo API
-  - Semi-transparent grey overlays based on cloud coverage percentage
-  - Opacity scales with cloud density
+- ✅ **Rain Layer**: Real-time precipitation radar from OpenWeatherMap API
+  - Precipitation tiles showing current rain patterns
+  - Real-time tile updates
+  - Opacity control for visibility
+- ✅ **Heat Layer**: Temperature visualization from OpenWeatherMap API
+  - Color-coded temperature tiles
+  - Opacity capped at 60% to prevent solid color overlay
+  - Better visibility of underlying map
+- ✅ **Cloud Layer**: Cloud coverage visualization from OpenWeatherMap API
+  - Cloud coverage tiles
+  - Semi-transparent overlays based on cloud density
+  - Opacity control for visibility
 
 ### Weather Features
-- ✅ Real-time weather data from RainViewer and Open-Meteo APIs
+- ✅ Real-time weather data from OpenWeatherMap API
+- ✅ Three weather layers: Rain (precipitation), Heat (temperature), Clouds (cloud coverage)
 - ✅ Toggleable layers with individual opacity controls
+- ✅ Heat layer opacity capped at 60% for better visibility
 - ✅ Raster tile overlays (not icons) for accurate weather visualization
 - ✅ Layer stacking (above base map, below routes/markers)
-- ✅ Efficient tile caching (5-minute cache duration)
-- ✅ Rate limiting and circuit breaker for API protection
+- ✅ Efficient tile caching and error handling
 - ✅ Platform-specific optimizations (web vs mobile/desktop)
-- ✅ Backend proxy support for web (bypasses CORS and rate limits)
+- ✅ OpenWeatherMap API key support (required for web, optional for mobile/desktop)
+- ✅ Backend proxy support for web (alternative to direct API access)
 - ⚠️ **MVP Scope:** Visual only - no rerouting based on weather yet
 - ⚠️ **Future:** Weather-aware rerouting logic (Post-MVP)
 
 ### Platform Support
-- ✅ **Mobile/Desktop**: Native support, works without proxy
-- ✅ **Web**: Requires backend proxy (see `SELF_HOSTED_SETUP.md`)
+- ✅ **Mobile/Desktop**: Native support with OpenWeatherMap API key
+- ✅ **Web**: Requires OpenWeatherMap API key or backend proxy (see `OPENWEATHERMAP_SETUP.md` or `SELF_HOSTED_SETUP.md`)
   - Automatically disabled if proxy not configured (graceful fallback)
   - No errors, clear UI messages explaining requirement
+
+---
+
+## 🚦 LIVE TRAFFIC LAYER
+
+### Traffic Layer Implementation
+- ✅ **Traffic Flow Visualization**: Real-time traffic conditions overlay on map
+  - Toggleable traffic layer in map filter panel
+  - Color-coded traffic flow indicators:
+    - 🟢 Green: Free flow (fast)
+    - 🟡 Yellow: Moderate traffic
+    - 🔴 Red: Heavy traffic / Slow
+    - ⚫ Dark red: Very slow / Standstill
+  - Transparent PNG overlay that doesn't obstruct map visibility
+  - Integrated with existing map filter system
+
+### Technical Implementation
+- ✅ **TrafficLayer Widget**: Custom `TileLayer` extension for traffic visualization
+- ✅ **TrafficTileProvider**: Custom tile provider for TomTom Traffic Flow API
+- ✅ **TrafficConfig**: Configuration class for API key management and URL construction
+- ✅ **URL Format**: `https://api.tomtom.com/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key={apiKey}`
+- ✅ **Integer Coordinate Enforcement**: All coordinates (z, x, y) converted to integers to prevent API errors
+- ✅ **Coordinate Order**: Verified z, x, y order (zoom, x, y)
+- ✅ **Error Handling**: Transparent placeholder tiles on API errors
+- ✅ **State Management**: Integrated with `MapFilterProvider` for toggle state
+
+### API Configuration
+- ✅ **TomTom Traffic Flow API**: Free tier available (2,500 requests/day)
+- ✅ **API Key Required**: Set `TOMTOM_API_KEY` in `.env` file (see `ENV_SETUP.md`)
+- ✅ **Environment Variable**: Read via `String.fromEnvironment("TOMTOM_API_KEY")`
+- ✅ **Scripts Updated**: `run.bat`, `run-with-env.ps1`, `run-with-env.sh` all support `TOMTOM_API_KEY`
+
+### Features
+- ✅ Toggleable in map filter panel (no technical warnings for users)
+- ✅ Opacity control (default 70%)
+- ✅ Transparent overlay (doesn't cover base map)
+- ✅ Efficient tile caching
+- ✅ Graceful error handling
+- ⚠️ **MVP Scope:** Visual only - no rerouting based on traffic yet
+- ⚠️ **Future:** Traffic-aware rerouting logic (Post-MVP)
+
+### Platform Support
+- ✅ **All Platforms**: Works on mobile, desktop, and web
+- ✅ **Web Support**: Direct API access (no proxy required)
+- ✅ **API Key**: Required for all platforms (set via `--dart-define` or `.env` file)
 
 ---
 
@@ -631,7 +694,7 @@ lib/
 - `lastKnownLocationProvider`: Cached location
 
 #### Filter Providers
-- `mapFilterProvider`: Map filter state (type, severity, expiry)
+- `mapFilterProvider`: Map filter state (type, severity, expiry, traffic toggle)
 
 #### Sticker Providers
 - `stickerServiceProvider`: Service instance
@@ -642,12 +705,28 @@ lib/
 
 #### Weather Services
 - `WeatherService`: Fetches weather data from Open-Meteo API (legacy, for point-based queries)
-- `WeatherLayerManager`: Manages weather layer state, opacity, and animation frames
-- `WeatherTileGenerator`: Generates weather tiles from Open-Meteo data (heat/clouds)
-- `RainViewerService`: Fetches radar timestamps from RainViewer API
-- Weather tile caching (5-minute duration)
+- `WeatherLayerManager`: Manages weather layer state, opacity, and configuration
+- `WeatherTileGenerator`: Generates weather tiles from Open-Meteo data (heat/clouds) - legacy
+- `WeatherConfig`: Configuration for OpenWeatherMap API key and proxy URL
+- OpenWeatherMap tile service for all weather layers (rain, heat, clouds)
+- Weather tile caching and error handling
 - Rate limiting and circuit breaker for API protection
 - Backend proxy support for web platforms
+
+#### Traffic Services
+- `TrafficConfig`: Configuration for TomTom Traffic Flow API key and URL construction
+- `TrafficLayer`: Custom TileLayer widget for traffic flow visualization
+- `TrafficTileProvider`: Custom tile provider for TomTom Traffic Flow API
+- Integer coordinate enforcement (z, x, y) to prevent API errors
+- Transparent PNG overlay tiles
+- Error handling with transparent placeholder tiles
+
+#### Location Search Services
+- `LocationSearchService`: OpenStreetMap Nominatim API integration
+- `getCountryCodeFromCoordinates()`: Reverse geocoding to detect country from coordinates
+- `searchLocation()`: Forward geocoding with optional country code restriction
+- Country code caching to reduce API calls
+- Dynamic country detection based on user's current location
 
 ---
 
@@ -785,11 +864,11 @@ lib/
 
 ### Codebase Metrics
 - **Total Screens:** 11 screens
-- **Total Services:** 13 services (WeatherService, WeatherLayerManager, WeatherTileGenerator, RainViewerService, RouteDistanceTracker, and others)
+- **Total Services:** 12 services (WeatherService, WeatherLayerManager, WeatherTileGenerator, RouteDistanceTracker, and others)
 - **Total Providers:** 5 provider files
 - **Total Models:** 4 models (WeatherState/WeatherData and others)
 - **Total Widgets:** 8 reusable widgets (RoutePreviewSheet, WeatherLayerControls, RainLayer, HeatLayer, CloudLayer, DistanceIndicatorsPanel, CompactDistanceIndicator, and others)
-- **Total Config:** 1 config class (WeatherConfig for proxy configuration)
+- **Total Config:** 1 config class (WeatherConfig for OpenWeatherMap API key and proxy configuration)
 - **Database Tables:** 4 tables
 - **Database Enums:** 4 enums
 
@@ -875,11 +954,50 @@ lib/
 
 ---
 
-**Last Updated:** 2025  
-**Version:** 2.5.0  
+**Last Updated:** December 2025  
+**Version:** 2.6.2  
 **Status:** MVP Ready (90% Complete) - Investor Demo Ready
 
-### Recent Updates (v2.5.0)
+### Recent Updates (v2.6.3)
+- ✅ Added smart country-prioritized location search
+- ✅ Dynamic country detection from current location
+- ✅ Search prioritizes current country but also shows global main cities
+- ✅ Two-phase search: current country first, then filtered global main cities
+- ✅ Added `_isMainCity()` method to filter global results to only main cities/towns
+- ✅ Country code caching to reduce API calls
+- ✅ Faster, more relevant search results with better local prioritization
+- ✅ Fixed RangeError: "Index out of range" in search results ListView
+- ✅ Improved result deduplication and bounds checking
+
+### Recent Updates (v2.6.2)
+- ✅ Added live traffic layer with TomTom Traffic Flow API integration
+- ✅ Toggleable traffic overlay in map filter panel
+- ✅ Color-coded traffic flow indicators (green, yellow, red, dark red)
+- ✅ Transparent PNG overlay that doesn't obstruct map visibility
+- ✅ Integer coordinate enforcement to prevent API errors
+- ✅ Fixed URL format to include `/relative/` path segment
+- ✅ Removed technical API key warning messages for non-technical users
+- ✅ Integrated with existing map filter system
+
+### Recent Updates (v2.6.1)
+- ✅ Added route distance display for search results
+- ✅ Distance shown on right side of each search result
+- ✅ Fallback straight-line distance displays immediately
+- ✅ Auto-updates to actual route distance when calculation completes
+- ✅ Loading spinner appears next to distance during calculation
+- ✅ Graceful error handling with fallback distance
+
+### Recent Updates (v2.6.0)
+- ✅ Fixed weather layers - all three layers (rain, heat, clouds) now working correctly
+- ✅ Migrated from RainViewer to OpenWeatherMap for all weather layers
+- ✅ Heat layer opacity capped at 60% to prevent solid color overlay
+- ✅ Upgraded flutter_map to 8.2.0 for infinite horizontal scrolling (map wrapping)
+- ✅ Map now wraps infinitely when panning left/right
+- ✅ Improved login screen UI (more compact right panel)
+- ✅ Added `.env` file support with helper scripts for API key management
+- ✅ Enhanced error handling and logging for weather layers
+
+### Previous Updates (v2.5.0)
 - ✅ Permission-based routing with sticker-based access control
 - ✅ Route preview sheet with blocked shortcut suggestions
 - ✅ Navigation-based distance indicators (route distance, next turn, gate, delivery entrance)

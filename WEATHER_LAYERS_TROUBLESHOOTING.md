@@ -221,4 +221,3 @@ After implementing Option 2:
 - Weather layers work on all platforms
 - No CORS errors
 - Reduced rate limit errors (backend caching helps)
-

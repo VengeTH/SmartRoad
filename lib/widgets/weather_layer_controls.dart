@@ -45,6 +45,13 @@ class _WeatherLayerControlsState extends State<WeatherLayerControls> {
   
   @override
   Widget build(BuildContext context) {
+    // * Debug: Log API key status
+    if (kDebugMode && kIsWeb) {
+      debugPrint("🔍 [WeatherLayerControls] API Key configured: ${WeatherConfig.hasOpenWeatherMapKey}");
+      debugPrint("🔍 [WeatherLayerControls] Proxy configured: ${WeatherConfig.useProxy}");
+      debugPrint("🔍 [WeatherLayerControls] Layers available: ${WeatherConfig.areLayersAvailable}");
+    }
+    
     // * Get screen width to constrain the panel
     final screenWidth = MediaQuery.of(context).size.width;
     final maxWidth = screenWidth > 600 ? 400.0 : screenWidth - (AppTheme.spacingMD * 4);
@@ -91,9 +98,9 @@ class _WeatherLayerControlsState extends State<WeatherLayerControls> {
             iconColor: Colors.blue,
             enabled: _manager.getLayerConfig(WeatherLayerType.rain).enabled,
             opacity: _manager.getLayerConfig(WeatherLayerType.rain).opacity,
-            available: WeatherConfig.areLayersAvailable,
-            unavailableMessage: !WeatherConfig.areLayersAvailable
-              ? (kIsWeb ? "Requires backend proxy (see WEATHER_LAYERS_TROUBLESHOOTING.md)" : null)
+            available: WeatherConfig.isLayerAvailableOnWeb(WeatherLayerType.rain),
+            unavailableMessage: !WeatherConfig.isLayerAvailableOnWeb(WeatherLayerType.rain)
+              ? (kIsWeb ? "Requires API key or backend proxy. Set OPENWEATHERMAP_API_KEY or WEATHER_PROXY_URL" : null)
               : null,
             onToggle: (enabled) {
               HapticFeedback.lightImpact();
@@ -110,9 +117,9 @@ class _WeatherLayerControlsState extends State<WeatherLayerControls> {
             iconColor: Colors.orange,
             enabled: _manager.getLayerConfig(WeatherLayerType.heat).enabled,
             opacity: _manager.getLayerConfig(WeatherLayerType.heat).opacity,
-            available: WeatherConfig.areLayersAvailable,
-            unavailableMessage: !WeatherConfig.areLayersAvailable
-              ? (kIsWeb ? "Requires backend proxy (see WEATHER_LAYERS_TROUBLESHOOTING.md)" : null)
+            available: WeatherConfig.isLayerAvailableOnWeb(WeatherLayerType.heat),
+            unavailableMessage: !WeatherConfig.isLayerAvailableOnWeb(WeatherLayerType.heat)
+              ? (kIsWeb ? "Requires API key or backend proxy. Set OPENWEATHERMAP_API_KEY or WEATHER_PROXY_URL" : null)
               : null,
             onToggle: (enabled) {
               HapticFeedback.lightImpact();
@@ -129,9 +136,9 @@ class _WeatherLayerControlsState extends State<WeatherLayerControls> {
             iconColor: Colors.grey,
             enabled: _manager.getLayerConfig(WeatherLayerType.clouds).enabled,
             opacity: _manager.getLayerConfig(WeatherLayerType.clouds).opacity,
-            available: WeatherConfig.areLayersAvailable,
-            unavailableMessage: !WeatherConfig.areLayersAvailable
-              ? (kIsWeb ? "Requires backend proxy (see WEATHER_LAYERS_TROUBLESHOOTING.md)" : null)
+            available: WeatherConfig.isLayerAvailableOnWeb(WeatherLayerType.clouds),
+            unavailableMessage: !WeatherConfig.isLayerAvailableOnWeb(WeatherLayerType.clouds)
+              ? (kIsWeb ? "Requires API key or backend proxy. Set OPENWEATHERMAP_API_KEY or WEATHER_PROXY_URL" : null)
               : null,
             onToggle: (enabled) {
               HapticFeedback.lightImpact();
@@ -141,7 +148,7 @@ class _WeatherLayerControlsState extends State<WeatherLayerControls> {
               _manager.setLayerOpacity(WeatherLayerType.clouds, opacity);
             },
           ),
-          if (kIsWeb && !WeatherConfig.useProxy) ...[
+          if (kIsWeb && !WeatherConfig.areLayersAvailable) ...[
             const SizedBox(height: AppTheme.spacingMD),
             Container(
               padding: const EdgeInsets.all(AppTheme.spacingSM),
@@ -166,7 +173,7 @@ class _WeatherLayerControlsState extends State<WeatherLayerControls> {
                       const SizedBox(width: AppTheme.spacingSM),
                       Expanded(
                         child: Text(
-                          "Weather layers require a backend proxy on web.",
+                          "Weather layers require configuration on web.",
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppTheme.warningColor,
                             fontSize: 11,
@@ -178,9 +185,13 @@ class _WeatherLayerControlsState extends State<WeatherLayerControls> {
                   ),
                   const SizedBox(height: AppTheme.spacingXS),
                   Text(
-                    "To enable: Set WEATHER_PROXY_URL environment variable:\n"
-                    "flutter run --dart-define=WEATHER_PROXY_URL=https://your-backend.com/api/weather\n\n"
-                    "See WEATHER_LAYERS_TROUBLESHOOTING.md for backend setup instructions.",
+                    "Option 1: Use .env file (recommended):\n"
+                    "  Windows: .\\run-with-env.ps1\n"
+                    "  Linux/Mac: ./run-with-env.sh\n\n"
+                    "Option 2: Direct --dart-define:\n"
+                    "  flutter run --dart-define=OPENWEATHERMAP_API_KEY=your_api_key\n\n"
+                    "Option 3: Use backend proxy:\n"
+                    "  flutter run --dart-define=WEATHER_PROXY_URL=http://your-backend.com",
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppTheme.warningColor,
                       fontSize: 10,

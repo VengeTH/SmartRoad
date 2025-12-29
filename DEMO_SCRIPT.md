@@ -19,6 +19,9 @@
 - Map loads with OpenStreetMap tiles
 - Current location is shown (blue dot)
 - Hazard markers appear on map (colored icons)
+- Tap filter icon to open map filter panel
+- Toggle "Live Traffic" to see real-time traffic conditions (requires TOMTOM_API_KEY)
+- Traffic colors: Green (free flow), Yellow (moderate), Red (heavy), Dark red (standstill)
 - Tap a hazard marker
 - **Result**: Bottom sheet shows hazard details (type, description, severity, image if available)
 

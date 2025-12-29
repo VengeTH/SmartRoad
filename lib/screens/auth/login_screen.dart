@@ -435,7 +435,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     return Form(
       key: _formKey,
       child: Container(
-        padding: EdgeInsets.all(isWide ? AppTheme.spacingXL : AppTheme.spacingLG),
+        padding: EdgeInsets.all(isWide ? AppTheme.spacingLG : AppTheme.spacingMD),
         decoration: BoxDecoration(
           color: AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(AppTheme.radiusXL),
@@ -454,11 +454,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             const SizedBox(height: AppTheme.spacingXS),
             Text(
               "Welcome back! Access The Heedful control room.",
-              style: theme.textTheme.bodyMedium?.copyWith(
+              style: theme.textTheme.bodySmall?.copyWith(
                 color: AppTheme.textSecondary,
               ),
             ),
-            const SizedBox(height: AppTheme.spacingXL),
+            const SizedBox(height: AppTheme.spacingMD),
             // * Email Field
             TextFormField(
                           controller: _emailController,
@@ -549,7 +549,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             return null;
                           },
                         ),
-            const SizedBox(height: AppTheme.spacingLG),
+            const SizedBox(height: AppTheme.spacingMD),
             // * Login Button with gradient
             Container(
                           decoration: BoxDecoration(
@@ -567,9 +567,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.transparent,
                               shadowColor: Colors.transparent,
-                              padding: const EdgeInsets.symmetric(
-                                vertical: AppTheme.spacingMD,
-                              ),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: AppTheme.spacingSM,
+                            ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(AppTheme.radiusMD),
                               ),
@@ -599,7 +599,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           onPressed: _isLoading ? null : _handleDemoLogin,
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
-                              vertical: AppTheme.spacingLG,
+                              vertical: AppTheme.spacingMD,
                             ),
                             side: BorderSide(
                               color: AppTheme.primaryColor.withOpacity(0.5),
@@ -614,9 +614,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ),
                           ),
                         ),
-            const SizedBox(height: AppTheme.spacingMD),
+            const SizedBox(height: AppTheme.spacingSM),
             // * Demo Mode Branding
-            const SizedBox(height: AppTheme.spacingXL),
+            const SizedBox(height: AppTheme.spacingMD),
             Container(
               padding: const EdgeInsets.all(AppTheme.spacingMD),
               decoration: BoxDecoration(
@@ -648,7 +648,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 ],
               ),
             ),
-            const SizedBox(height: AppTheme.spacingMD),
+            const SizedBox(height: AppTheme.spacingSM),
             // * Demo Credentials Info - Premium Card
             Container(
                           padding: const EdgeInsets.all(AppTheme.spacingMD),
@@ -711,7 +711,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ],
                           ),
                         ),
-            const SizedBox(height: AppTheme.spacingLG),
+            const SizedBox(height: AppTheme.spacingMD),
             // * Sign Up Link
             Row(
                           mainAxisAlignment: MainAxisAlignment.center,

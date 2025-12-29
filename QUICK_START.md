@@ -110,4 +110,3 @@ After running the script, you'll see something like:
 ```
 
 **Just copy that URL and use it in Flutter!**
-

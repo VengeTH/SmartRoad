@@ -439,24 +439,38 @@ lib/
 
 ---
 
-## 🌤️ WEATHER VISUAL OVERLAY (MAP-ONLY MVP)
+## 🌤️ WEATHER TILE LAYERS (MAP-ONLY MVP)
 
-### Weather States Supported
-- ✅ ☀️ Sunny (normal conditions)
-- ✅ 🔥 Intense Heat (temperature > 35°C)
-- ✅ 🌥️ Cloudy
-- ✅ 🌧️ Light Rain
-- ✅ ⛈️ Heavy Rain
+### Weather Layers Implemented
+- ✅ **Rain Layer**: Real-time precipitation radar from RainViewer API
+  - Animated radar tiles showing current and past rain patterns
+  - Frame-based animation system
+  - Real-time timestamp synchronization
+- ✅ **Heat Layer**: Temperature visualization from Open-Meteo API
+  - Color-coded temperature gradients (blue = cold, red = hot)
+  - Grid-based sampling with bilinear interpolation
+  - Smooth gradient rendering
+- ✅ **Cloud Layer**: Cloud coverage visualization from Open-Meteo API
+  - Semi-transparent grey overlays based on cloud coverage percentage
+  - Opacity scales with cloud density
 
 ### Weather Features
-- ✅ Open-Meteo API integration (free, no API key required)
-- ✅ Toggleable map overlay with semi-transparent color layers
-- ✅ Weather icons displayed on affected regions
-- ✅ Auto-update every 10-15 minutes
-- ✅ Weather legend with color/icon meanings
-- ✅ Caching for performance (10-minute cache duration)
+- ✅ Real-time weather data from RainViewer and Open-Meteo APIs
+- ✅ Toggleable layers with individual opacity controls
+- ✅ Raster tile overlays (not icons) for accurate weather visualization
+- ✅ Layer stacking (above base map, below routes/markers)
+- ✅ Efficient tile caching (5-minute cache duration)
+- ✅ Rate limiting and circuit breaker for API protection
+- ✅ Platform-specific optimizations (web vs mobile/desktop)
+- ✅ Backend proxy support for web (bypasses CORS and rate limits)
 - ⚠️ **MVP Scope:** Visual only - no rerouting based on weather yet
 - ⚠️ **Future:** Weather-aware rerouting logic (Post-MVP)
+
+### Platform Support
+- ✅ **Mobile/Desktop**: Native support, works without proxy
+- ✅ **Web**: Requires backend proxy (see `SELF_HOSTED_SETUP.md`)
+  - Automatically disabled if proxy not configured (graceful fallback)
+  - No errors, clear UI messages explaining requirement
 
 ---
 
@@ -626,11 +640,14 @@ lib/
 - `userStickerIdsProvider`: Active sticker IDs (for routing)
 - `hoasProvider`: All HOAs list
 
-#### Weather Service
-- `WeatherService`: Singleton service for weather data
-- Open-Meteo API integration
-- Weather data caching
-- Auto-update mechanism
+#### Weather Services
+- `WeatherService`: Fetches weather data from Open-Meteo API (legacy, for point-based queries)
+- `WeatherLayerManager`: Manages weather layer state, opacity, and animation frames
+- `WeatherTileGenerator`: Generates weather tiles from Open-Meteo data (heat/clouds)
+- `RainViewerService`: Fetches radar timestamps from RainViewer API
+- Weather tile caching (5-minute duration)
+- Rate limiting and circuit breaker for API protection
+- Backend proxy support for web platforms
 
 ---
 
@@ -755,7 +772,7 @@ lib/
 - Permission-based routing logic (structure prepared)
 - HOA admin panel for sticker management
 - Payment integration for sticker purchases
-- Weather radar integration
+- Weather-aware rerouting logic (weather visualization implemented, rerouting pending)
 - AI incident prediction
 - Ride-hailing integration
 - Background sync for offline queue
@@ -768,10 +785,11 @@ lib/
 
 ### Codebase Metrics
 - **Total Screens:** 11 screens
-- **Total Services:** 10 services (added WeatherService)
+- **Total Services:** 13 services (WeatherService, WeatherLayerManager, WeatherTileGenerator, RainViewerService, RouteDistanceTracker, and others)
 - **Total Providers:** 5 provider files
-- **Total Models:** 4 models (added WeatherState/WeatherData)
-- **Total Widgets:** 6 reusable widgets (added RoutePreviewSheet, WeatherOverlay, WeatherOverlayToggle, WeatherLegend)
+- **Total Models:** 4 models (WeatherState/WeatherData and others)
+- **Total Widgets:** 8 reusable widgets (RoutePreviewSheet, WeatherLayerControls, RainLayer, HeatLayer, CloudLayer, DistanceIndicatorsPanel, CompactDistanceIndicator, and others)
+- **Total Config:** 1 config class (WeatherConfig for proxy configuration)
 - **Database Tables:** 4 tables
 - **Database Enums:** 4 enums
 
@@ -864,7 +882,9 @@ lib/
 ### Recent Updates (v2.5.0)
 - ✅ Permission-based routing with sticker-based access control
 - ✅ Route preview sheet with blocked shortcut suggestions
-- ✅ Weather visual overlay (map-only MVP)
+- ✅ Navigation-based distance indicators (route distance, next turn, gate, delivery entrance)
+- ✅ Real-time weather tile layers (Rain, Heat, Clouds) with raster overlays
+- ✅ Backend proxy support for weather layers on web
 - ✅ Enhanced branding across all screens
 - ✅ Route metadata for time savings calculations
 

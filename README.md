@@ -59,12 +59,13 @@ smartroad/
 - **Current Location**: Real-time location tracking with platform-specific optimizations
 - **Map Controls**: Zoom in/out, center on location, filter panel
 - **HOA Gate Markers**: Color-coded gate markers (Red = Strict, Green = Open)
-- **Weather Overlay (MVP)**: 
-  - Toggleable weather visualization on map
-  - Shows weather conditions: Sunny, Intense Heat, Cloudy, Light Rain, Heavy Rain
-  - Semi-transparent color layers with weather icons
-  - Auto-updates every 10-15 minutes
-  - Weather legend for reference
+- **Weather Tile Layers**: 
+  - Real-time weather visualization as map tile overlays
+  - Three weather layers: Rain (RainViewer radar), Heat (temperature), Clouds (cloud coverage)
+  - Toggleable layers with opacity control
+  - Real-time data from RainViewer and Open-Meteo APIs
+  - Works on mobile/desktop natively
+  - **Web Support**: Requires backend proxy (see Weather Layers Setup below)
   - ⚠️ Visual only - no rerouting based on weather yet
 
 ### Sticker & Gate Security
@@ -113,6 +114,7 @@ smartroad/
 - **GraphHopper**: Required for routing features (can run without for basic map)
 - **Supabase**: Required for production, optional for demo mode
 - **Google Gemini API**: Required for physical sticker AI verification
+- **Weather Proxy Server**: Required for weather layers on web (optional, see setup below)
 
 ## Setup Instructions
 
@@ -166,7 +168,40 @@ flutter pub get
 
 **Note:** If Supabase is not configured, the app will automatically use **Demo Mode** with sample data.
 
-### 5. Environment Configuration
+### 5. Weather Proxy Setup (Optional - Required for Web Weather Layers)
+
+Weather layers work natively on mobile/desktop, but require a backend proxy on web due to CORS restrictions and rate limiting.
+
+**Quick Setup (Self-Hosted Server):**
+
+1. **Upload setup script to your server:**
+   ```bash
+   scp setup-proxy.sh username@your-server-ip:~/
+   ```
+
+2. **SSH into your server and run:**
+   ```bash
+   ssh username@your-server-ip
+   chmod +x setup-proxy.sh
+   ./setup-proxy.sh
+   ```
+
+3. **Copy the proxy URL shown** (e.g., `http://192.168.1.100:3000`)
+
+4. **Run Flutter with proxy URL:**
+   ```bash
+   flutter run --dart-define=WEATHER_PROXY_URL=http://YOUR-SERVER-IP:3000
+   ```
+
+**For detailed instructions**, see:
+- `SELF_HOSTED_SETUP.md` - Complete step-by-step guide
+- `QUICK_START.md` - Quick reference
+- `BACKEND_PROXY_SETUP.md` - General backend proxy guide
+- `WEATHER_LAYERS_TROUBLESHOOTING.md` - Troubleshooting guide
+
+**Note:** Weather layers are automatically disabled on web if no proxy is configured (no errors, graceful fallback).
+
+### 6. Environment Configuration
 
 Create a `.env` file in the project root (or use `--dart-define` flags):
 
@@ -175,19 +210,24 @@ SUPABASE_URL=your_supabase_project_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
 STORAGE_BUCKET_NAME=hazard-images
 GEMINI_API_KEY=your_gemini_api_key  # Required for physical sticker AI verification
+WEATHER_PROXY_URL=http://your-server-ip:3000  # Optional: For weather layers on web
 ```
 
 **For Flutter, use `--dart-define` flags instead:**
 
 ```bash
-flutter run --dart-define=SUPABASE_URL=your_url --dart-define=SUPABASE_ANON_KEY=your_key --dart-define=GEMINI_API_KEY=your_gemini_key
+flutter run \
+  --dart-define=SUPABASE_URL=your_url \
+  --dart-define=SUPABASE_ANON_KEY=your_key \
+  --dart-define=GEMINI_API_KEY=your_gemini_key \
+  --dart-define=WEATHER_PROXY_URL=http://your-server-ip:3000
 ```
 
 Or create a script to run with environment variables (see `.env.example` for reference).
 
 **Demo Mode:** If environment variables are not set, the app automatically runs in demo mode with sample data.
 
-### 6. Android Configuration
+### 7. Android Configuration
 
 Add location permissions to `android/app/src/main/AndroidManifest.xml`:
 
@@ -198,7 +238,7 @@ Add location permissions to `android/app/src/main/AndroidManifest.xml`:
 <uses-permission android:name="android.permission.CAMERA"/> <!-- For QR scanning -->
 ```
 
-### 7. iOS Configuration
+### 8. iOS Configuration
 
 Add location permissions to `ios/Runner/Info.plist`:
 
@@ -211,7 +251,7 @@ Add location permissions to `ios/Runner/Info.plist`:
 <string>This app needs camera access to scan QR codes</string>
 ```
 
-### 8. Build and Run
+### 9. Build and Run
 
 ```bash
 # For Android
@@ -287,11 +327,18 @@ lib/
 │   ├── notification_service.dart
 │   ├── offline_cache_service.dart
 │   ├── sticker_service.dart
-│   └── sticker_verifier_service.dart
+│   ├── sticker_verifier_service.dart
+│   ├── weather_service.dart
+│   ├── weather_layer_manager.dart
+│   ├── weather_tile_generator.dart
+│   └── rainviewer_service.dart
 └── widgets/             # Reusable widgets
     ├── hazard_marker.dart
     ├── hazard_detail_sheet.dart
-    └── hoa_gate_marker.dart
+    ├── hoa_gate_marker.dart
+    ├── distance_indicator_widget.dart
+    ├── weather_layer_controls.dart
+    └── weather_tile_layers.dart
 ```
 
 ## Key Dependencies
@@ -310,6 +357,13 @@ lib/
 - `permission_handler`: Location and camera permissions
 
 ## Troubleshooting
+
+### Weather Layer Issues
+- **Web**: Weather layers require backend proxy (see Weather Proxy Setup above)
+- **Mobile/Desktop**: Weather layers work natively without proxy
+- **CORS Errors**: Set up backend proxy for web support
+- **Rate Limiting**: Backend proxy includes caching to reduce API calls
+- **See**: `WEATHER_LAYERS_TROUBLESHOOTING.md` for detailed troubleshooting
 
 ### Location Permission Issues
 - Ensure permissions are added to AndroidManifest.xml and Info.plist
@@ -364,6 +418,7 @@ lib/
 - **Location Options**: Long-press map to show location options sheet
 - **Route Selection**: Vehicle type selection with route preview
 - **Navigation Overlay**: Real-time navigation with distance and duration
+- **Distance Indicators**: Route-based distance tracking to destination, next turn, gate, and delivery entrance
 
 ## Demo Script (30-60 seconds)
 
@@ -373,15 +428,16 @@ lib/
 4. **Get Directions**: Long-press map or select from search, choose vehicle type
 5. **Route Preview**: View route preview sheet with distance, duration, and sticker suggestions (if shortcut blocked)
 6. **Start Navigation**: Tap "Start Navigation" to begin real-time navigation
-7. **Weather Overlay**: Toggle weather overlay button to see weather conditions on map
-8. **Report Hazard**: Tap "Report Hazard" button, fill form, submit
-9. **View Feed**: Switch to Feed tab, see all hazards
-10. **Profile**: View profile, update name/photo
-11. **Gate Pass**: View QR code for gate access (if you have stickers)
-12. **My Stickers**: Manage stickers, upload physical stickers (requires GEMINI_API_KEY)
-13. **HOA Gates**: See color-coded gate markers on map (Red = Strict, Green = Open)
-14. **Permission-Based Routing**: Test routing with/without stickers to see blocked shortcuts
-15. **Realtime**: Open app on two devices, report on one, see update on other
+7. **Distance Indicators**: View remaining distance to destination, next turn, gate, and delivery entrance during navigation
+8. **Weather Layers**: Toggle weather layers (Rain, Heat, Clouds) to see real-time weather conditions on map
+9. **Report Hazard**: Tap "Report Hazard" button, fill form, submit
+10. **View Feed**: Switch to Feed tab, see all hazards
+11. **Profile**: View profile, update name/photo
+12. **Gate Pass**: View QR code for gate access (if you have stickers)
+13. **My Stickers**: Manage stickers, upload physical stickers (requires GEMINI_API_KEY)
+14. **HOA Gates**: See color-coded gate markers on map (Red = Strict, Green = Open)
+15. **Permission-Based Routing**: Test routing with/without stickers to see blocked shortcuts
+16. **Realtime**: Open app on two devices, report on one, see update on other
 
 ## Production Notes
 

@@ -18,12 +18,17 @@ import "../../widgets/hazard_marker.dart";
 import "../../widgets/hazard_detail_sheet.dart";
 import "../../widgets/hoa_gate_marker.dart";
 import "../../widgets/route_preview_sheet.dart";
-import "../../widgets/weather_overlay.dart";
+import "../../widgets/weather_tile_layers.dart";
+import "../../widgets/weather_layer_controls.dart";
+import "../../services/weather_layer_manager.dart";
+import "../../config/weather_config.dart";
 import "../../services/location_service.dart";
 import "../../services/routing_service.dart";
+import "../../services/route_distance_tracker.dart";
 import "../../providers/hazards_provider.dart" show MapHazardsNotifier;
 import "../../providers/sticker_provider.dart";
 import "../../models/sticker.dart";
+import "../../widgets/distance_indicator_widget.dart";
 // * Route utilities removed - using inline functions
 
 /// * Navigation overlay widget
@@ -618,6 +623,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _showSearchResults = false;
   final Dio _dio = Dio();
   final RoutingService _routingService = RoutingService();
+  final RouteDistanceTracker _distanceTracker = RouteDistanceTracker();
+  final WeatherLayerManager _weatherLayerManager = WeatherLayerManager();
   StreamSubscription<Position>? _positionSubscription;
   bool _hasPreciseLocation = false;
   String _activeRoutingProfile = "car";
@@ -632,6 +639,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _mapController = MapController();
     _currentLocation = LatLng(AppConstants.defaultLatitude, AppConstants.defaultLongitude);
     _isInitialized = true;
+    
+    // * Listen to weather layer changes
+    _weatherLayerManager.addListener(() {
+      if (mounted) {
+        setState(() {}); // * Rebuild to update weather layers
+      }
+    });
     
     _startLocationStream();
     
@@ -655,6 +669,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _searchController.dispose();
     _searchFocusNode.dispose();
     _dio.close();
+    _weatherLayerManager.dispose();
     // * RoutingService doesn't need dispose
     super.dispose();
   }
@@ -792,7 +807,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   double _traveledDistance = 0.0;
   
   // * Weather overlay state
-  bool _weatherOverlayEnabled = false;
+  bool _showWeatherControls = false;
   
   // * Off-route detection state
   bool _isOffRoute = false;
@@ -803,6 +818,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // * Route progress state
   double _remainingDistance = 0.0;
   Duration _remainingDuration = Duration.zero;
+  
+  // * Distance indicators state
+  DistanceIndicators? _distanceIndicators;
   
   /// * Get navigation mode display name
   String _getNavigationModeName(String mode) {
@@ -937,13 +955,40 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
   
   /// * Begin actual navigation (after preview confirmed)
-  void _beginNavigation(LatLng destination, String mode) {
+  void _beginNavigation(LatLng destination, String mode) async {
     setState(() {
       _isNavigating = true;
       _navigationDestination = destination;
       _navigationMode = mode;
       _activeRoutingProfile = mode == 'car' ? 'car' : 'motorcycle_sub400';
     });
+    
+    // * Initialize distance tracker
+    if (_availableRoutes.isNotEmpty) {
+      final route = _availableRoutes[_selectedRouteIndex];
+      
+      // * Get HOAs and user stickers for permission-based routing
+      final hoasAsync = ref.read(hoasProvider);
+      final userStickerIdsAsync = ref.read(userStickerIdsProvider);
+      
+      final hoas = await hoasAsync.when(
+        data: (hoaList) => hoaList,
+        loading: () => <HOA>[],
+        error: (_, __) => <HOA>[],
+      );
+      
+      final userStickerIds = await userStickerIdsAsync.when(
+        data: (ids) => ids,
+        loading: () => <String>[],
+        error: (_, __) => <String>[],
+      );
+      
+      _distanceTracker.initialize(
+        route: route,
+        hoas: hoas,
+        userStickerIds: userStickerIds,
+      );
+    }
     
     // * Move map to show route
     if (_navigationRoute != null && _navigationRoute!.isNotEmpty) {
@@ -1627,6 +1672,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   
   /// * Stop navigation
   void _stopNavigation() {
+    // * Reset distance tracker
+    _distanceTracker.reset();
+    
     setState(() {
       _isNavigating = false;
       _navigationDestination = null;
@@ -1642,6 +1690,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _isRerouting = false;
       _remainingDistance = 0.0;
       _remainingDuration = Duration.zero;
+      _distanceIndicators = null;
     });
     
     // * Restart location stream with normal frequency (less frequent updates)
@@ -1870,6 +1919,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         if (_isNavigating) {
           // * Update route segments based on current position
           _updateRouteSegments();
+          
+          // * Update distance indicators
+          final indicators = _distanceTracker.getDistanceIndicators(updated);
+          setState(() {
+            _distanceIndicators = indicators;
+          });
           
           // * Check if user is off-route
           final isOffRoute = _checkOffRoute(updated);
@@ -2384,11 +2439,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               },
             ),
             children: [
+              // * Base map layer
               TileLayer(
                 urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                 userAgentPackageName: "com.smartroad.app", // * Package name stays lowercase (technical identifier)
                 maxZoom: 19,
               ),
+              // * Weather tile layers (above base map, below routes)
+              // * On web, only available if backend proxy is configured (see WEATHER_LAYERS_TROUBLESHOOTING.md)
+              // * On other platforms, always available
+              if (WeatherConfig.areLayersAvailable && _weatherLayerManager.getLayerConfig(WeatherLayerType.rain).enabled)
+                RainLayer(
+                  manager: _weatherLayerManager,
+                  frame: _weatherLayerManager.getRainFrame(),
+                ),
+              if (WeatherConfig.areLayersAvailable && _weatherLayerManager.getLayerConfig(WeatherLayerType.heat).enabled)
+                HeatLayer(
+                  manager: _weatherLayerManager,
+                ),
+              if (WeatherConfig.areLayersAvailable && _weatherLayerManager.getLayerConfig(WeatherLayerType.clouds).enabled)
+                CloudLayer(
+                  manager: _weatherLayerManager,
+                ),
               // * Navigation route polylines (traveled and upcoming)
               if (_navigationRoute != null && _navigationRoute!.isNotEmpty)
                 if (_isNavigating && (_traveledRoute.isNotEmpty || _upcomingRoute.isNotEmpty))
@@ -2756,7 +2828,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ),
             ),
             // * Navigation overlay (when navigating)
-            if (_isNavigating && _navigationDestination != null && _navigationMode != null)
+            if (_isNavigating && _navigationDestination != null && _navigationMode != null) ...[
               Positioned(
                 top: AppTheme.spacingMD,
                 left: AppTheme.spacingMD,
@@ -2770,7 +2842,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   remainingDuration: _remainingDuration,
                   isOffRoute: _isOffRoute,
                 ),
-          ),
+              ),
+              // * Distance indicators panel (below navigation overlay)
+              if (_distanceIndicators != null && _distanceIndicators!.hasAny)
+                Positioned(
+                  top: 120, // * Below navigation overlay
+                  left: AppTheme.spacingMD,
+                  right: AppTheme.spacingMD,
+                  child: DistanceIndicatorsPanel(
+                    indicators: _distanceIndicators!,
+                    compact: true,
+                  ),
+                ),
+            ],
           // * Hazard detail bottom sheet
           if (_selectedHazard != null)
             Positioned(
@@ -2786,37 +2870,34 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   },
               ),
             ),
-          // * Weather overlay toggle button
+          // * Weather layer controls toggle button
           Positioned(
             bottom: 100, // * Above bottom navigation
             right: AppTheme.spacingMD,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                WeatherOverlayToggle(
-                  isEnabled: _weatherOverlayEnabled,
-                  onToggle: () {
+                WeatherLayerToggleButton(
+                  manager: _weatherLayerManager,
+                  onPressed: () {
                     setState(() {
-                      _weatherOverlayEnabled = !_weatherOverlayEnabled;
+                      _showWeatherControls = !_showWeatherControls;
                     });
                   },
                 ),
-                if (_weatherOverlayEnabled) ...[
+                if (_showWeatherControls) ...[
                   const SizedBox(height: AppTheme.spacingMD),
-                  WeatherLegend(),
+                  WeatherLayerControls(
+                    manager: _weatherLayerManager,
+                    onLayersChanged: () {
+                      setState(() {}); // * Rebuild to update layers
+                    },
+                  ),
                 ],
               ],
             ),
           ),
-          // * Weather overlay
-          if (_weatherOverlayEnabled)
-            Positioned.fill(
-              child: WeatherOverlay(
-                center: _currentLocation,
-                bounds: _mapController.camera.visibleBounds,
-                isVisible: _weatherOverlayEnabled,
-              ),
-            ),
           // * Bottom Toolbar (removed - using main navigation bar instead)
           // * Note: Bottom toolbar removed to avoid conflict with MainNavigationScreen's bottomNavigationBar
         ],

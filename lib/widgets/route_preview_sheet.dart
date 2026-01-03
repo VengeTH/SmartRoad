@@ -12,6 +12,7 @@ class RoutePreviewSheet extends StatelessWidget {
   final VoidCallback onStartNavigation;
   final VoidCallback onCancel;
   final VoidCallback? onApplyForSticker; // * CTA for sticker application
+  final VoidCallback? onEditRoute; // * Edit route with waypoints
   
   const RoutePreviewSheet({
     super.key,
@@ -21,6 +22,7 @@ class RoutePreviewSheet extends StatelessWidget {
     required this.onStartNavigation,
     required this.onCancel,
     this.onApplyForSticker,
+    this.onEditRoute,
   });
   
   @override
@@ -89,17 +91,36 @@ class RoutePreviewSheet extends StatelessWidget {
                     ),
                     const SizedBox(height: AppTheme.spacingLG),
                     
-                    // * Route details
-                    _RouteDetailCard(
-                      icon: Icons.straighten,
-                      label: "Distance",
-                      value: "${route.distance.toStringAsFixed(1)} km",
-                    ),
-                    const SizedBox(height: AppTheme.spacingMD),
-                    _RouteDetailCard(
-                      icon: Icons.access_time,
-                      label: "Duration",
-                      value: _formatDuration(route.duration),
+                    // * Route details - Improved card design
+                    Container(
+                      padding: const EdgeInsets.all(AppTheme.spacingLG),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceVariant,
+                        borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                        border: Border.all(
+                          color: AppTheme.borderColor.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _RouteDetailItem(
+                            icon: Icons.straighten,
+                            label: "Distance",
+                            value: "${route.distance.toStringAsFixed(1)} km",
+                          ),
+                          Container(
+                            width: 1,
+                            height: 40,
+                            color: AppTheme.borderColor.withOpacity(0.3),
+                          ),
+                          _RouteDetailItem(
+                            icon: Icons.access_time,
+                            label: "Duration",
+                            value: _formatDuration(route.duration),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: AppTheme.spacingLG),
                     
@@ -113,6 +134,21 @@ class RoutePreviewSheet extends StatelessWidget {
                       const SizedBox(height: AppTheme.spacingLG),
                     ],
                     
+                    // * Edit Route button (if available)
+                    if (onEditRoute != null) ...[
+                      OutlinedButton.icon(
+                        onPressed: onEditRoute,
+                        icon: const Icon(Icons.edit_location_alt),
+                        label: const Text("Adjust Route Path"),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppTheme.spacingMD,
+                          ),
+                          side: BorderSide(color: AppTheme.primaryColor),
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingMD),
+                    ],
                     // * Action buttons
                     Row(
                       children: [
@@ -163,6 +199,47 @@ class RoutePreviewSheet extends StatelessWidget {
     } else {
       return "${minutes}m";
     }
+  }
+}
+
+/// * Route detail item widget (for improved UI)
+class _RouteDetailItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  
+  const _RouteDetailItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+  
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          color: AppTheme.primaryColor,
+          size: 24,
+        ),
+        const SizedBox(height: AppTheme.spacingSM),
+        Text(
+          value,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppTheme.textSecondary,
+          ),
+        ),
+      ],
+    );
   }
 }
 

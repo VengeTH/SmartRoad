@@ -4,7 +4,106 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
-## Version 2.6.4 - Weather Layer Smoothing & Zoom Limits (Latest)
+## Version 2.6.5 - Route Creation & Editing System (Latest)
+
+**Release Date:** January 2026  
+**Focus:** Route Creation with Custom Points & Control Point Editing  
+**Status:** Production Ready
+
+### New Features
+
+#### Route Creation System
+- ✅ **Custom Start/End Point Selection**
+  - Added draggable bottom sheet for selecting custom navigation points
+  - Support for "Use Current Location" as start point
+  - Search integration for location selection
+  - Auto-calculates route when end point is selected
+  - Route preview sheet opens automatically after calculation
+
+- ✅ **Control Point System for Route Editing**
+  - Tap on route line to add control points
+  - Drag control points to adjust route path
+  - Real-time route geometry updates
+  - Control points work as waypoints: Start → CP1 → CP2 → ... → End
+  - Route recalculates automatically when control points are moved
+
+- ✅ **Route Editing UI**
+  - "Adjust Route Path" button in route preview and save dialogs
+  - Visual editing controls (Recalculate, Clear, Done)
+  - Control point markers with drag handles
+  - Route line becomes thicker and more visible during editing
+
+- ✅ **Fallback Route Interpolation**
+  - When GraphHopper is unavailable, routes interpolate through control points
+  - Smooth curve generation between waypoints
+  - Intermediate points generated for visual smoothness
+  - Total distance calculated correctly across all segments
+
+### Improvements
+
+#### UX Enhancements
+- ✅ Auto-open route preview when end point is selected
+- ✅ Improved dialog closing and state management
+- ✅ Better error handling for GraphHopper failures
+- ✅ Snackbar notifications for route updates
+- ✅ Currency changed to PHP (Philippine Peso)
+- ✅ Price field disabled for private routes
+- ✅ Duration formatting (hours, minutes, days)
+
+#### UI Polish
+- ✅ Removed gradients from login/signup screens
+- ✅ Improved custom point selection dialog (draggable, minimizable)
+- ✅ Floating button to reopen minimized selection sheet
+- ✅ Better visual feedback for control point operations
+
+### Bug Fixes
+
+#### White Screen Issues
+- ✅ Fixed white screen after selecting end point
+- ✅ Improved context handling for dialog closing
+- ✅ Added mounted checks before all setState calls
+- ✅ Better async flow management with proper delays
+
+#### Route Calculation
+- ✅ Fixed route calculation with waypoints
+- ✅ Improved fallback route creation with waypoint interpolation
+- ✅ Fixed duration display accuracy (GraphHopper time unit detection)
+- ✅ Route updates correctly when control points are added/moved
+
+### Technical Changes
+
+- **MapScreen (`lib/screens/map/map_screen.dart`):**
+  - Added `_routeControlPoints` state for managing control points
+  - Added `_isEditingRoute` flag for editing mode
+  - Implemented `_updateRouteGeometryWithControlPoints()` for fallback interpolation
+  - Added `_handleEndPointSelected()` for safe dialog closing
+  - Improved `_calculateRouteWithCustomPoints()` with GraphHopper failure detection
+  - Added control point markers and editing UI
+
+- **RoutingService (`lib/services/routing_service.dart`):**
+  - Updated `calculateRoute()` to accept waypoints parameter
+  - Improved `_createFallbackRoute()` to interpolate between waypoints
+  - Added smooth curve generation for fallback routes
+
+- **Route Creation Provider (`lib/providers/route_creation_provider.dart`):**
+  - Added `routeEditingProvider` for passing routes to edit
+  - Route creation trigger system
+
+- **Save Route Dialog (`lib/widgets/save_route_dialog.dart`):**
+  - Added "Adjust Route Path" button
+  - Currency changed to PHP
+  - Price field disabled for private routes
+  - Improved duration formatting
+
+### Known Issues
+
+- ⚠️ Route interpolation creates straight lines between control points (not curved)
+- ⚠️ GraphHopper waypoint routing not fully tested (GraphHopper not set up)
+- ⚠️ Route drawing feature (draw route) not yet implemented
+
+---
+
+## Version 2.6.4 - Weather Layer Smoothing & Zoom Limits
 
 **Release Date:** January 2026  
 **Focus:** Weather Layer Improvements & Map Zoom Restrictions  

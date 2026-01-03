@@ -47,10 +47,15 @@ class WeatherConfig {
   static bool get useProxy => proxyBaseUrl.isNotEmpty;
   
   /// * Whether OpenWeatherMap API key is configured
+  static bool _hasLoggedKey = false;
   static bool get hasOpenWeatherMapKey {
     final hasKey = openWeatherMapApiKey.isNotEmpty;
-    final keyPreview = hasKey ? "${openWeatherMapApiKey.substring(0, 8)}..." : "not set";
-    debugPrint("🔍 [WeatherConfig] OpenWeatherMap API Key: $keyPreview");
+    // * Only log once to prevent console overflow
+    if (kDebugMode && !_hasLoggedKey) {
+      final keyPreview = hasKey ? "${openWeatherMapApiKey.substring(0, 8)}..." : "not set";
+      debugPrint("🔍 [WeatherConfig] OpenWeatherMap API Key: $keyPreview");
+      _hasLoggedKey = true;
+    }
     if (kDebugMode && !hasKey && kIsWeb) {
       debugPrint("⚠️ [WeatherConfig] OPENWEATHERMAP_API_KEY not set. Weather layers will not work on web.");
       debugPrint("💡 [WeatherConfig] Run with: flutter run --dart-define=OPENWEATHERMAP_API_KEY=your_api_key");

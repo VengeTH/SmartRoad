@@ -22,9 +22,7 @@ class ProfileScreen extends ConsumerWidget {
     final userId = ref.watch(currentUserIdProvider);
     final profileAsync = ref.watch(currentUserProfileProvider);
     
-    debugPrint("🔍 [ProfileScreen] UserId: $userId");
-    debugPrint("🔍 [ProfileScreen] Profile state: ${profileAsync.valueOrNull?.name ?? 'null'}");
-    debugPrint("🔍 [ProfileScreen] Has error: ${profileAsync.hasError}");
+    // * Removed verbose logging to prevent console overflow
     if (profileAsync.hasError) {
       debugPrint("🔍 [ProfileScreen] Error: ${profileAsync.error}");
     }
@@ -82,7 +80,7 @@ class ProfileScreen extends ConsumerWidget {
             );
           }
           
-          debugPrint("✅ [ProfileScreen] Profile loaded successfully: ${profile.name}");
+          // * Removed verbose logging to prevent console overflow
           return _ProfileContent(profile: profile);
         },
         loading: () => const Center(

@@ -63,11 +63,8 @@ class TrafficTileProvider extends TileProvider {
       
       final url = TrafficConfig.getTrafficTileUrl(z, x, y);
       
-      // * Only log in debug mode to reduce console noise
-      if (kDebugMode) {
-        debugPrint("🚦 [TrafficTileProvider] Loading traffic tile: z=$z, x=$x, y=$y");
-        debugPrint("🚦 [TrafficTileProvider] URL: $url");
-      }
+      // * Removed verbose logging to prevent console overflow
+      // * Traffic tile loading is handled silently by flutter_map
       
       // * Return NetworkImage - errors will be handled by flutter_map
       return NetworkImage(url);

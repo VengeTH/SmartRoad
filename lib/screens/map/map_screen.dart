@@ -32,7 +32,11 @@ import "../../models/sticker.dart";
 import "../../widgets/distance_indicator_widget.dart";
 import "../../widgets/traffic_layer.dart";
 import "../../widgets/map_filter_panel.dart";
+import "../../widgets/save_route_dialog.dart";
+import "../../widgets/route_creation_dialog.dart";
 import "../../providers/map_filter_provider.dart";
+import "../../providers/route_creation_provider.dart";
+import "../../models/saved_route.dart";
 // * Route utilities removed - using inline functions
 
 /// * Navigation overlay widget
@@ -41,6 +45,7 @@ class _NavigationOverlay extends StatelessWidget {
   final LatLng destination;
   final VoidCallback onStop;
   final VoidCallback? onChangeRoute;
+  final VoidCallback? onSaveRoute;
   final double? remainingDistance;
   final Duration? remainingDuration;
   final bool isOffRoute;
@@ -50,6 +55,7 @@ class _NavigationOverlay extends StatelessWidget {
     required this.destination,
     required this.onStop,
     this.onChangeRoute,
+    this.onSaveRoute,
     this.remainingDistance,
     this.remainingDuration,
     this.isOffRoute = false,
@@ -1062,8 +1068,116 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
   
+  /// * Handle end point selection - close dialog and calculate route safely
+  Future<void> _handleEndPointSelected() async {
+    if (!mounted || _customStartPoint == null || _customEndPoint == null) return;
+    
+    // * Store points locally to avoid state issues
+    final startPoint = _customStartPoint!;
+    final endPoint = _customEndPoint!;
+    
+    // * Update state first to stop selecting custom points
+    if (mounted) {
+      setState(() {
+        _isSelectingCustomPoints = false;
+      });
+    }
+    
+    // * Close the selection dialog safely
+    // * Use a post-frame callback to ensure we're not in the middle of a build
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !context.mounted) return;
+      
+      // * Try to close dialog
+      try {
+        final navigator = Navigator.of(context, rootNavigator: false);
+        if (navigator.canPop()) {
+          navigator.pop();
+        }
+      } catch (e) {
+        // * Dialog might already be closed, ignore
+        debugPrint("⚠️ [MapScreen] Could not close dialog: $e");
+      }
+      
+      // * Wait for dialog to fully close
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted || !context.mounted) return;
+      
+      // * Automatically calculate route with default vehicle (car)
+      try {
+        await _calculateRouteWithCustomPoints(startPoint, endPoint, 'car');
+      } catch (e, stackTrace) {
+        debugPrint("❌ [MapScreen] Error in _handleEndPointSelected: $e");
+        debugPrint("❌ [MapScreen] Stack: $stackTrace");
+        if (mounted && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Error calculating route: ${e.toString()}"),
+              backgroundColor: AppTheme.errorColor,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    });
+  }
+  
   /// * Select a search result and show options
-  void _selectSearchResult(Map<String, dynamic> result) {
+  Future<void> _selectSearchResult(Map<String, dynamic> result) async {
+    // * If in custom point selection mode, set the point instead of navigating
+    if (_isSelectingCustomPoints) {
+      final lat = (result['lat'] as num?)?.toDouble();
+      final lon = (result['lon'] as num?)?.toDouble();
+      if (lat != null && lon != null) {
+        final point = LatLng(lat, lon);
+        final wasSelectingStart = _selectingStartPoint; // * Remember before state change
+        final bool justSetEndPoint = !_selectingStartPoint && _customEndPoint == null;
+        
+        setState(() {
+          if (_selectingStartPoint) {
+            _customStartPoint = point;
+            _selectingStartPoint = false; // * Switch to selecting end point
+          } else {
+            _customEndPoint = point;
+          }
+          _showSearchResults = false;
+          _searchController.clear();
+          _searchFocusNode.unfocus();
+          // * Keep _isSelectingCustomPoints true so map taps still work
+          _isSelectingCustomPoints = true;
+        });
+        
+        // * Auto-calculate route when end point is selected via search
+        if (justSetEndPoint && _customStartPoint != null && _customEndPoint != null) {
+          await _handleEndPointSelected();
+          return;
+        }
+        
+        // * Show feedback
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              wasSelectingStart
+                  ? "Start point selected! Now tap on map or search for END point."
+                  : "End point selected! Calculating route...",
+            ),
+            duration: const Duration(seconds: 2),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+        // * Reopen the bottom sheet to show end point selection (only if start point was just set)
+        if (wasSelectingStart) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted && _isSelectingCustomPoints) {
+              _showNavigationWithCustomPointsDialog();
+            }
+          });
+        }
+        return;
+      }
+    }
+    
+    // * Original behavior for normal search
     try {
       final lat = double.parse(result['lat'].toString());
       final lon = double.parse(result['lon'].toString());
@@ -1114,9 +1228,30 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   String? _navigationMode; // 'car', 'motorcycle_sub400', 'motorcycle_400plus', 'truck', 'public_transit', 'tricycle'
   List<LatLng>? _navigationRoute;
   
+  // * Route creation state
+  bool _isDrawingRoute = false;
+  List<LatLng> _drawnRoutePoints = [];
+  
+  // * Custom point selection state
+  LatLng? _customStartPoint;
+  LatLng? _customEndPoint;
+  bool _selectingStartPoint = true;
+  bool _isSelectingCustomPoints = false;
+  bool _showSheetReopenButton = false; // * Show button to reopen minimized sheet
+  
+  // * Saved route following state
+  SavedRoute? _followingSavedRoute;
+  bool _strictRouteFollowing = true; // * Follow exact route, no reroute unless blocked
+  bool _allowRerouteWhenBlocked = true; // * Allow reroute only when route is blocked
+  
   // * Route selection state
   List<RouteData> _availableRoutes = [];
   int _selectedRouteIndex = 0;
+  
+  // * Route editing state - draggable control points
+  bool _isEditingRoute = false; // * Whether user is editing route path
+  List<LatLng> _routeControlPoints = []; // * Draggable points on the route line
+  int? _draggingControlPointIndex; // * Index of control point being dragged
   
   // * Route color coding state
   List<LatLng> _traveledRoute = [];
@@ -1247,6 +1382,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               },
               onCancel: () {
                 Navigator.of(context).pop(); // * Close preview sheet
+              },
+              onEditRoute: () {
+                Navigator.of(context).pop(); // * Close preview sheet
+                final routeOrigin = _currentLocation;
+                _startRouteEditing(destination, mode, routeOrigin);
               },
               onApplyForSticker: route.metadata?.blockedShortcut ?? false
                   ? () {
@@ -1409,7 +1549,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// * [destination] - Destination point
   /// * [mode] - Navigation mode
   /// * [origin] - Optional origin point (defaults to current location)
-  Future<void> _calculateRoute(LatLng destination, String mode, {LatLng? origin}) async {
+  /// * [waypoints] - Optional intermediate waypoints for route customization
+  Future<void> _calculateRoute(LatLng destination, String mode, {LatLng? origin, List<LatLng>? waypoints}) async {
     try {
       final routeOrigin = origin ?? _currentLocation;
       
@@ -1488,7 +1629,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           vehicleType = VehicleType.car;
       }
       
-      // * Call routing service with permission-based routing
+      // * Call routing service with permission-based routing and waypoints
       final route = await _routingService.calculateRoute(
         start: routeOrigin,
         end: destination,
@@ -1496,21 +1637,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         avoidTolls: avoidTolls,
         userStickerIds: userStickerIds,
         restrictedHoaIds: restrictedHoaIds,
+        waypoints: waypoints ?? _routeControlPoints, // * Use control points if provided
       );
       
-      // * Store route
-      setState(() {
-        _availableRoutes = [route]; // * Single route for now
-        _selectedRouteIndex = 0;
-        
-        // * Use primary route
-        _navigationRoute = route.points;
-        _routeDistance = route.distance; // * Already in km
-        _routeDuration = route.duration;
-        
-        // * Initialize route segments
-        _updateRouteSegments();
-      });
+      // * Store route - only if widget is still mounted
+      if (mounted) {
+        setState(() {
+          _availableRoutes = [route]; // * Single route for now
+          _selectedRouteIndex = 0;
+          
+          // * Use primary route
+          _navigationRoute = route.points;
+          _routeDistance = route.distance; // * Already in km
+          _routeDuration = route.duration;
+          
+          // * Initialize route segments
+          _updateRouteSegments();
+        });
+      }
       
       debugPrint("📍 [MapScreen] Route calculated: "
           "${_routeDistance.toStringAsFixed(2)} km, "
@@ -1987,6 +2131,1151 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
   
+  /// * Show route creation dialog
+  void _showRouteCreationDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => RouteCreationDialog(
+        onDrawRoute: () {
+          Navigator.pop(context);
+          _startRouteDrawing();
+        },
+        onUseNavigation: () {
+          Navigator.pop(context);
+          _showNavigationWithCustomPointsDialog();
+        },
+      ),
+    );
+  }
+  
+  /// * Show dialog to select start and end points for navigation
+  void _showNavigationWithCustomPointsDialog() {
+    // * Don't reset existing points if they're already set
+    setState(() {
+      _isSelectingCustomPoints = true;
+      _showSheetReopenButton = false; // * Hide reopen button when sheet is shown
+      // * Only reset selectingStartPoint if we don't have a start point yet
+      if (_customStartPoint == null) {
+        _selectingStartPoint = true;
+      } else {
+        _selectingStartPoint = false; // * Move to end point selection
+      }
+      // * Don't reset _customStartPoint and _customEndPoint if they're already set
+      // * This allows the dialog to be reopened without losing progress
+    });
+    
+    // * Create controller for DraggableScrollableSheet
+    final draggableController = DraggableScrollableController();
+    
+    // * Listen to sheet size changes to show/hide reopen button
+    draggableController.addListener(() {
+      final size = draggableController.size;
+      if (mounted) {
+        setState(() {
+          // * Show reopen button when sheet is minimized (at or near minChildSize)
+          _showSheetReopenButton = size <= 0.15; // * Slightly above 0.1 to account for snap
+        });
+      }
+    });
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.3), // * Semi-transparent barrier
+      isDismissible: false, // * Prevent accidental dismissal - user must use buttons
+      enableDrag: true, // * Allow dragging to minimize
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: DraggableScrollableSheet(
+            controller: draggableController,
+            initialChildSize: 0.4, // * Larger initial size for better visibility
+            minChildSize: 0.1, // * Can be minimized to just a small bar (10%) to see map
+            maxChildSize: 0.7,
+            expand: false,
+            snap: true, // * Snap to min/max sizes for better UX
+            snapSizes: const [0.1, 0.4, 0.7], // * Snap points: minimized, default, expanded
+            builder: (context, scrollController) => SingleChildScrollView(
+              controller: scrollController,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // * Drag handle
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.textSecondary.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    // * Title with close button
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _selectingStartPoint
+                                ? "Select START Point"
+                                : "Select END Point",
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.visibility_off, size: 20),
+                          tooltip: "Hide sheet (tap map to select)",
+                          onPressed: () {
+                            // * Hide sheet but maintain state so map taps work
+                            Navigator.pop(context);
+                            // * State is maintained - _isSelectingCustomPoints stays true
+                            // * Show floating button to reopen sheet
+                            setState(() {
+                              _showSheetReopenButton = true;
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  _selectingStartPoint
+                                      ? "Sheet hidden. Tap on map to select START point."
+                                      : "Sheet hidden. Tap on map to select END point.",
+                                ),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 20),
+                          onPressed: () {
+                            setState(() {
+                              // * Only reset if user explicitly cancels
+                              _isSelectingCustomPoints = false;
+                              _customStartPoint = null;
+                              _customEndPoint = null;
+                              _selectingStartPoint = true;
+                            });
+                            Navigator.pop(context);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // * Instructions with minimize hint
+                    Card(
+                      color: AppTheme.primaryColor.withOpacity(0.1),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.info_outline, color: AppTheme.primaryColor),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    _selectingStartPoint
+                                        ? "Tap anywhere on the map to set START point"
+                                        : "Tap anywhere on the map to set END point",
+                                    style: TextStyle(
+                                      color: AppTheme.textPrimary,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(Icons.arrow_downward, size: 16, color: AppTheme.textSecondary),
+                                const SizedBox(width: 8),
+                                Text(
+                                  "Drag down or tap minimize to see more of the map",
+                                  style: TextStyle(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // * Start Point
+                    if (_customStartPoint != null)
+                      Card(
+                        color: AppTheme.successColor.withOpacity(0.1),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          leading: const Icon(Icons.location_on, color: Colors.green, size: 32),
+                          title: const Text("Start Point", style: TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text("${_customStartPoint!.latitude.toStringAsFixed(6)}, ${_customStartPoint!.longitude.toStringAsFixed(6)}"),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.edit),
+                            onPressed: () {
+                              setDialogState(() {
+                                _selectingStartPoint = true;
+                                _customStartPoint = null;
+                              });
+                              setState(() {
+                                _selectingStartPoint = true;
+                                _customStartPoint = null;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    // * End Point
+                    if (_customEndPoint != null)
+                      Card(
+                        color: AppTheme.primaryColor.withOpacity(0.1),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          leading: const Icon(Icons.flag, color: Colors.red, size: 32),
+                          title: const Text("End Point", style: TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text("${_customEndPoint!.latitude.toStringAsFixed(6)}, ${_customEndPoint!.longitude.toStringAsFixed(6)}"),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.edit),
+                            onPressed: () {
+                              setDialogState(() {
+                                _selectingStartPoint = false;
+                                _customEndPoint = null;
+                              });
+                              setState(() {
+                                _selectingStartPoint = false;
+                                _customEndPoint = null;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    // * Use Current Location button - Only show when selecting start point
+                    if (_selectingStartPoint)
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          setDialogState(() {
+                            _customStartPoint = _currentLocation;
+                            _selectingStartPoint = false; // * Switch to selecting end point
+                          });
+                          setState(() {
+                            _customStartPoint = _currentLocation;
+                            _selectingStartPoint = false; // * Switch to selecting end point
+                            // * Ensure _isSelectingCustomPoints stays true so map taps work even when minimized
+                            _isSelectingCustomPoints = true;
+                          });
+                          // * Show feedback
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Start point set! Now tap on map to select END point."),
+                              duration: Duration(seconds: 2),
+                              backgroundColor: AppTheme.successColor,
+                            ),
+                          );
+                          // * Expand sheet slightly to show end point selection
+                          draggableController.animateTo(
+                            0.4,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                          );
+                        },
+                        icon: const Icon(Icons.my_location),
+                        label: const Text("Use Current Location as Start"),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: AppTheme.primaryColor,
+                        ),
+                      ),
+                    if (_selectingStartPoint) const SizedBox(height: 12),
+                    // * Search for location - Only show when selecting start point
+                    if (_selectingStartPoint)
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          // * Minimize sheet instead of closing to maintain state
+                          draggableController.animateTo(
+                            0.1, // * Minimize to small size
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                          );
+                          // * Focus search bar and show search results in main screen
+                          Future.delayed(const Duration(milliseconds: 200), () {
+                            if (mounted) {
+                              _searchFocusNode.requestFocus();
+                              setState(() {
+                                _showSearchResults = true;
+                                // * Ensure state is maintained
+                                _isSelectingCustomPoints = true;
+                              });
+                            }
+                          });
+                        },
+                        icon: const Icon(Icons.search),
+                        label: const Text("Search for Start Location"),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                    // * Show message when start point is selected
+                    if (!_selectingStartPoint && _customStartPoint != null)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.successColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle, color: AppTheme.successColor, size: 20),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                "Start point selected. Now tap on the map to select END point",
+                                style: TextStyle(
+                                  color: AppTheme.textPrimary,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    // * Action buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              setState(() {
+                                // * Only reset if user explicitly cancels
+                                _isSelectingCustomPoints = false;
+                                _customStartPoint = null;
+                                _customEndPoint = null;
+                                _selectingStartPoint = true;
+                              });
+                              Navigator.pop(context);
+                            },
+                            child: const Text("Cancel"),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _customStartPoint != null && _customEndPoint != null
+                                ? () {
+                                    Navigator.pop(context);
+                                    setState(() {
+                                      _isSelectingCustomPoints = false;
+                                    });
+                                    _selectVehicleAndCalculateRoute(_customStartPoint!, _customEndPoint!);
+                                  }
+                                : null,
+                            child: const Text("Calculate Route"),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    // * Don't reset _isSelectingCustomPoints when sheet is dismissed
+    // * Only reset when user explicitly cancels or completes the flow
+    // * This allows map taps to work even when sheet is minimized
+  }
+  
+  /// * Select vehicle type and calculate route
+  void _selectVehicleAndCalculateRoute(LatLng start, LatLng end) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Select Vehicle Type"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _VehicleOptionButton(
+              icon: Icons.directions_car,
+              label: "Car",
+              onTap: () {
+                Navigator.pop(context);
+                _calculateRouteWithCustomPoints(start, end, 'car');
+              },
+            ),
+            const SizedBox(height: 8),
+            _VehicleOptionButton(
+              icon: Icons.two_wheeler,
+              label: "Motorcycle (≤399cc)",
+              onTap: () {
+                Navigator.pop(context);
+                _calculateRouteWithCustomPoints(start, end, 'motorcycle_sub400');
+              },
+            ),
+            const SizedBox(height: 8),
+            _VehicleOptionButton(
+              icon: Icons.motorcycle,
+              label: "Big Bike (400cc+)",
+              onTap: () {
+                Navigator.pop(context);
+                _calculateRouteWithCustomPoints(start, end, 'motorcycle_400plus');
+              },
+            ),
+            const SizedBox(height: 8),
+            _VehicleOptionButton(
+              icon: Icons.local_shipping,
+              label: "Truck",
+              onTap: () {
+                Navigator.pop(context);
+                _calculateRouteWithCustomPoints(start, end, 'truck');
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  /// * Vehicle option button widget
+  Widget _VehicleOptionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(icon, size: 32, color: AppTheme.primaryColor),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios, size: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  /// * Start route editing mode (adjust route path to follow correct roads)
+  /// * Load a saved route for editing
+  void _loadRouteForEditing(SavedRoute route) {
+    if (route.geometry.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Route has no geometry to edit")),
+      );
+      return;
+    }
+    
+    // * Set route geometry
+    setState(() {
+      _navigationRoute = route.geometry;
+      _navigationDestination = route.endPoint;
+      _customStartPoint = route.startPoint;
+      _customEndPoint = route.endPoint;
+      
+      // * Determine vehicle mode from route
+      String mode;
+      switch (route.vehicleType) {
+        case VehicleType.motorcycle:
+          mode = 'motorcycle_sub400';
+          break;
+        case VehicleType.bigBike:
+          mode = 'motorcycle_400plus';
+          break;
+        case VehicleType.car:
+          mode = 'car';
+          break;
+        case VehicleType.truck:
+          mode = 'truck';
+          break;
+        case VehicleType.pedestrian:
+          mode = 'pedestrian';
+          break;
+      }
+      _navigationMode = mode;
+      
+      // * Calculate distance and duration from route
+      _routeDistance = route.distanceKm;
+      _routeDuration = route.duration;
+      
+      // * Enable editing mode
+      _isEditingRoute = true;
+      _routeControlPoints = [];
+      _draggingControlPointIndex = null;
+    });
+    
+    // * Fit map to route
+    if (route.geometry.isNotEmpty) {
+      final bounds = LatLngBounds.fromPoints(route.geometry);
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: bounds,
+          padding: const EdgeInsets.all(50),
+        ),
+      );
+    }
+    
+    // * Show editing instructions
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("Route loaded for editing. Tap on the route line to add control points. Tap a control point to move it."),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: "Done",
+          onPressed: () {
+            setState(() {
+              _isEditingRoute = false;
+            });
+          },
+        ),
+      ),
+    );
+  }
+  
+  void _startRouteEditing(LatLng destination, String mode, LatLng start) {
+    // * Enable route path editing mode
+    // * User can tap on the route line to add control points, then drag them to adjust the path
+    if (_navigationRoute == null || _navigationRoute!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No route to edit")),
+      );
+      return;
+    }
+    
+    setState(() {
+      _isEditingRoute = true;
+      _routeControlPoints = []; // * Clear existing control points
+      _draggingControlPointIndex = null;
+      // * Store navigation info for recalculation
+      if (_navigationDestination == null) {
+        _navigationDestination = destination;
+      }
+      if (_navigationMode == null) {
+        _navigationMode = mode;
+      }
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("Tap on the route line to add control points. Tap a control point to move it and adjust the route path."),
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: "Done",
+          onPressed: () {
+            setState(() {
+              _isEditingRoute = false;
+              _routeControlPoints = [];
+            });
+          },
+        ),
+      ),
+    );
+  }
+  
+  /// * Find the nearest point on the route line to the tap position
+  /// * Checks distance to line segments, not just route points
+  LatLng? _findNearestRoutePoint(LatLng tapPoint) {
+    if (_navigationRoute == null || _navigationRoute!.isEmpty) return null;
+    
+    double minDistance = double.infinity;
+    LatLng? nearestPointOnLine;
+    
+    // * Check distance to each line segment
+    for (int i = 0; i < _navigationRoute!.length - 1; i++) {
+      final p1 = _navigationRoute![i];
+      final p2 = _navigationRoute![i + 1];
+      
+      // * Calculate distance from tap point to line segment
+      final distanceToSegment = _distanceToLineSegment(tapPoint, p1, p2);
+      
+      if (distanceToSegment['distance']! < minDistance) {
+        minDistance = distanceToSegment['distance']!;
+        nearestPointOnLine = distanceToSegment['point'] as LatLng;
+      }
+    }
+    
+    // * Also check distance to route points (in case route has very few points)
+    for (final point in _navigationRoute!) {
+      final distance = _calculateDistance(tapPoint, point);
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestPointOnLine = point;
+      }
+    }
+    
+    // * Return if within reasonable distance (200 meters - more forgiving)
+    if (minDistance < 0.2) {
+      return nearestPointOnLine;
+    }
+    return null;
+  }
+  
+  /// * Calculate distance from a point to a line segment and return the nearest point on the segment
+  Map<String, dynamic> _distanceToLineSegment(LatLng point, LatLng segmentStart, LatLng segmentEnd) {
+    // * Vector from segment start to end
+    final dx = segmentEnd.longitude - segmentStart.longitude;
+    final dy = segmentEnd.latitude - segmentStart.latitude;
+    
+    // * Vector from segment start to point
+    final px = point.longitude - segmentStart.longitude;
+    final py = point.latitude - segmentStart.latitude;
+    
+    // * Calculate dot product
+    final dot = dx * px + dy * py;
+    final lenSq = dx * dx + dy * dy;
+    
+    // * Parameter t represents position along segment (0 = start, 1 = end)
+    double t = 0.0;
+    if (lenSq > 0) {
+      t = (dot / lenSq).clamp(0.0, 1.0);
+    }
+    
+    // * Nearest point on segment
+    final nearestPoint = LatLng(
+      segmentStart.latitude + t * dy,
+      segmentStart.longitude + t * dx,
+    );
+    
+    // * Distance to nearest point
+    final distance = _calculateDistance(point, nearestPoint);
+    
+    return {
+      'distance': distance,
+      'point': nearestPoint,
+    };
+  }
+  
+  /// * Get minimum distance from point to route (for feedback)
+  double _getMinDistanceToRoute(LatLng point) {
+    if (_navigationRoute == null || _navigationRoute!.isEmpty) return double.infinity;
+    
+    double minDistance = double.infinity;
+    
+    // * Check distance to line segments
+    for (int i = 0; i < _navigationRoute!.length - 1; i++) {
+      final p1 = _navigationRoute![i];
+      final p2 = _navigationRoute![i + 1];
+      final distanceToSegment = _distanceToLineSegment(point, p1, p2);
+      final segmentDistance = distanceToSegment['distance'] as double;
+      if (segmentDistance < minDistance) {
+        minDistance = segmentDistance;
+      }
+    }
+    
+    // * Also check distance to route points
+    for (final routePoint in _navigationRoute!) {
+      final distance = _calculateDistance(point, routePoint);
+      if (distance < minDistance) {
+        minDistance = distance;
+      }
+    }
+    
+    return minDistance;
+  }
+  
+  /// * Calculate distance between two points in kilometers
+  double _calculateDistance(LatLng p1, LatLng p2) {
+    const double earthRadiusKm = 6371.0;
+    final double dLat = _toRadians(p2.latitude - p1.latitude);
+    final double dLon = _toRadians(p2.longitude - p1.longitude);
+    final double a = 
+      math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(_toRadians(p1.latitude)) * math.cos(_toRadians(p2.latitude)) *
+      math.sin(dLon / 2) * math.sin(dLon / 2);
+    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadiusKm * c;
+  }
+  
+  double _toRadians(double degrees) => degrees * (math.pi / 180.0);
+  
+  /// * Recalculate route with control points - routes along actual roads (or updates geometry if GraphHopper unavailable)
+  Future<void> _recalculateRouteWithControlPoints() async {
+    if (_navigationRoute == null || _navigationRoute!.isEmpty) return;
+    
+    // * If no control points, just recalculate the original route
+    if (_routeControlPoints.isEmpty) {
+      if (_navigationDestination != null && _navigationMode != null) {
+        try {
+          await _calculateRoute(
+            _navigationDestination!,
+            _navigationMode!,
+            origin: _currentLocation,
+          );
+        } catch (e) {
+          // * GraphHopper unavailable - keep existing route
+        }
+      }
+      return;
+    }
+    
+    // * Get start and end points from the route
+    final routeStart = _navigationRoute!.first;
+    final routeEnd = _navigationRoute!.last;
+    
+    // * Determine vehicle mode (use existing or default to car)
+    final mode = _navigationMode ?? 'car';
+    
+    // * Try to recalculate via GraphHopper to route along actual roads
+    bool graphhopperSuccess = false;
+    try {
+      // * Use route start as origin, route end as destination, control points as waypoints
+      await _calculateRoute(
+        routeEnd,
+        mode,
+        origin: routeStart,
+        waypoints: _routeControlPoints,
+      );
+      
+      graphhopperSuccess = true;
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Route updated to follow roads!"),
+            duration: Duration(seconds: 2),
+            backgroundColor: AppTheme.successColor,
+          ),
+        );
+      }
+    } catch (e) {
+      // * GraphHopper unavailable - use fallback: manually adjust route geometry
+      graphhopperSuccess = false;
+    }
+    
+    // * Fallback: If GraphHopper fails, manually update route geometry to pass through control points
+    if (!graphhopperSuccess) {
+      _updateRouteGeometryWithControlPoints();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Route updated (GraphHopper unavailable - route may not follow roads)"),
+            duration: Duration(seconds: 3),
+            backgroundColor: AppTheme.warningColor,
+          ),
+        );
+      }
+    }
+  }
+  
+  /// * Update route geometry to pass through control points as waypoints (fallback when GraphHopper unavailable)
+  /// * Route goes: Start → Control Point 1 → Control Point 2 → ... → End
+  void _updateRouteGeometryWithControlPoints() {
+    if (_navigationRoute == null || _navigationRoute!.isEmpty) return;
+    
+    final routeStart = _navigationRoute!.first;
+    final routeEnd = _navigationRoute!.last;
+    final updatedRoute = <LatLng>[];
+    
+    // * If no control points, keep original route
+    if (_routeControlPoints.isEmpty) {
+      return;
+    }
+    
+    // * Sort control points by distance from start to ensure proper order
+    final sortedControlPoints = List<LatLng>.from(_routeControlPoints);
+    sortedControlPoints.sort((a, b) {
+      final distA = _calculateDistance(routeStart, a);
+      final distB = _calculateDistance(routeStart, b);
+      return distA.compareTo(distB);
+    });
+    
+    // * Build route: Start → Control Point 1 → Control Point 2 → ... → End
+    updatedRoute.add(routeStart);
+    
+    LatLng prevPoint = routeStart;
+    for (final controlPoint in sortedControlPoints) {
+      // * Create smooth path from previous point to this control point
+      final distance = _calculateDistance(prevPoint, controlPoint);
+      final numSegments = (distance * 200).round().clamp(10, 50);
+      
+      for (int j = 1; j <= numSegments; j++) {
+        final t = j / numSegments;
+        final interpolated = LatLng(
+          prevPoint.latitude + (controlPoint.latitude - prevPoint.latitude) * t,
+          prevPoint.longitude + (controlPoint.longitude - prevPoint.longitude) * t,
+        );
+        updatedRoute.add(interpolated);
+      }
+      
+      // * Ensure control point is included
+      updatedRoute.add(controlPoint);
+      prevPoint = controlPoint;
+    }
+    
+    // * Add final segment to end point
+    final finalDistance = _calculateDistance(prevPoint, routeEnd);
+    final finalNumSegments = (finalDistance * 200).round().clamp(10, 50);
+    
+    for (int j = 1; j <= finalNumSegments; j++) {
+      final t = j / finalNumSegments;
+      final interpolated = LatLng(
+        prevPoint.latitude + (routeEnd.latitude - prevPoint.latitude) * t,
+        prevPoint.longitude + (routeEnd.longitude - prevPoint.longitude) * t,
+      );
+      updatedRoute.add(interpolated);
+    }
+    
+    // * Add end point
+    updatedRoute.add(routeEnd);
+    
+    // * Update route immediately - force rebuild
+    if (mounted) {
+      setState(() {
+        _navigationRoute = List<LatLng>.from(updatedRoute); // * Create new list to force update
+      });
+    }
+  }
+  
+  /// * Calculate route with custom start and end points
+  Future<void> _calculateRouteWithCustomPoints(LatLng start, LatLng end, String mode) async {
+    if (!mounted) return;
+    
+    // * Track if GraphHopper failed
+    bool graphhopperFailed = false;
+    
+    try {
+      // * Calculate route with control points as waypoints (Start → CP1 → CP2 → ... → End)
+      try {
+        await _calculateRoute(
+          end, 
+          mode, 
+          origin: start,
+          waypoints: _routeControlPoints, // * Use control points as waypoints
+        );
+      } catch (e) {
+        // * GraphHopper failed - mark it and continue with fallback route
+        graphhopperFailed = true;
+        debugPrint("⚠️ [MapScreen] GraphHopper unavailable, using fallback route");
+      }
+      
+      // * Check mounted again after async operation
+      if (!mounted) return;
+      
+      if (_availableRoutes.isNotEmpty && _selectedRouteIndex < _availableRoutes.length) {
+        final route = _availableRoutes[_selectedRouteIndex];
+        
+        // * Validate route has points
+        if (route.points.isEmpty || route.points.length < 2) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Route has no points. Please try different locations."),
+                backgroundColor: AppTheme.warningColor,
+              ),
+            );
+          }
+          return;
+        }
+        
+        // * If GraphHopper failed, skip preview sheet and just show route on map
+        if (graphhopperFailed) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text("Route calculated (GraphHopper unavailable). Route shown on map."),
+                backgroundColor: AppTheme.infoColor,
+                duration: const Duration(seconds: 3),
+                action: SnackBarAction(
+                  label: "Start",
+                  textColor: Colors.white,
+                  onPressed: () {
+                    if (mounted) {
+                      _beginNavigation(end, mode);
+                    }
+                  },
+                ),
+              ),
+            );
+          }
+          return; // * Don't show preview sheet for fallback routes
+        }
+        
+        final vehicleType = _getVehicleTypeFromMode(mode);
+        final vehicleModeName = _getNavigationModeName(mode);
+        
+        // * Wait for next frame to ensure UI is stable and dialog is fully closed
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (!mounted || !context.mounted) return;
+        
+        // * Show bottom sheet with error handling
+        try {
+          await showModalBottomSheet(
+            context: context,
+            backgroundColor: Colors.transparent,
+            isScrollControlled: true,
+            isDismissible: true,
+            enableDrag: true,
+            builder: (sheetContext) {
+              // * Validate route again in builder
+              if (route.points.isEmpty || route.points.length < 2) {
+                return Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceColor,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: const Center(
+                    child: Text("Invalid route data"),
+                  ),
+                );
+              }
+              
+              return RoutePreviewSheet(
+                route: route,
+                vehicleType: vehicleType,
+                vehicleModeName: vehicleModeName,
+                onStartNavigation: () {
+                  if (Navigator.of(sheetContext).canPop()) {
+                    Navigator.of(sheetContext).pop();
+                  }
+                  if (mounted) {
+                    _beginNavigation(end, mode);
+                  }
+                },
+                onCancel: () {
+                  if (Navigator.of(sheetContext).canPop()) {
+                    Navigator.of(sheetContext).pop();
+                  }
+                },
+                onEditRoute: () {
+                  if (Navigator.of(sheetContext).canPop()) {
+                    Navigator.of(sheetContext).pop();
+                  }
+                  if (mounted) {
+                    _startRouteEditing(end, mode, start);
+                  }
+                },
+                onApplyForSticker: null,
+              );
+            },
+          );
+        } catch (e, stackTrace) {
+          // * If preview sheet fails, just show snackbar - don't crash
+          debugPrint("❌ [MapScreen] Error showing route preview: $e");
+          debugPrint("❌ [MapScreen] Stack: $stackTrace");
+          
+          if (mounted && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text("Route calculated. Tap 'Start' to begin navigation."),
+                backgroundColor: AppTheme.successColor,
+                duration: const Duration(seconds: 4),
+                action: SnackBarAction(
+                  label: "Start",
+                  textColor: Colors.white,
+                  onPressed: () {
+                    if (mounted) {
+                      _beginNavigation(end, mode);
+                    }
+                  },
+                ),
+              ),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("No route found. Please try different points."),
+              backgroundColor: AppTheme.warningColor,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        debugPrint("❌ [MapScreen] Error calculating route: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error calculating route: ${e.toString()}"),
+            backgroundColor: AppTheme.errorColor,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+  
+  /// * Start route drawing mode
+  void _startRouteDrawing() {
+    setState(() {
+      _isDrawingRoute = true;
+      _drawnRoutePoints = [];
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Tap on map to draw route. Long press to finish."),
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+  
+  /// * Handle route drawn completion
+  void _onRouteDrawn(List<LatLng> points) {
+    if (points.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Route must have at least 2 points")),
+      );
+      return;
+    }
+    
+    setState(() {
+      _isDrawingRoute = false;
+    });
+    
+    // * Show save route dialog with drawn route
+    _showSaveDrawnRouteDialog(points);
+  }
+  
+  /// * Show save dialog for drawn route
+  void _showSaveDrawnRouteDialog(List<LatLng> points) {
+    final startPoint = points.first;
+    final endPoint = points.last;
+    
+    // * Calculate approximate distance
+    double totalDistance = 0.0;
+    for (int i = 0; i < points.length - 1; i++) {
+      totalDistance += const Distance().distance(points[i], points[i + 1]);
+    }
+    
+    showDialog(
+      context: context,
+      builder: (context) => SaveRouteDialog(
+        routePoints: points,
+        startPoint: startPoint,
+        endPoint: endPoint,
+        distanceMeters: totalDistance.round(),
+        duration: Duration(seconds: (totalDistance / 50 * 3600).round()), // * Estimate: 50 km/h average
+        vehicleType: VehicleType.car, // * Default, user can change
+        onEditRoute: () {
+          Navigator.pop(context); // * Close save dialog
+          // * Enable editing mode for drawn route
+          setState(() {
+            _navigationRoute = points;
+            _navigationDestination = endPoint;
+            _customStartPoint = startPoint;
+            _customEndPoint = endPoint;
+            _navigationMode = 'car'; // * Default mode for drawn routes
+            _isEditingRoute = true;
+            _routeControlPoints = [];
+            _draggingControlPointIndex = null;
+          });
+          
+          // * Fit map to route
+          if (points.isNotEmpty) {
+            final bounds = LatLngBounds.fromPoints(points);
+            _mapController.fitCamera(
+              CameraFit.bounds(
+                bounds: bounds,
+                padding: const EdgeInsets.all(50),
+              ),
+            );
+          }
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Route loaded for editing. Tap on the route line to add control points. Tap a control point to move it."),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        },
+      ),
+    );
+  }
+  
+  /// * Show save route dialog
+  void _showSaveRouteDialog() {
+    if (_navigationRoute == null || _navigationRoute!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No route to save")),
+      );
+      return;
+    }
+    
+    // * Map mode to VehicleType
+    VehicleType vehicleType;
+    switch (_navigationMode!) {
+      case 'motorcycle_sub400':
+        vehicleType = VehicleType.motorcycle;
+        break;
+      case 'motorcycle_400plus':
+        vehicleType = VehicleType.bigBike;
+        break;
+      case 'car':
+        vehicleType = VehicleType.car;
+        break;
+      case 'truck':
+        vehicleType = VehicleType.truck;
+        break;
+      case 'pedestrian':
+        vehicleType = VehicleType.pedestrian;
+        break;
+      default:
+        vehicleType = VehicleType.car;
+    }
+    
+    showDialog(
+      context: context,
+      builder: (context) => SaveRouteDialog(
+        routePoints: _navigationRoute!,
+        startPoint: _currentLocation,
+        endPoint: _navigationDestination!,
+        distanceMeters: (_routeDistance * 1000).round(),
+        duration: _routeDuration,
+        vehicleType: vehicleType,
+        onEditRoute: _navigationDestination != null && _navigationMode != null
+            ? () {
+                Navigator.pop(context); // * Close save dialog
+                _startRouteEditing(_navigationDestination!, _navigationMode!, _currentLocation);
+              }
+            : null,
+      ),
+    );
+  }
+  
   /// * Stop navigation
   void _stopNavigation() {
     // * Reset distance tracker
@@ -2221,7 +3510,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
     
     await _positionSubscription?.cancel();
-    debugPrint("📍 [MapScreen] Starting location stream (distanceFilter: ${settings.distanceFilter}m)");
+    // * Removed verbose logging to prevent console overflow
     
     _positionSubscription = Geolocator.getPositionStream(locationSettings: settings).listen(
       (position) {
@@ -2274,7 +3563,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       },
     );
     
-    debugPrint("📍 [MapScreen] Location stream started successfully");
+    // * Removed verbose logging to prevent console overflow
   }
   
   Future<void> _loadCurrentLocation() async {
@@ -2319,7 +3608,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               debugPrint("❌ [MapScreen] Error moving map: $e");
             }
           }
-          debugPrint("📍 [MapScreen] Fresh location obtained: ${location.latitude}, ${location.longitude}");
+          // * Removed verbose logging to prevent console overflow
           // * Detect country code when location is updated
           _detectCountryCode();
         } else {
@@ -2547,20 +3836,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
   
   void _onMapReady() {
-    debugPrint("🗺️ [MapScreen] _onMapReady called");
+    // * Removed verbose logging to prevent console overflow
     try {
     // * Load all hazards initially (will be optimized with PostGIS RPC later)
     // * For now, load a reasonable bounding box around current location
     const offset = 0.1; // * Roughly 10km
-      
-      debugPrint("🗺️ [MapScreen] Current location: ${_currentLocation.latitude}, ${_currentLocation.longitude}");
       
       if (!mounted) {
         debugPrint("❌ [MapScreen] Widget not mounted, skipping _onMapReady");
         return;
       }
       
-      debugPrint("🗺️ [MapScreen] Using cached notifier...");
+      // * Removed verbose logging to prevent console overflow
       if (_hazardsNotifier == null) {
         debugPrint("❌ [MapScreen] ERROR: _hazardsNotifier is NULL!");
         return;
@@ -2572,7 +3859,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _currentLocation.latitude + offset,
         _currentLocation.longitude + offset,
       );
-      debugPrint("🗺️ [MapScreen] loadHazardsInBounds called successfully");
+      // * Removed verbose logging to prevent console overflow
     } catch (e, stackTrace) {
       debugPrint("❌ [MapScreen] ERROR in _onMapReady: $e");
       debugPrint("❌ [MapScreen] Stack: $stackTrace");
@@ -2593,7 +3880,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         return;
       }
       
-      debugPrint("🗺️ [MapScreen] Using cached notifier...");
+      // * Removed verbose logging to prevent console overflow
       if (_hazardsNotifier == null) {
         debugPrint("❌ [MapScreen] ERROR: _hazardsNotifier is NULL!");
         return;
@@ -2605,7 +3892,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _currentLocation.latitude + offset,
         _currentLocation.longitude + offset,
       );
-      debugPrint("🗺️ [MapScreen] loadHazardsInBounds called successfully");
+      // * Removed verbose logging to prevent console overflow
     } catch (e, stackTrace) {
       debugPrint("❌ [MapScreen] ERROR in _onMapMoved: $e");
       debugPrint("❌ [MapScreen] Stack: $stackTrace");
@@ -2614,11 +3901,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   
   @override
   Widget build(BuildContext context) {
-    debugPrint("🗺️ [MapScreen] build() called - START");
+    // * Removed verbose build logging to prevent console overflow
     
     // * Don't build map until initialized
     if (!_isInitialized) {
-      debugPrint("🗺️ [MapScreen] Not initialized yet, showing loading...");
       return Scaffold(
         backgroundColor: AppTheme.backgroundColor,
         body: Center(
@@ -2629,17 +3915,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       );
     }
     
-    debugPrint("🗺️ [MapScreen] Map is initialized, building...");
-    debugPrint("🗺️ [MapScreen] Current location: ${_currentLocation.latitude}, ${_currentLocation.longitude}");
+    // * Removed verbose build logging to prevent console overflow
+    
+    // * Watch for route editing - load route when set
+    final routeToEdit = ref.watch(routeEditingProvider);
+    if (routeToEdit != null) {
+      // * Load route for editing
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _loadRouteForEditing(routeToEdit);
+          // * Clear the provider after loading
+          ref.read(routeEditingProvider.notifier).state = null;
+        }
+      });
+    }
     
     // * Wrap everything in error boundary
     try {
       // * Cache the notifier for use in callbacks - with error handling
       if (_hazardsNotifier == null) {
         try {
-          debugPrint("🗺️ [MapScreen] Attempting to read mapHazardsProvider.notifier...");
+          // * Removed verbose logging to prevent console overflow
           _hazardsNotifier = ref.read(mapHazardsProvider.notifier);
-          debugPrint("🗺️ [MapScreen] Hazards notifier cached successfully");
         } catch (e, stackTrace) {
           debugPrint("❌ [MapScreen] ERROR reading mapHazardsProvider.notifier: $e");
           debugPrint("❌ [MapScreen] Stack: $stackTrace");
@@ -2675,16 +3972,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
           );
         }
-      } else {
-        debugPrint("🗺️ [MapScreen] Using cached hazards notifier");
       }
       
       // * Safely get hazards - ensure it's never null
       List<Hazard> hazards;
       try {
-        debugPrint("🗺️ [MapScreen] Watching mapHazardsProvider...");
+        // * Removed verbose logging to prevent console overflow
         hazards = ref.watch(mapHazardsProvider);
-        debugPrint("🗺️ [MapScreen] Hazards obtained: ${hazards.length} items");
       } catch (e, stackTrace) {
         debugPrint("❌ [MapScreen] Error reading hazards provider: $e");
         debugPrint("❌ [MapScreen] Stack: $stackTrace");
@@ -2706,11 +4000,30 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final safeCenter = LatLng(safeLat, safeLon);
       final currentLocationForMarker = _hasPreciseLocation ? _currentLocation : null;
     
+    // * Listen to route creation trigger
+    ref.listen<RouteCreationAction?>(routeCreationTriggerProvider, (previous, next) {
+      if (next != null && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            if (next == RouteCreationAction.showDialog) {
+              _showRouteCreationDialog();
+            } else if (next == RouteCreationAction.startDrawing) {
+              _startRouteDrawing();
+            } else if (next == RouteCreationAction.useNavigation) {
+              _showNavigationWithCustomPointsDialog();
+            }
+            // * Reset trigger
+            ref.read(routeCreationTriggerProvider.notifier).state = null;
+          }
+        });
+      }
+    });
+    
     return Scaffold(
       body: Stack(
-        children: [
-          FlutterMap(
-            mapController: _mapController,
+          children: [
+            FlutterMap(
+              mapController: _mapController,
             options: MapOptions(
               initialCenter: safeCenter,
               initialZoom: AppConstants.defaultZoom,
@@ -2745,6 +4058,178 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 }
               },
               onTap: (tapPosition, point) {
+                  // * Handle custom point selection for navigation
+                  // * Also check if we have points set but state was lost (e.g., after minimizing)
+                  if (_isSelectingCustomPoints || (_customStartPoint != null && _customEndPoint == null)) {
+                    // * Restore state if it was lost
+                    if (!_isSelectingCustomPoints) {
+                      setState(() {
+                        _isSelectingCustomPoints = true;
+                        _selectingStartPoint = false; // * We have start, so selecting end
+                      });
+                    }
+                    
+                    final wasSelectingStart = _selectingStartPoint; // * Remember before state change
+                    final bool justSetEndPoint = !_selectingStartPoint && _customEndPoint == null;
+                    
+                    setState(() {
+                      if (_selectingStartPoint) {
+                        _customStartPoint = point;
+                        _selectingStartPoint = false; // * Switch to selecting end point
+                      } else {
+                        _customEndPoint = point;
+                      }
+                      // * Ensure state is maintained
+                      _isSelectingCustomPoints = true;
+                    });
+                    
+                    // * Auto-calculate route when end point is selected (after setState)
+                    // * Close dialog first, then calculate route
+                    if (justSetEndPoint && _customStartPoint != null && _customEndPoint != null) {
+                      // * Close any open dialogs/sheets first
+                      if (mounted) {
+                        try {
+                          // * Try to close modal bottom sheet if open
+                          final navigator = Navigator.of(context, rootNavigator: false);
+                          if (navigator.canPop()) {
+                            navigator.pop();
+                          }
+                        } catch (e) {
+                          // * Ignore if dialog already closed
+                        }
+                      }
+                      
+                      // * Wait a moment for dialog to close, then calculate route
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        if (mounted && _customStartPoint != null && _customEndPoint != null) {
+                          setState(() {
+                            _isSelectingCustomPoints = false;
+                          });
+                          _calculateRouteWithCustomPoints(_customStartPoint!, _customEndPoint!, 'car');
+                        }
+                      });
+                    }
+                    
+                    // * Only show feedback if we didn't auto-calculate
+                    if (_selectingStartPoint || _customEndPoint == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            wasSelectingStart
+                                ? "Start point selected! Now tap on map to select END point."
+                                : "End point selected! Calculating route...",
+                          ),
+                          duration: const Duration(seconds: 2),
+                          backgroundColor: AppTheme.successColor,
+                        ),
+                      );
+                    }
+                    
+                    // * Reopen/expand the bottom sheet to show updated state (only if it was closed)
+                    // * Check if there's already a bottom sheet open by trying to find it
+                    if (_customEndPoint == null) {
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        if (mounted && _isSelectingCustomPoints) {
+                          // * Only reopen if we don't have both points yet
+                          if (_customStartPoint == null || _customEndPoint == null) {
+                            _showNavigationWithCustomPointsDialog();
+                          }
+                        }
+                      });
+                    }
+                    return;
+                  }
+                  
+                  // * Handle route path editing mode - check if tapping near a control point to move it
+                  // * IMPORTANT: Check control points FIRST before checking route line
+                  if (_isEditingRoute && _routeControlPoints.isNotEmpty) {
+                    // * Check if tap is near any control point (within 100 meters - more forgiving)
+                    int nearestIndex = -1;
+                    double minDistance = double.infinity;
+                    
+                    for (int i = 0; i < _routeControlPoints.length; i++) {
+                      final distance = _calculateDistance(point, _routeControlPoints[i]);
+                      if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestIndex = i;
+                      }
+                    }
+                    
+                    // * If within 100 meters of a control point, move it
+                    if (nearestIndex >= 0 && minDistance < 0.1) { // * 100 meters
+                      // * Move control point to tap location
+                      setState(() {
+                        _routeControlPoints[nearestIndex] = point;
+                      });
+                      
+                      // * Update route immediately (synchronous for instant visual feedback)
+                      if (_navigationRoute != null && _navigationRoute!.isNotEmpty) {
+                        _updateRouteGeometryWithControlPoints();
+                        
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Control point moved. Route updated."),
+                              duration: Duration(seconds: 1),
+                              backgroundColor: AppTheme.successColor,
+                            ),
+                          );
+                        }
+                      }
+                      return; // * IMPORTANT: Return here to prevent adding new control point
+                    }
+                  }
+                  
+                  // * Handle route path editing mode - tap on route line to add control point
+                  if (_isEditingRoute && _navigationRoute != null && _navigationRoute!.isNotEmpty) {
+                    // * Find nearest point on route line
+                    final nearestPoint = _findNearestRoutePoint(point);
+                    if (nearestPoint != null) {
+                      // * Add control point at this location
+                      setState(() {
+                        _routeControlPoints.add(nearestPoint);
+                      });
+                      
+                      // * Update route immediately to show the bend
+                      if (_navigationRoute != null && _navigationRoute!.isNotEmpty) {
+                        _updateRouteGeometryWithControlPoints();
+                      }
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            "Control point added (${_routeControlPoints.length} total). Route updated.",
+                          ),
+                          duration: const Duration(seconds: 2),
+                          backgroundColor: AppTheme.successColor,
+                        ),
+                      );
+                    } else {
+                      // * Show helpful message with distance info
+                      final minDist = _getMinDistanceToRoute(point);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            minDist < 0.5 
+                                ? "Tap closer to the route line (${(minDist * 1000).toStringAsFixed(0)}m away)"
+                                : "Tap on the purple route line to add a control point",
+                          ),
+                          duration: const Duration(seconds: 2),
+                          backgroundColor: AppTheme.warningColor,
+                        ),
+                      );
+                    }
+                    return;
+                  }
+                  
+                  // * Handle route drawing mode
+                  if (_isDrawingRoute) {
+                    setState(() {
+                      _drawnRoutePoints.add(point);
+                    });
+                    return;
+                  }
+                  
                   // * Close detail sheet and search results if tapping map
                   if (mounted) {
                     try {
@@ -2759,6 +4244,44 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   }
               },
               onLongPress: (tapPosition, point) {
+                  // * Handle route drawing finish
+                  if (_isDrawingRoute) {
+                    if (_drawnRoutePoints.length >= 2) {
+                      _onRouteDrawn(_drawnRoutePoints);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Please draw at least 2 points")),
+                      );
+                    }
+                    return;
+                  }
+                  
+                  // * Handle route editing - long press on route line to add control point
+                  if (_isEditingRoute && _navigationRoute != null && _navigationRoute!.isNotEmpty) {
+                    final nearestPoint = _findNearestRoutePoint(point);
+                    if (nearestPoint != null) {
+                      setState(() {
+                        _routeControlPoints.add(nearestPoint);
+                      });
+                      
+                      // * Update route immediately to show the bend
+                      if (_navigationRoute != null && _navigationRoute!.isNotEmpty) {
+                        _updateRouteGeometryWithControlPoints();
+                      }
+                      
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            "Control point added (${_routeControlPoints.length} total). Route updated.",
+                          ),
+                          duration: const Duration(seconds: 2),
+                          backgroundColor: AppTheme.successColor,
+                        ),
+                      );
+                      return;
+                    }
+                  }
+                  
                   // * Long press to pin location and show options
                   if (mounted) {
                     try {
@@ -2804,6 +4327,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 CloudLayer(
                   manager: _weatherLayerManager,
                 ),
+              // * Drawn route polyline (when drawing)
+              if (_isDrawingRoute && _drawnRoutePoints.length >= 2)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _drawnRoutePoints,
+                      strokeWidth: 4.0,
+                      color: AppTheme.primaryColor,
+                      borderStrokeWidth: 2.0,
+                      borderColor: Colors.white,
+                    ),
+                  ],
+                ),
               // * Navigation route polylines (traveled and upcoming)
               if (_navigationRoute != null && _navigationRoute!.isNotEmpty)
                 if (_isNavigating && (_traveledRoute.isNotEmpty || _upcomingRoute.isNotEmpty))
@@ -2837,13 +4373,86 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     polylines: [
                       Polyline(
                         points: _navigationRoute!,
-                        strokeWidth: 6.0,
-                        color: _getRouteColor(_navigationMode ?? 'car'),
-                        borderStrokeWidth: 2.0,
-                        borderColor: Colors.white.withOpacity(0.8),
+                        strokeWidth: _isEditingRoute ? 8.0 : 6.0, // * Thicker when editing
+                        color: _isEditingRoute 
+                            ? AppTheme.primaryColor.withOpacity(0.9) // * More visible when editing
+                            : _getRouteColor(_navigationMode ?? 'car'),
+                        borderStrokeWidth: _isEditingRoute ? 3.0 : 2.0,
+                        borderColor: _isEditingRoute 
+                            ? Colors.white.withOpacity(0.9) // * More visible border when editing
+                            : Colors.white.withOpacity(0.8),
                       ),
                     ],
                   ),
+              // * Custom start/end point markers (when selecting) - Always show if points are set
+              if (_isSelectingCustomPoints || _customStartPoint != null || _customEndPoint != null) ...[
+                if (_customStartPoint != null)
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: _customStartPoint!,
+                        width: 50,
+                        height: 50,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppTheme.successColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: AppTheme.shadowMedium,
+                          ),
+                          child: const Icon(Icons.location_on, color: Colors.white, size: 28),
+                        ),
+                      ),
+                    ],
+                  ),
+                if (_customEndPoint != null)
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: _customEndPoint!,
+                        width: 50,
+                        height: 50,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppTheme.errorColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: AppTheme.shadowMedium,
+                          ),
+                          child: const Icon(Icons.flag, color: Colors.white, size: 28),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+              // * Draggable route control points (when editing route)
+              if (_isEditingRoute && _routeControlPoints.isNotEmpty)
+                MarkerLayer(
+                  markers: _routeControlPoints.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final controlPoint = entry.value;
+                    return Marker(
+                      point: controlPoint,
+                      width: 50,
+                      height: 50,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: _draggingControlPointIndex == index 
+                              ? AppTheme.primaryColor 
+                              : AppTheme.warningColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: AppTheme.shadowMedium,
+                        ),
+                        child: const Icon(
+                          Icons.drag_handle,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
               // * Navigation destination marker
               if (_navigationDestination != null && _navigationMode != null)
                 MarkerLayer(
@@ -3288,6 +4897,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   destination: _navigationDestination!,
                   onStop: _stopNavigation,
                   onChangeRoute: _availableRoutes.length > 1 ? _showRouteSelectionSheet : null,
+                  onSaveRoute: _showSaveRouteDialog,
                   remainingDistance: _remainingDistance > 0 ? _remainingDistance / 1000 : null,
                   remainingDuration: _remainingDuration,
                   isOffRoute: _isOffRoute,
@@ -3318,6 +4928,128 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       setState(() => _selectedHazard = null);
                     }
                   },
+              ),
+            ),
+          // * Floating button to reopen minimized sheet
+          if (_showSheetReopenButton && _isSelectingCustomPoints)
+            Positioned(
+              bottom: 180, // * Above weather controls and bottom navigation
+              right: AppTheme.spacingMD,
+              child: FloatingActionButton(
+                heroTag: "reopen_sheet_fab",
+                onPressed: () {
+                  setState(() {
+                    _showSheetReopenButton = false;
+                  });
+                  _showNavigationWithCustomPointsDialog();
+                },
+                backgroundColor: AppTheme.primaryColor,
+                child: const Icon(Icons.visibility, color: Colors.white),
+                tooltip: "Show selection sheet",
+              ),
+            ),
+          // * Route editing controls - Improved UI
+          if (_isEditingRoute)
+            Positioned(
+              bottom: 100, // * Above bottom navigation
+              left: AppTheme.spacingMD,
+              right: AppTheme.spacingMD,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceColor,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // * Instruction text
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: AppTheme.primaryColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Tap on the route line to add control points",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // * Control buttons
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          if (_routeControlPoints.isNotEmpty)
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _recalculateRouteWithControlPoints,
+                                icon: const Icon(Icons.refresh, size: 18),
+                                label: const Text("Recalculate"),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primaryColor,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ),
+                          if (_routeControlPoints.isNotEmpty) const SizedBox(width: 8),
+                          if (_routeControlPoints.isNotEmpty)
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _routeControlPoints.clear();
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Control points cleared")),
+                                );
+                              },
+                              icon: const Icon(Icons.clear_all, size: 18),
+                              label: const Text("Clear"),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          if (_routeControlPoints.isNotEmpty) const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _isEditingRoute = false;
+                                  _routeControlPoints = [];
+                                  _draggingControlPointIndex = null;
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Route editing mode disabled")),
+                                );
+                              },
+                              icon: const Icon(Icons.check, size: 18),
+                              label: const Text("Done"),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           // * Filter Panel
@@ -3365,7 +5097,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           // * Bottom Toolbar (removed - using main navigation bar instead)
           // * Note: Bottom toolbar removed to avoid conflict with MainNavigationScreen's bottomNavigationBar
         ],
-        ),
+      ),
       );
     } catch (e, stackTrace) {
       // * If there's an error building the map, show error screen
@@ -3528,7 +5260,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final segmentEnd = route[i + 1];
       
       // * Calculate distance to line segment
-      final distance = _distanceToLineSegment(point, segmentStart, segmentEnd);
+      final distance = _distanceToLineSegmentSimple(point, segmentStart, segmentEnd);
       if (distance < minDistance) {
         minDistance = distance;
       }
@@ -3537,8 +5269,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     return minDistance; // * Returns in meters
   }
   
-  /// * Calculate distance to line segment
-  double _distanceToLineSegment(LatLng point, LatLng lineStart, LatLng lineEnd) {
+  /// * Calculate distance to line segment (simplified version - uses closest endpoint)
+  double _distanceToLineSegmentSimple(LatLng point, LatLng lineStart, LatLng lineEnd) {
     // * Simplified: use distance to closest endpoint
     final distToStart = _calculateHaversineDistance(point, lineStart);
     final distToEnd = _calculateHaversineDistance(point, lineEnd);
@@ -3559,8 +5291,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
     return earthRadiusM * c;
   }
-  
-  double _toRadians(double degrees) => degrees * (math.pi / 180.0);
 }
 
 // * Toolbar button widget removed - no longer used

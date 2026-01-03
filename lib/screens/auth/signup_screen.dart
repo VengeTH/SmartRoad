@@ -151,19 +151,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
         elevation: 0,
       ),
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppTheme.backgroundColor,
-              AppTheme.surfaceColor.withOpacity(0.3),
-              AppTheme.primaryColor.withOpacity(0.1),
-              AppTheme.backgroundColor,
-            ],
-            stops: const [0.0, 0.3, 0.7, 1.0],
-          ),
-        ),
+        color: AppTheme.backgroundColor,
         child: SafeArea(
           child: ScrollConfiguration(
             behavior: ScrollConfiguration.of(context).copyWith(
@@ -171,7 +159,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
             ),
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(AppTheme.spacingXL),
-            child: FadeTransition(
+              child: FadeTransition(
               opacity: _fadeAnimation,
               child: SlideTransition(
                 position: _slideAnimation,
@@ -373,23 +361,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
                         },
                       ),
                       const SizedBox(height: AppTheme.spacingLG),
-                      // * Sign Up Button with gradient
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              AppTheme.primaryColor,
-                              AppTheme.secondaryColor,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                          boxShadow: AppTheme.shadowGlow,
-                        ),
-                        child: ElevatedButton(
+                      // * Sign Up Button
+                      ElevatedButton(
                           onPressed: _isLoading ? null : _handleSignUp,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
+                            backgroundColor: AppTheme.primaryColor,
                             padding: const EdgeInsets.symmetric(
                               vertical: AppTheme.spacingMD,
                             ),
@@ -414,7 +390,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
                                     letterSpacing: 0.5,
                                   ),
                                 ),
-                        ),
                       ),
                       const SizedBox(height: AppTheme.spacingMD),
                       // * Login Link
@@ -442,7 +417,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
             ),
           ),
         ),
-        ),
+      ),
       ),
     );
   }

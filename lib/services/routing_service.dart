@@ -93,6 +93,7 @@ class RoutingService {
   /// * 
   /// * [userStickerIds] - List of HOA IDs for which user has active stickers
   /// * [restrictedHoaIds] - List of HOA IDs that have restricted roads
+  /// * [waypoints] - Optional intermediate waypoints for route customization
   Future<RouteData> calculateRoute({
     required LatLng start,
     required LatLng end,
@@ -100,14 +101,21 @@ class RoutingService {
     bool avoidTolls = true,
     List<String> userStickerIds = const [],
     List<String> restrictedHoaIds = const [],
+    List<LatLng> waypoints = const [], // * Intermediate waypoints
   }) async {
     try {
-      // * Build GraphHopper API URL
+      // * Build GraphHopper API URL with waypoints
       final vehicleParam = vehicle.graphhopperParam;
+      final points = [
+        "${start.latitude},${start.longitude}",
+        ...waypoints.map((wp) => "${wp.latitude},${wp.longitude}"),
+        "${end.latitude},${end.longitude}",
+      ];
+      final pointsParam = points.map((p) => "point=$p").join("&");
+      
       final url = Uri.parse(
         "$_graphhopperUrl/route"
-        "?point=${start.latitude},${start.longitude}"
-        "&point=${end.latitude},${end.longitude}"
+        "?$pointsParam"
         "&vehicle=$vehicleParam"
         "&type=json"
         "&instructions=true"
@@ -152,9 +160,27 @@ class RoutingService {
         final distanceMeters = (path['distance'] as num?)?.toDouble() ?? 0.0;
         final distanceKm = distanceMeters / 1000.0;
         
-        // * Parse duration (in milliseconds, convert to Duration)
-        final durationMs = (path['time'] as num?)?.toInt() ?? 0;
-        final duration = Duration(milliseconds: durationMs);
+        // * Parse duration
+        // * GraphHopper typically returns time in milliseconds, but some versions/configurations
+        // * may return in seconds. We'll check the value and convert appropriately.
+        final timeValue = (path['time'] as num?)?.toDouble() ?? 0.0;
+        
+        // * Sanity check: GraphHopper time should be in milliseconds
+        // * If timeValue is very large (> 1,000,000), it might be in a different unit
+        // * For a 1.9km route at 50km/h, expected time is ~2.3 minutes = ~138,000 ms
+        // * If we get something like 1,000,000+ ms for a short route, it's likely in seconds
+        Duration duration;
+        if (timeValue > 1000000) {
+          // * Very large value - likely in seconds, convert to milliseconds
+          duration = Duration(milliseconds: (timeValue * 1000).round());
+        } else if (timeValue > 0 && timeValue < 100 && distanceKm > 0.5) {
+          // * Very small value for a route > 0.5km - definitely in seconds
+          // * (e.g., 2 seconds for 1.9km would be 2000ms, but if we see 2, it's seconds)
+          duration = Duration(milliseconds: (timeValue * 1000).round());
+        } else {
+          // * Assume milliseconds (default GraphHopper behavior)
+          duration = Duration(milliseconds: timeValue.round());
+        }
         
         // * Parse instructions
         final instructionsData = path['instructions'] as List?;
@@ -196,17 +222,51 @@ class RoutingService {
     } catch (e) {
       debugPrint("Routing error: $e");
       // * Return a fallback route (straight line) if GraphHopper is unavailable
-      return _createFallbackRoute(start, end, vehicle);
+      return _createFallbackRoute(start, end, vehicle, waypoints: waypoints);
     }
   }
   
-  /// * Create a fallback route (straight line) when GraphHopper is unavailable
-  RouteData _createFallbackRoute(LatLng start, LatLng end, VehicleType vehicle) {
-    // * Simple straight line route
-    final points = [start, end];
+  /// * Create a fallback route with smooth interpolation through waypoints when GraphHopper is unavailable
+  RouteData _createFallbackRoute(LatLng start, LatLng end, VehicleType vehicle, {List<LatLng> waypoints = const []}) {
+    // * Build route with smooth interpolation: Start → WP1 → WP2 → ... → End
+    final allPoints = <LatLng>[start, ...waypoints, end];
+    final interpolatedPoints = <LatLng>[];
     
-    // * Calculate distance using Haversine formula
-    final distance = _calculateDistance(start, end);
+    // * Calculate total distance for duration estimation
+    double totalDistance = 0.0;
+    for (int i = 0; i < allPoints.length - 1; i++) {
+      totalDistance += _calculateDistance(allPoints[i], allPoints[i + 1]);
+    }
+    
+    // * Create smooth interpolated path between each pair of points
+    for (int i = 0; i < allPoints.length - 1; i++) {
+      final from = allPoints[i];
+      final to = allPoints[i + 1];
+      
+      // * Calculate number of segments based on distance (more segments = smoother curve)
+      final segmentDistance = _calculateDistance(from, to);
+      final numSegments = (segmentDistance * 200).round().clamp(10, 100); // * ~5m per segment, max 100
+      
+      // * Add start point (except for first segment to avoid duplicates)
+      if (i == 0) {
+        interpolatedPoints.add(from);
+      }
+      
+      // * Interpolate between points
+      for (int j = 1; j <= numSegments; j++) {
+        final t = j / numSegments;
+        final interpolated = LatLng(
+          from.latitude + (to.latitude - from.latitude) * t,
+          from.longitude + (to.longitude - from.longitude) * t,
+        );
+        interpolatedPoints.add(interpolated);
+      }
+    }
+    
+    // * Ensure end point is included
+    if (interpolatedPoints.isEmpty || interpolatedPoints.last != end) {
+      interpolatedPoints.add(end);
+    }
     
     // * Estimate duration based on vehicle type
     double avgSpeed;
@@ -227,12 +287,12 @@ class RoutingService {
         avgSpeed = 5.0;
         break;
     }
-    final durationMinutes = (distance / avgSpeed * 60).round();
+    final durationMinutes = (totalDistance / avgSpeed * 60).round();
     final duration = Duration(minutes: durationMinutes);
     
     return RouteData(
-      points: points,
-      distance: distance,
+      points: interpolatedPoints,
+      distance: totalDistance,
       duration: duration,
       instructions: "Direct route (GraphHopper unavailable)",
     );

@@ -271,16 +271,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              AppTheme.backgroundColor,
-              AppTheme.surfaceColor.withOpacity(0.4),
-            ],
-          ),
-        ),
+        color: AppTheme.backgroundColor,
         child: SafeArea(
           child: Center(
             child: ScrollConfiguration(
@@ -550,30 +541,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           },
                         ),
             const SizedBox(height: AppTheme.spacingMD),
-            // * Login Button with gradient
-            Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                AppTheme.primaryColor,
-                                AppTheme.secondaryColor,
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                            boxShadow: AppTheme.shadowGlow,
-                          ),
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _handleLogin,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                            padding: const EdgeInsets.symmetric(
-                              vertical: AppTheme.spacingSM,
-                            ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                              ),
-                            ),
+            // * Login Button
+            ElevatedButton(
+              onPressed: _isLoading ? null : _handleLogin,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryColor,
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppTheme.spacingSM,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                ),
+                elevation: 4,
+              ),
                             child: _isLoading
                                 ? const SizedBox(
                                     height: 22,
@@ -591,8 +571,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                       letterSpacing: 0.5,
                                     ),
                                   ),
-                                  ),
-                        ),
+            ),
             const SizedBox(height: AppTheme.spacingMD),
             // * Demo Button
             OutlinedButton(

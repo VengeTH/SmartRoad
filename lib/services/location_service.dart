@@ -34,7 +34,7 @@ class LocationService {
   /// * Returns null if permission denied or location unavailable
   Future<Position?> getCurrentPosition() async {
     try {
-      debugPrint("📍 [LocationService] Getting current position...");
+      // * Removed verbose logging to prevent console overflow
       
       // * Check if permission is granted
       final hasPermission = await isPermissionGranted();
@@ -61,7 +61,7 @@ class LocationService {
       final accuracy = kIsWeb ? LocationAccuracy.high : LocationAccuracy.bestForNavigation;
       final timeout = kIsWeb ? const Duration(seconds: 15) : const Duration(seconds: 10);
       
-      debugPrint("📍 [LocationService] Requesting position (accuracy: $accuracy, timeout: ${timeout.inSeconds}s)...");
+      // * Removed verbose logging to prevent console overflow
       
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: accuracy,

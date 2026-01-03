@@ -4,6 +4,7 @@ import "dart:io";
 import "dart:typed_data";
 import "../models/hazard.dart";
 import "../models/user_profile.dart";
+import "../models/hazard_comment.dart";
 import "../core/config/env.dart";
 import "../core/constants/app_constants.dart";
 
@@ -363,6 +364,203 @@ class SupabaseService {
         .getPublicUrl(fileName);
     
     return url;
+  }
+  
+  // * Comment Methods
+  
+  /// * Get comments for a hazard
+  Future<List<HazardComment>> getHazardComments(String hazardId) async {
+    if (isDemoMode) {
+      return []; // * Return empty list in demo mode
+    }
+    final c = client;
+    if (c == null) {
+      return [];
+    }
+    final response = await c
+        .from('hazard_comments')
+        .select('''
+          *,
+          profiles:user_id (
+            name,
+            photo_url
+          )
+        ''')
+        .eq('hazard_id', hazardId)
+        .order('created_at', ascending: false);
+    
+    final List<HazardComment> comments = [];
+    for (final item in response) {
+      final commentData = item as Map<String, dynamic>;
+      final profileData = commentData['profiles'] as Map<String, dynamic>?;
+      
+      if (profileData != null) {
+        commentData['user_name'] = profileData['name'];
+        commentData['user_photo_url'] = profileData['photo_url'];
+      }
+      
+      comments.add(HazardComment.fromJson(commentData));
+    }
+    
+    return comments;
+  }
+  
+  /// * Create a new comment on a hazard
+  Future<HazardComment> createComment({
+    required String hazardId,
+    required String text,
+  }) async {
+    if (isDemoMode) {
+      throw Exception("Creating comments not available in demo mode");
+    }
+    if (!isAuthenticated) {
+      throw Exception("User must be authenticated to create comments");
+    }
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+    
+    final commentData = {
+      'hazard_id': hazardId,
+      'text': text.trim(),
+    };
+    
+    final response = await c
+        .from('hazard_comments')
+        .insert(commentData)
+        .select('''
+          *,
+          profiles:user_id (
+            name,
+            photo_url
+          )
+        ''')
+        .single();
+    
+    final commentJson = response as Map<String, dynamic>;
+    final profileData = commentJson['profiles'] as Map<String, dynamic>?;
+    
+    if (profileData != null) {
+      commentJson['user_name'] = profileData['name'];
+      commentJson['user_photo_url'] = profileData['photo_url'];
+    }
+    
+    return HazardComment.fromJson(commentJson);
+  }
+  
+  /// * Update a comment
+  Future<HazardComment> updateComment({
+    required String commentId,
+    required String text,
+  }) async {
+    if (isDemoMode) {
+      throw Exception("Updating comments not available in demo mode");
+    }
+    if (!isAuthenticated) {
+      throw Exception("User must be authenticated to update comments");
+    }
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+    
+    final response = await c
+        .from('hazard_comments')
+        .update({'text': text.trim()})
+        .eq('id', commentId)
+        .select('''
+          *,
+          profiles:user_id (
+            name,
+            photo_url
+          )
+        ''')
+        .single();
+    
+    final commentJson = response;
+    final profileData = commentJson['profiles'] as Map<String, dynamic>?;
+    
+    if (profileData != null) {
+      commentJson['user_name'] = profileData['name'];
+      commentJson['user_photo_url'] = profileData['photo_url'];
+    }
+    
+    return HazardComment.fromJson(commentJson);
+  }
+  
+  /// * Delete a comment
+  Future<void> deleteComment(String commentId) async {
+    if (isDemoMode) {
+      throw Exception("Deleting comments not available in demo mode");
+    }
+    if (!isAuthenticated) {
+      throw Exception("User must be authenticated to delete comments");
+    }
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+    
+    await c
+        .from('hazard_comments')
+        .delete()
+        .eq('id', commentId);
+  }
+  
+  /// * Subscribe to realtime comments updates for a hazard
+  RealtimeChannel? subscribeToComments({
+    required String hazardId,
+    required Function(Map<String, dynamic>) onInsert,
+    required Function(Map<String, dynamic>) onUpdate,
+    required Function(Map<String, dynamic>) onDelete,
+  }) {
+    if (isDemoMode) {
+      return null; // * No realtime in demo mode
+    }
+    final c = client;
+    if (c == null) {
+      return null;
+    }
+    final channel = c.channel('comments_channel_$hazardId');
+    
+    channel
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'hazard_comments',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'hazard_id',
+            value: hazardId,
+          ),
+          callback: (payload) => onInsert(payload.newRecord),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'hazard_comments',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'hazard_id',
+            value: hazardId,
+          ),
+          callback: (payload) => onUpdate(payload.newRecord),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.delete,
+          schema: 'public',
+          table: 'hazard_comments',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'hazard_id',
+            value: hazardId,
+          ),
+          callback: (payload) => onDelete(payload.oldRecord),
+        )
+        .subscribe();
+    
+    return channel;
   }
 }
 

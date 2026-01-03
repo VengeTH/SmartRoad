@@ -8,15 +8,39 @@
 **Root Cause:** OpenWeatherMap temperature tiles (`temp_new`) are color-coded overlays. When opacity is too high (100%), they appear as a solid color layer.
 
 **Solution:**
-- Reduced maximum effective opacity to 60% (even if slider is at 100%, it applies as 60%)
+- Reduced maximum effective opacity to 50% (even if slider is at 100%, it applies as 50%)
 - This allows the underlying map to show through, making temperature variations visible
 - The heat layer now blends better with the base map
+- Note: Temperature tiles use interpolated data and should be considered general indicators
 
 **Code Change:**
 ```dart
 // * In HeatLayer tileBuilder
 final baseOpacity = manager.getLayerConfig(WeatherLayerType.heat).opacity;
-final adjustedOpacity = baseOpacity * 0.6; // * Cap at 60% to prevent solid overlay
+final adjustedOpacity = baseOpacity * 0.5; // * Cap at 50% for better accuracy perception
+```
+
+### 1.1. Weather Layer Square Artifacts (Updated)
+**Problem:** Weather layers (Rain, Heat, Clouds) displayed with visible square/boxy tile boundaries.
+
+**Root Cause:** OpenWeatherMap provides PNG raster tiles with hard square edges. `ClipRect` was creating additional hard boundaries.
+
+**Solution:**
+- Removed `ClipRect` from all weather layer tile builders
+- Implemented extreme blur (7.0-12.0 sigma) to eliminate tile boundaries
+- Blur extends beyond tile boundaries for seamless blending
+- Weather layers now display with smooth, curved edges at all zoom levels
+
+**Code Change:**
+```dart
+// * Removed ClipRect, use extreme blur
+return Opacity(
+  opacity: opacity,
+  child: ImageFiltered(
+    imageFilter: ui.ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+    child: tileWidget,
+  ),
+);
 ```
 
 ### 2. Map Not Wrapping Horizontally

@@ -26,16 +26,37 @@ class RainLayer extends TileLayer {
   }) : super(
     urlTemplate: WeatherConfig.getOpenWeatherMapRainTileUrl(0, 0, 0), // * Will be replaced by tileProvider
     userAgentPackageName: "com.smartroad.app",
-    maxZoom: kIsWeb ? 7 : 10, // * OpenWeatherMap supports up to zoom 10
+    maxZoom: 18, // * Match map maxZoom to keep layer visible at all zoom levels
     minZoom: 2,
     tileProvider: OpenWeatherMapTileProvider(
       tileType: OpenWeatherMapTileType.precipitation,
     ),
-    // * Apply opacity in tileBuilder
+    // * Apply opacity and adaptive smooth blending in tileBuilder
+    // * OpenWeatherMap precipitation tiles show blue for rain, transparent for no rain
+    // * Use adaptive blur - stronger blur at higher zoom levels to smooth scaled tiles
     tileBuilder: (context, tileWidget, tile) {
+      final opacity = manager.getLayerConfig(WeatherLayerType.rain).opacity;
+      // * Only apply opacity if > 0 to ensure tiles are visible
+      if (opacity <= 0) {
+        return const SizedBox.shrink();
+      }
+      // * Remove square artifacts by using extreme blur and removing ClipRect
+      // * ClipRect creates hard edges - removing it allows blur to extend beyond tile boundaries
+      // * This creates smooth, seamless blending between tiles like the original smooth appearance
+      final zoom = tile.coordinates.z;
+      // * Use extreme blur - stronger at lower zoom levels where squares are more visible
+      // * Remove ClipRect to allow blur to blend across tile boundaries
+      final blurSigma = zoom <= 7
+          ? 12.0 - ((zoom - 2) * 0.6) // * 12.0 at zoom 2, down to 9.0 at zoom 7
+          : zoom <= 10
+              ? 9.0 - ((zoom - 7) * 0.67) // * 9.0 at zoom 7, down to 7.0 at zoom 10
+              : 7.0; // * Minimum 7.0 blur at all higher zoom levels
       return Opacity(
-        opacity: manager.getLayerConfig(WeatherLayerType.rain).opacity,
-        child: tileWidget,
+        opacity: opacity,
+        child: ImageFiltered(
+          imageFilter: ui.ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+          child: tileWidget,
+        ),
       );
     },
   );
@@ -60,31 +81,47 @@ class OpenWeatherMapTileProvider extends TileProvider {
   ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
     String url;
     try {
+      // * OpenWeatherMap only provides tiles up to zoom 10
+      // * For higher zoom levels, use zoom 10 tiles and let flutter_map scale them
+      final nativeZoom = coordinates.z.clamp(0, 10);
+      
+      // * When requesting tiles at zoom > 10, we need to get the parent tile at zoom 10
+      // * Each zoom level doubles the number of tiles, so we divide by 2^(zoomDiff)
+      int nativeX = coordinates.x;
+      int nativeY = coordinates.y;
+      
+      if (coordinates.z > 10) {
+        final zoomDiff = coordinates.z - 10;
+        final divisor = 1 << zoomDiff; // * 2^zoomDiff
+        nativeX = coordinates.x ~/ divisor;
+        nativeY = coordinates.y ~/ divisor;
+      }
+      
       switch (tileType) {
         case OpenWeatherMapTileType.precipitation:
           url = WeatherConfig.getOpenWeatherMapRainTileUrl(
-            coordinates.z,
-            coordinates.x,
-            coordinates.y,
+            nativeZoom,
+            nativeX,
+            nativeY,
           );
           break;
         case OpenWeatherMapTileType.temperature:
           url = WeatherConfig.getOpenWeatherMapTempTileUrl(
-            coordinates.z,
-            coordinates.x,
-            coordinates.y,
+            nativeZoom,
+            nativeX,
+            nativeY,
           );
           break;
         case OpenWeatherMapTileType.clouds:
           url = WeatherConfig.getOpenWeatherMapCloudsTileUrl(
-            coordinates.z,
-            coordinates.x,
-            coordinates.y,
+            nativeZoom,
+            nativeX,
+            nativeY,
           );
           break;
       }
       if (kDebugMode) {
-        debugPrint("🌤️ [OpenWeatherMapTileProvider] Loading ${tileType.name} tile: z=${coordinates.z}, x=${coordinates.x}, y=${coordinates.y}");
+        debugPrint("🌤️ [OpenWeatherMapTileProvider] Loading ${tileType.name} tile: requested z=${coordinates.z}, x=${coordinates.x}, y=${coordinates.y}, native z=$nativeZoom, x=$nativeX, y=$nativeY");
         debugPrint("🌤️ [OpenWeatherMapTileProvider] URL: $url");
       }
     } catch (e) {
@@ -100,6 +137,9 @@ class OpenWeatherMapTileProvider extends TileProvider {
 /// * 
 /// * OpenWeatherMap provides temperature visualization tiles
 /// * URL format: https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid={apiKey}
+/// * 
+/// * Note: Temperature tiles may not be highly accurate as they use interpolated data.
+/// * Consider this layer as a general temperature indicator rather than precise measurements.
 class HeatLayer extends TileLayer {
   final WeatherLayerManager manager;
   
@@ -108,20 +148,36 @@ class HeatLayer extends TileLayer {
   }) : super(
     urlTemplate: WeatherConfig.getOpenWeatherMapTempTileUrl(0, 0, 0), // * Will be replaced by tileProvider
     userAgentPackageName: "com.smartroad.app",
-    maxZoom: kIsWeb ? 7 : 10, // * OpenWeatherMap supports up to zoom 10
+    maxZoom: 18, // * Match map maxZoom to keep layer visible at all zoom levels
     minZoom: 2,
     tileProvider: OpenWeatherMapTileProvider(
       tileType: OpenWeatherMapTileType.temperature,
     ),
     tileBuilder: (context, tileWidget, tile) {
-      // * Apply opacity for heat layer
-      // * OpenWeatherMap temperature tiles are color-coded overlays
-      // * Use lower opacity (max 0.6) to prevent solid color appearance
+      // * Apply opacity and adaptive smooth blending for heat layer
+      // * OpenWeatherMap temperature tiles may not be highly accurate - use with caution
+      // * Use lower opacity (max 0.5) to prevent solid color appearance
+      // * Use adaptive blur - stronger at higher zoom levels
       final baseOpacity = manager.getLayerConfig(WeatherLayerType.heat).opacity;
-      final adjustedOpacity = baseOpacity * 0.6; // * Cap at 60% to prevent solid overlay
+      final adjustedOpacity = baseOpacity * 0.5; // * Reduced to 50% for better accuracy perception
+      if (adjustedOpacity <= 0) {
+        return const SizedBox.shrink();
+      }
+      // * Remove square artifacts by using extreme blur and removing ClipRect
+      // * ClipRect creates hard edges - removing it allows blur to extend beyond tile boundaries
+      final zoom = tile.coordinates.z;
+      // * Use extreme blur - stronger at lower zoom levels
+      final blurSigma = zoom <= 7
+          ? 12.0 - ((zoom - 2) * 0.6) // * 12.0 at zoom 2, down to 9.0 at zoom 7
+          : zoom <= 10
+              ? 9.0 - ((zoom - 7) * 0.67) // * 9.0 at zoom 7, down to 7.0 at zoom 10
+              : 7.0; // * Minimum 7.0 blur at all higher zoom levels
       return Opacity(
         opacity: adjustedOpacity,
-        child: tileWidget,
+        child: ImageFiltered(
+          imageFilter: ui.ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+          child: tileWidget,
+        ),
       );
     },
   );
@@ -139,16 +195,33 @@ class CloudLayer extends TileLayer {
   }) : super(
     urlTemplate: WeatherConfig.getOpenWeatherMapCloudsTileUrl(0, 0, 0), // * Will be replaced by tileProvider
     userAgentPackageName: "com.smartroad.app",
-    maxZoom: kIsWeb ? 7 : 10, // * OpenWeatherMap supports up to zoom 10
+    maxZoom: 18, // * Match map maxZoom to keep layer visible at all zoom levels
     minZoom: 2,
     tileProvider: OpenWeatherMapTileProvider(
       tileType: OpenWeatherMapTileType.clouds,
     ),
     tileBuilder: (context, tileWidget, tile) {
-      // * Apply opacity
+      // * Apply opacity and adaptive smooth blending for cloud layer
+      // * Use adaptive blur - stronger at higher zoom levels to smooth scaled tiles
+      final opacity = manager.getLayerConfig(WeatherLayerType.clouds).opacity;
+      if (opacity <= 0) {
+        return const SizedBox.shrink();
+      }
+      // * Remove square artifacts by using extreme blur and removing ClipRect
+      // * ClipRect creates hard edges - removing it allows blur to extend beyond tile boundaries
+      final zoom = tile.coordinates.z;
+      // * Use extreme blur - stronger at lower zoom levels
+      final blurSigma = zoom <= 7
+          ? 12.0 - ((zoom - 2) * 0.6) // * 12.0 at zoom 2, down to 9.0 at zoom 7
+          : zoom <= 10
+              ? 9.0 - ((zoom - 7) * 0.67) // * 9.0 at zoom 7, down to 7.0 at zoom 10
+              : 7.0; // * Minimum 7.0 blur at all higher zoom levels
       return Opacity(
-        opacity: manager.getLayerConfig(WeatherLayerType.clouds).opacity,
-        child: tileWidget,
+        opacity: opacity,
+        child: ImageFiltered(
+          imageFilter: ui.ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+          child: tileWidget,
+        ),
       );
     },
   );

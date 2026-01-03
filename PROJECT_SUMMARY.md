@@ -262,9 +262,7 @@ The app is production-demo ready with:
 - Long-press to pin location
 - Location options sheet
 - Filter panel
-- Map controls
-
-### Demo Mode
+- Map controls### Demo Mode
 - Full functionality without database
 - Sample data included
 - Perfect for quick demos

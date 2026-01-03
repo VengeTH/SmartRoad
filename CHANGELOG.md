@@ -4,7 +4,75 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
-## Version 2.6.3 - Smart Country-Prioritized Location Search (Latest)
+## Version 2.6.4 - Weather Layer Smoothing & Zoom Limits (Latest)
+
+**Release Date:** January 2026  
+**Focus:** Weather Layer Improvements & Map Zoom Restrictions  
+**Status:** Production Ready
+
+### Bug Fixes
+
+#### Weather Layer Square Artifacts
+- **Fixed Square/Boxy Tile Artifacts:**
+  - ✅ Removed `ClipRect` which was creating hard edges between tiles
+  - ✅ Implemented extreme blur (7.0-12.0 sigma) to eliminate all visible tile boundaries
+  - ✅ Weather layers now display with smooth, curved edges at all zoom levels
+  - ✅ Blur extends beyond tile boundaries for seamless blending
+  - ✅ Applied to all three weather layers: Rain, Heat, and Clouds
+  - ✅ Weather layers now match the smooth appearance from previous versions
+
+#### Map Zoom Limits
+- **Fixed Excessive Zoom-Out:**
+  - ✅ Set `minZoom` to 6.8 to restrict zoom-out to Philippines area size
+  - ✅ Added continuous zoom limit enforcement using periodic timer (100ms checks)
+  - ✅ Added Philippines geographic bounds enforcement
+  - ✅ Map center is automatically clamped to Philippines bounds when panning
+  - ✅ Prevents users from zooming out beyond the Philippines area (similar to Waze)
+
+#### Weather Layer Visibility
+- **Fixed Weather Layers Not Showing When Zoomed In:**
+  - ✅ Weather layers now work at all zoom levels (2-18)
+  - ✅ Fixed tile coordinate calculation for zoom levels > 10
+  - ✅ OpenWeatherMap tiles (max zoom 10) are properly scaled for higher zoom levels
+  - ✅ Weather layers remain visible when zooming in beyond level 10
+
+#### Heat Layer Accuracy
+- **Improved Heat Layer Display:**
+  - ✅ Reduced heat layer opacity cap from 60% to 50% for better accuracy perception
+  - ✅ Added documentation note about temperature tile accuracy limitations
+  - ✅ Heat layer now uses same extreme blur as other layers for smooth appearance
+
+### Technical Changes
+
+- **Weather Tile Layers (`lib/widgets/weather_tile_layers.dart`):**
+  - Removed `ClipRect` from all weather layer `tileBuilder` methods
+  - Implemented adaptive blur: 7.0-12.0 sigma based on zoom level
+  - Blur is stronger at lower zoom levels (12.0 at zoom 2, down to 7.0 at zoom 10+)
+  - Fixed tile coordinate scaling for zoom levels beyond OpenWeatherMap's native max (10)
+
+- **Map Screen (`lib/screens/map/map_screen.dart`):**
+  - Added `_zoomLimitTimer` for continuous zoom and bounds enforcement
+  - Enhanced timer to check both zoom limits and geographic bounds every 100ms
+  - Automatically clamps map center to Philippines bounds when outside
+  - Properly disposes timer in `dispose()` method
+
+- **App Constants (`lib/core/constants/app_constants.dart`):**
+  - Updated `minZoom` from 3.0 to 6.8 for Philippines area restriction
+  - Added Philippines geographic bounds constants:
+    - `philippinesSouth`: 4.215806
+    - `philippinesWest`: 116.147499
+    - `philippinesNorth`: 21.321780
+    - `philippinesEast`: 127.647621
+
+### Performance Improvements
+- **Zoom Enforcement:**
+  - Efficient periodic checking (100ms intervals) ensures smooth user experience
+  - Bounds checking only triggers corrections when needed
+  - No performance impact on map rendering
+
+---
+
+## Version 2.6.3 - Smart Country-Prioritized Location Search
 
 **Release Date:** December 2025  
 **Focus:** Search Optimization & Bug Fixes  

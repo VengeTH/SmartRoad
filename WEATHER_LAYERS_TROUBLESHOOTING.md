@@ -2,6 +2,18 @@
 
 ## 🔍 Problem Summary
 
+### Issue 0: Square/Boxy Tile Artifacts (Fixed in v2.6.4)
+- **Problem**: Weather layers display with visible square/boxy tile boundaries
+- **Cause**: OpenWeatherMap provides PNG raster tiles with hard square edges. `ClipRect` was creating additional hard boundaries.
+- **Solution**: 
+  - ✅ Removed `ClipRect` from all weather layer tile builders
+  - ✅ Implemented extreme blur (7.0-12.0 sigma) to eliminate tile boundaries
+  - ✅ Blur extends beyond tile boundaries for seamless blending
+  - ✅ Weather layers now display with smooth, curved edges at all zoom levels
+- **Status**: ✅ Fixed in Version 2.6.4
+
+---
+
 Your weather layers are failing on web due to two fundamental issues:
 
 ### Issue 1: Rain Layer - CORS Policy

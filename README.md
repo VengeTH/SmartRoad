@@ -71,11 +71,16 @@ smartroad/
   - **Fallback Distance**: Straight-line distance shown immediately, replaced by route distance when available
 - **Current Location**: Real-time location tracking with platform-specific optimizations
 - **Map Controls**: Zoom in/out, center on location, filter panel
+  - **Zoom Limits**: Restricted to Philippines area (minZoom: 6.8, maxZoom: 18.0)
+  - **Geographic Bounds**: Map panning restricted to Philippines boundaries
+  - **Continuous Enforcement**: Zoom and bounds limits enforced automatically
 - **HOA Gate Markers**: Color-coded gate markers (Red = Strict, Green = Open)
 - **Weather Tile Layers**: 
   - Real-time weather visualization as map tile overlays
   - Three weather layers: Rain (precipitation), Heat (temperature), Clouds (cloud coverage)
-  - Toggleable layers with opacity control (heat layer capped at 60% for better visibility)
+  - Toggleable layers with opacity control (heat layer capped at 50% for better accuracy perception)
+  - Smooth, curved rendering - no square tile artifacts
+  - Works at all zoom levels (2-18)
   - Real-time data from OpenWeatherMap API
   - Works on mobile/desktop natively
   - **Web Support**: Requires API key via `--dart-define` or backend proxy (see Weather Layers Setup below)

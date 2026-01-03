@@ -4,8 +4,16 @@ class AppConstants {
   static const double defaultLatitude = 14.5995; // Manila default
   static const double defaultLongitude = 120.9842;
   static const double defaultZoom = 13.0;
-  static const double minZoom = 3.0;
+  static const double minZoom = 6.8; // * Restrict zoom to Philippines area - more zoomed in at max zoom out
   static const double maxZoom = 18.0;
+  
+  // * Philippines geographic bounds
+  // * Southwest corner (southernmost point)
+  static const double philippinesSouth = 4.215806;
+  static const double philippinesWest = 116.147499;
+  // * Northeast corner (northernmost point)
+  static const double philippinesNorth = 21.321780;
+  static const double philippinesEast = 127.647621;
   
   // * Hazard Notification
   static const double notificationRadiusKm = 2.0; // * Notify if hazard within 2km

@@ -636,6 +636,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   final WeatherLayerManager _weatherLayerManager = WeatherLayerManager();
   final LocationSearchService _locationSearchService = LocationSearchService();
   StreamSubscription<Position>? _positionSubscription;
+  Timer? _zoomLimitTimer; // * Timer to enforce zoom limits
   bool _hasPreciseLocation = false;
   // * Cache country code to avoid repeated reverse geocoding calls
   String? _cachedCountryCode;
@@ -660,6 +661,51 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       }
     });
     
+    // * Enforce zoom limits and bounds continuously using a periodic check
+    // * This ensures zoom limits are respected even with pinch gestures
+    // * Also restricts panning to Philippines area
+    _zoomLimitTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final camera = _mapController.camera;
+      final currentZoom = camera.zoom;
+      final currentCenter = camera.center;
+      
+      // * Enforce zoom limits
+      if (currentZoom < AppConstants.minZoom || currentZoom > AppConstants.maxZoom) {
+        final clampedZoom = currentZoom.clamp(
+          AppConstants.minZoom,
+          AppConstants.maxZoom,
+        );
+        _mapController.move(currentCenter, clampedZoom);
+        return;
+      }
+      
+      // * Enforce Philippines bounds - restrict panning to Philippines area
+      final philippinesBounds = LatLngBounds(
+        LatLng(AppConstants.philippinesSouth, AppConstants.philippinesWest),
+        LatLng(AppConstants.philippinesNorth, AppConstants.philippinesEast),
+      );
+      
+      if (!philippinesBounds.contains(currentCenter)) {
+        // * Clamp center to Philippines bounds
+        final clampedLat = currentCenter.latitude.clamp(
+          AppConstants.philippinesSouth,
+          AppConstants.philippinesNorth,
+        );
+        final clampedLon = currentCenter.longitude.clamp(
+          AppConstants.philippinesWest,
+          AppConstants.philippinesEast,
+        );
+        _mapController.move(
+          LatLng(clampedLat, clampedLon),
+          currentZoom,
+        );
+      }
+    });
+    
     _startLocationStream();
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -678,6 +724,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   void dispose() {
     _positionSubscription?.cancel();
+    _zoomLimitTimer?.cancel();
     _mapController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -2676,8 +2723,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               // * Explicitly set CRS to enable map wrapping
               // * Epsg3857 (Web Mercator) supports infinite horizontal scrolling
               crs: const Epsg3857(),
-              // * Remove any bounds restrictions to allow infinite wrapping
-              // * Don't set maxBounds - this would limit panning
                 onMapReady: () {
                   // * Wrap in try-catch to prevent crashes
                   if (mounted) {

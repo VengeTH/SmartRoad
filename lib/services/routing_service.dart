@@ -6,6 +6,7 @@ import "package:http/http.dart" as http;
 import "dart:convert";
 import "package:latlong2/latlong.dart";
 import "package:flutter/foundation.dart";
+import "../utils/polyline_smoothing.dart";
 
 /// * Vehicle type enum
 enum VehicleType {
@@ -87,7 +88,19 @@ class RoutingService {
   RoutingService._internal();
   
   // * GraphHopper API endpoint (local Docker instance)
-  static const String _graphhopperUrl = "http://localhost:8989";
+  // * Override with: --dart-define=GRAPH_HOPPER_URL=https://your-host
+  static const String _graphhopperUrl = String.fromEnvironment(
+    "GRAPH_HOPPER_URL",
+    defaultValue: "http://localhost:8989",
+  );
+
+  // * For Flutter Web, GraphHopper is usually unavailable (localhost:8989 not running,
+  // * or blocked by CORS). Users can explicitly enable it with:
+  // *   --dart-define=ENABLE_GRAPH_HOPPER_WEB=true
+  static const bool _enableGraphhopperOnWeb =
+      bool.fromEnvironment("ENABLE_GRAPH_HOPPER_WEB", defaultValue: false);
+
+  DateTime? _graphhopperDisabledUntil;
   
   /// * Calculate route between two points
   /// * 
@@ -104,6 +117,17 @@ class RoutingService {
     List<LatLng> waypoints = const [], // * Intermediate waypoints
   }) async {
     try {
+      // * On Web, default to fallback routing unless explicitly enabled.
+      if (kIsWeb && !_enableGraphhopperOnWeb) {
+        return _createFallbackRoute(start, end, vehicle, waypoints: waypoints);
+      }
+
+      // * Backoff if GraphHopper was recently unreachable (prevents console spam).
+      final disabledUntil = _graphhopperDisabledUntil;
+      if (disabledUntil != null && DateTime.now().isBefore(disabledUntil)) {
+        return _createFallbackRoute(start, end, vehicle, waypoints: waypoints);
+      }
+
       // * Build GraphHopper API URL with waypoints
       final vehicleParam = vehicle.graphhopperParam;
       final points = [
@@ -125,9 +149,12 @@ class RoutingService {
       
       final response = await http.get(
         url,
-        headers: {
-          'User-Agent': 'SmartRoad App',
-        },
+        // ! Browsers do not allow setting User-Agent; also triggers CORS preflight.
+        headers: kIsWeb
+            ? null
+            : {
+              "User-Agent": "SmartRoad App (contact@smartroad.app)",
+            },
       );
       
       if (response.statusCode == 200) {
@@ -221,6 +248,8 @@ class RoutingService {
       }
     } catch (e) {
       debugPrint("Routing error: $e");
+      // * Prevent hammering GraphHopper if it's down (especially in Flutter Web).
+      _graphhopperDisabledUntil = DateTime.now().add(const Duration(seconds: 45));
       // * Return a fallback route (straight line) if GraphHopper is unavailable
       return _createFallbackRoute(start, end, vehicle, waypoints: waypoints);
     }
@@ -228,46 +257,22 @@ class RoutingService {
   
   /// * Create a fallback route with smooth interpolation through waypoints when GraphHopper is unavailable
   RouteData _createFallbackRoute(LatLng start, LatLng end, VehicleType vehicle, {List<LatLng> waypoints = const []}) {
-    // * Build route with smooth interpolation: Start → WP1 → WP2 → ... → End
+    // * Build route: Start → WP1 → WP2 → ... → End
+    // * Uses Catmull–Rom smoothing to avoid sharp corners between waypoints.
     final allPoints = <LatLng>[start, ...waypoints, end];
-    final interpolatedPoints = <LatLng>[];
-    
-    // * Calculate total distance for duration estimation
+    final interpolatedPoints = PolylineSmoothing.catmullRomThroughWaypoints(
+      allPoints,
+      targetSpacingMeters: 5.0,
+      minPointsPerSegment: 8,
+      maxPointsPerSegment: 120,
+    );
+
+    // * Calculate distance along the generated polyline (more accurate than waypoint-to-waypoint).
     double totalDistance = 0.0;
-    for (int i = 0; i < allPoints.length - 1; i++) {
-      totalDistance += _calculateDistance(allPoints[i], allPoints[i + 1]);
+    for (int i = 0; i < interpolatedPoints.length - 1; i++) {
+      totalDistance += _calculateDistance(interpolatedPoints[i], interpolatedPoints[i + 1]);
     }
-    
-    // * Create smooth interpolated path between each pair of points
-    for (int i = 0; i < allPoints.length - 1; i++) {
-      final from = allPoints[i];
-      final to = allPoints[i + 1];
-      
-      // * Calculate number of segments based on distance (more segments = smoother curve)
-      final segmentDistance = _calculateDistance(from, to);
-      final numSegments = (segmentDistance * 200).round().clamp(10, 100); // * ~5m per segment, max 100
-      
-      // * Add start point (except for first segment to avoid duplicates)
-      if (i == 0) {
-        interpolatedPoints.add(from);
-      }
-      
-      // * Interpolate between points
-      for (int j = 1; j <= numSegments; j++) {
-        final t = j / numSegments;
-        final interpolated = LatLng(
-          from.latitude + (to.latitude - from.latitude) * t,
-          from.longitude + (to.longitude - from.longitude) * t,
-        );
-        interpolatedPoints.add(interpolated);
-      }
-    }
-    
-    // * Ensure end point is included
-    if (interpolatedPoints.isEmpty || interpolatedPoints.last != end) {
-      interpolatedPoints.add(end);
-    }
-    
+
     // * Estimate duration based on vehicle type
     double avgSpeed;
     switch (vehicle) {

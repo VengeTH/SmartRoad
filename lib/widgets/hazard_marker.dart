@@ -1,5 +1,6 @@
 import "package:flutter/material.dart";
 import "../models/hazard.dart";
+import "../core/theme/app_theme.dart";
 
 /// * Custom marker widget for hazards
 class HazardMarker extends StatelessWidget {
@@ -13,53 +14,52 @@ class HazardMarker extends StatelessWidget {
   IconData _getIconForType(HazardType type) {
     switch (type) {
       case HazardType.pothole:
-        return Icons.pan_tool; // * Alternative icon for pothole (pothole icon doesn't exist)
+        return Icons.warning_amber_rounded;
       case HazardType.flood:
-        return Icons.water_drop;
+        return Icons.water_drop_outlined;
       case HazardType.accident:
         return Icons.car_crash;
       case HazardType.closure:
-        return Icons.block;
+        return Icons.do_not_disturb_on_outlined;
       case HazardType.landslide:
-        return Icons.landslide;
+        return Icons.terrain;
       case HazardType.roadblock:
-        return Icons.construction;
+        return Icons.construction_outlined;
     }
   }
   
   Color _getColorForSeverity(SeverityLevel severity) {
     switch (severity) {
       case SeverityLevel.low:
-        return Colors.green;
+        return AppTheme.successColor;
       case SeverityLevel.medium:
-        return Colors.orange;
+        return AppTheme.warningColor;
       case SeverityLevel.high:
-        return Colors.red;
+        return AppTheme.errorColor;
     }
   }
   
   @override
   Widget build(BuildContext context) {
-    final color = _getColorForSeverity(hazard.severity);
+    final severityColor = _getColorForSeverity(hazard.severity);
     final icon = _getIconForType(hazard.type);
     
     return Container(
+      width: 34,
+      height: 34,
       decoration: BoxDecoration(
-        color: color,
+        color: AppTheme.surfaceColor.withOpacity(0.95),
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(
+          color: severityColor.withOpacity(0.9),
+          width: 2,
+        ),
+        boxShadow: AppTheme.shadowSmall,
       ),
       child: Icon(
         icon,
-        color: Colors.white,
-        size: 24,
+        color: severityColor,
+        size: 18,
       ),
     );
   }

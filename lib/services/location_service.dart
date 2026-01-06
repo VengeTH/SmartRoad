@@ -79,6 +79,10 @@ class LocationService {
   
   /// * Get last known position (cached)
   Future<Position?> getLastKnownPosition() async {
+    // ! Geolocator does not support getLastKnownPosition on web.
+    if (kIsWeb) {
+      return null;
+    }
     try {
       final position = await Geolocator.getLastKnownPosition();
       if (position != null) {

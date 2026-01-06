@@ -30,6 +30,7 @@ class LocationSearchService {
   
   // * Nominatim API endpoint (free, no API key required)
   static const String _baseUrl = "https://nominatim.openstreetmap.org";
+  static const String _contactEmail = "contact@smartroad.app";
   
   /// * Search for locations by query string
   /// * 
@@ -52,7 +53,8 @@ class LocationSearchService {
           "&format=json"
           "&limit=10"
           "&addressdetails=1"
-          "&extratags=1";
+          "&extratags=1"
+          "&email=${Uri.encodeComponent(_contactEmail)}";
       
       // * Add country code restriction if provided
       if (countryCode != null && countryCode.isNotEmpty) {
@@ -63,9 +65,13 @@ class LocationSearchService {
       
       final response = await http.get(
         url,
-        headers: {
-          'User-Agent': 'SmartRoad App (contact@smartroad.app)', // * Required by Nominatim
-        },
+        // ! Browsers do not allow setting User-Agent; it triggers CORS/preflight failures.
+        // * Use the `email` query parameter for web, and keep User-Agent for native platforms.
+        headers: kIsWeb
+            ? null
+            : const {
+              "User-Agent": "SmartRoad App (contact@smartroad.app)", // * Required by Nominatim (native only)
+            },
       );
       
       if (response.statusCode == 200) {
@@ -95,13 +101,16 @@ class LocationSearchService {
         "$_baseUrl/reverse?lat=$lat&lon=$lon"
         "&format=json"
         "&addressdetails=1"
+        "&email=${Uri.encodeComponent(_contactEmail)}"
       );
       
       final response = await http.get(
         url,
-        headers: {
-          'User-Agent': 'SmartRoad App (contact@smartroad.app)',
-        },
+        headers: kIsWeb
+            ? null
+            : const {
+              "User-Agent": "SmartRoad App (contact@smartroad.app)",
+            },
       );
       
       if (response.statusCode == 200) {
@@ -125,13 +134,16 @@ class LocationSearchService {
         "$_baseUrl/reverse?lat=$lat&lon=$lon"
         "&format=json"
         "&addressdetails=1"
+        "&email=${Uri.encodeComponent(_contactEmail)}"
       );
       
       final response = await http.get(
         url,
-        headers: {
-          'User-Agent': 'SmartRoad App (contact@smartroad.app)',
-        },
+        headers: kIsWeb
+            ? null
+            : const {
+              "User-Agent": "SmartRoad App (contact@smartroad.app)",
+            },
       );
       
       if (response.statusCode == 200) {

@@ -7,11 +7,12 @@ import "../../providers/auth_provider.dart";
 import "../../services/supabase_service.dart";
 import "../../models/user_profile.dart";
 import "../../core/theme/app_theme.dart";
-import "../auth/login_screen.dart";
 import "../gate/gate_pass_screen.dart";
 import "../gate/guard_scanner_screen.dart";
 import "../stickers/manage_stickers_screen.dart";
+import "../admin/place_photo_review_screen.dart";
 import "../about/about_screen.dart";
+import "navigation_settings_screen.dart";
 
 /// * Profile screen
 class ProfileScreen extends ConsumerWidget {
@@ -30,9 +31,7 @@ class ProfileScreen extends ConsumerWidget {
     if (userId == null) {
       return Scaffold(
         appBar: AppBar(title: const Text("Profile")),
-        body: const Center(
-          child: Text("Please log in to view your profile"),
-        ),
+        body: const _GuestProfileContent(),
       );
     }
     
@@ -51,9 +50,7 @@ class ProfileScreen extends ConsumerWidget {
                 await service.signOut();
               }
               if (context.mounted) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
+                Navigator.of(context).pushReplacementNamed("/login");
               }
             },
           ),
@@ -134,6 +131,218 @@ class ProfileScreen extends ConsumerWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _GuestProfileContent extends StatelessWidget {
+  const _GuestProfileContent();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final padding = AppTheme.responsivePadding(context);
+    final maxWidth = AppTheme.maxContentWidth(context);
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(padding),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppTheme.spacingLG),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceVariant,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                  border: Border.all(
+                    color: AppTheme.borderColor.withOpacity(0.8),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withOpacity(0.12),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppTheme.primaryColor.withOpacity(0.35),
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.person_outline,
+                        color: AppTheme.primaryColor,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: AppTheme.spacingMD),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Guest",
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "You can browse the map and navigate without an account.",
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            "Sign in to report hazards, save routes, and interact with places.",
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textTertiary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacingLG),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pushNamed("/login");
+                },
+                icon: const Icon(Icons.login),
+                label: const Text(
+                  "Sign in / Create account",
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacingMD),
+              Card(
+                child: InkWell(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const NavigationSettingsScreen(),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingMD),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(AppTheme.spacingMD),
+                          decoration: BoxDecoration(
+                            color: AppTheme.secondaryColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                          ),
+                          child: Icon(
+                            Icons.navigation,
+                            color: AppTheme.secondaryColor,
+                            size: 32,
+                          ),
+                        ),
+                        const SizedBox(width: AppTheme.spacingMD),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Navigation",
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                "Customize avatar, speed HUD, and alerts",
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: AppTheme.textTertiary,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacingMD),
+              Card(
+                child: InkWell(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AboutScreen()),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingMD),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(AppTheme.spacingMD),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                          ),
+                          child: Icon(
+                            Icons.info_outline,
+                            color: AppTheme.primaryColor,
+                            size: 32,
+                          ),
+                        ),
+                        const SizedBox(width: AppTheme.spacingMD),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "About SmartRoad",
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                "Learn more about the app",
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: AppTheme.textTertiary,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -519,6 +728,126 @@ class _ProfileContentState extends State<_ProfileContent> {
             ),
           ),
           const SizedBox(height: AppTheme.spacingMD),
+          // * Navigation Settings Card
+          Card(
+            child: InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const NavigationSettingsScreen(),
+                  ),
+                );
+              },
+              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+              child: Padding(
+                padding: const EdgeInsets.all(AppTheme.spacingMD),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(AppTheme.spacingMD),
+                      decoration: BoxDecoration(
+                        color: AppTheme.secondaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                      ),
+                      child: Icon(
+                        Icons.navigation,
+                        color: AppTheme.secondaryColor,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(width: AppTheme.spacingMD),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Navigation",
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Customize avatar, speed alerts, and speed limits",
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: AppTheme.textTertiary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppTheme.spacingMD),
+          // * Admin Tools - Place Photo Review
+          if (widget.profile.reporterLevel == ReporterLevel.admin) ...[
+            Card(
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const PlacePhotoReviewScreen(),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppTheme.spacingMD),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(AppTheme.spacingMD),
+                        decoration: BoxDecoration(
+                          color: AppTheme.warningColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                        ),
+                        child: Icon(
+                          Icons.gpp_good,
+                          color: AppTheme.warningColor,
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(width: AppTheme.spacingMD),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Photo Review",
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "Review pending place photos for safety & accuracy",
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: AppTheme.textTertiary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppTheme.spacingMD),
+          ],
           // * Guard Scanner Card (for testing)
           Card(
             child: InkWell(

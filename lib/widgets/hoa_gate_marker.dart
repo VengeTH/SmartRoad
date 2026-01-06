@@ -1,4 +1,6 @@
+import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
+import "../core/theme/app_theme.dart";
 import "../models/sticker.dart";
 
 /// * Custom marker widget for HOA gates
@@ -15,58 +17,55 @@ class HOAGateMarker extends StatelessWidget {
   Color _getColorForAccessType() {
     switch (hoa.accessType) {
       case HOAAccessType.residentsOnly:
-        return Colors.red; // * Red gate icon for strict (Residents/Guests Only)
+        return AppTheme.errorColor; // * Strict (Residents/Guests Only)
       case HOAAccessType.publicShortcut:
-        return Colors.green; // * Green gate icon for open (Pay-to-Pass available)
+        return AppTheme.successColor; // * Open (Pay-to-Pass available)
     }
   }
   
-  /// * Get tooltip text based on access type
-  String _getTooltipText() {
+  IconData _getIconForAccessType() {
     switch (hoa.accessType) {
       case HOAAccessType.residentsOnly:
-        return "${hoa.name}\nResidents/Guests Only";
+        return Icons.lock_outline;
       case HOAAccessType.publicShortcut:
-        return "${hoa.name}\nPay-to-Pass Available";
+        return Icons.local_offer_outlined;
     }
   }
   
   @override
   Widget build(BuildContext context) {
     final color = _getColorForAccessType();
+    final icon = _getIconForAccessType();
     
-    return Tooltip(
-      message: _getTooltipText(),
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Colors.white,
-            width: 3,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.4),
-              blurRadius: 8,
-              spreadRadius: 1,
-              offset: const Offset(0, 2),
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
+    final marker = Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor.withOpacity(0.95),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: color.withOpacity(0.9),
+          width: 2,
         ),
-        child: Icon(
-          Icons.security, // * Gate/security icon
-          color: Colors.white,
-          size: 22,
-        ),
+        boxShadow: AppTheme.shadowSmall,
       ),
+      child: Icon(
+        icon,
+        color: color,
+        size: 18,
+      ),
+    );
+
+    // * Avoid hover tooltips on web (they can cover the map while panning).
+    if (kIsWeb) {
+      return marker;
+    }
+
+    return Tooltip(
+      message: hoa.accessType == HOAAccessType.residentsOnly
+          ? "${hoa.name} · Residents/Guests Only"
+          : "${hoa.name} · Pay-to-Pass",
+      child: marker,
     );
   }
 }

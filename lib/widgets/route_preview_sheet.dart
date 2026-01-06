@@ -13,6 +13,7 @@ class RoutePreviewSheet extends StatelessWidget {
   final VoidCallback onCancel;
   final VoidCallback? onApplyForSticker; // * CTA for sticker application
   final VoidCallback? onEditRoute; // * Edit route with waypoints
+  final VoidCallback? onSaveRoute; // * Save route without starting navigation
   
   const RoutePreviewSheet({
     super.key,
@@ -23,6 +24,7 @@ class RoutePreviewSheet extends StatelessWidget {
     required this.onCancel,
     this.onApplyForSticker,
     this.onEditRoute,
+    this.onSaveRoute,
   });
   
   @override
@@ -149,6 +151,21 @@ class RoutePreviewSheet extends StatelessWidget {
                       ),
                       const SizedBox(height: AppTheme.spacingMD),
                     ],
+                    // * Save Route button (optional)
+                    if (onSaveRoute != null) ...[
+                      ElevatedButton.icon(
+                        onPressed: onSaveRoute,
+                        icon: const Icon(Icons.save),
+                        label: const Text("Save Route"),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppTheme.spacingMD,
+                          ),
+                          backgroundColor: AppTheme.primaryColor,
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingMD),
+                    ],
                     // * Action buttons
                     Row(
                       children: [
@@ -239,57 +256,6 @@ class _RouteDetailItem extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// * Route detail card widget
-class _RouteDetailCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  
-  const _RouteDetailCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-  
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.spacingMD),
-      decoration: BoxDecoration(
-        color: AppTheme.backgroundColor,
-        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-        border: Border.all(
-          color: AppTheme.borderColor,
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            color: AppTheme.primaryColor,
-            size: 20,
-          ),
-          const SizedBox(width: AppTheme.spacingMD),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppTheme.textSecondary,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

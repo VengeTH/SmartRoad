@@ -4,6 +4,7 @@ import "core/theme/app_theme.dart";
 import "services/supabase_service.dart";
 import "services/offline_cache_service.dart";
 import "services/notification_service.dart";
+import "services/route_service.dart";
 import "providers/auth_provider.dart";
 import "screens/auth/login_screen.dart";
 import "screens/auth/signup_screen.dart";
@@ -16,6 +17,7 @@ void main() async {
   // * Initialize services
   try {
     await SupabaseService().initialize();
+    await RouteService().initialize();
     await OfflineCacheService().initialize();
     await NotificationService().initialize();
   } catch (e) {

@@ -1,0 +1,27 @@
+[
+  {
+    "id": "vtx_alabang",
+    "name": "Vista Terminal Exchange (VTX) - Alabang",
+    "latitude": 14.415836951581369,
+    "longitude": 121.04676835280829,
+    "category": "terminal",
+    "aliases": ["Starmall Alabang", "VTX", "Vista Terminal Exchange"]
+  },
+  {
+    "id": "festival_mall_alabang",
+    "name": "Festival Mall - Alabang",
+    "latitude": 14.417661941786854,
+    "longitude": 121.04030966680887,
+    "category": "mall",
+    "aliases": ["Festival Mall Alabang", "Festival Mall"]
+  },
+  {
+    "id": "sm_city_san_pablo",
+    "name": "SM City San Pablo",
+    "latitude": 14.071488169152836,
+    "longitude": 121.30146130727488,
+    "category": "mall",
+    "aliases": ["SM San Pablo", "SM City San Pablo Laguna"]
+  }
+]
+

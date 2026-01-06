@@ -4,7 +4,129 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
-## Version 2.6.5 - Route Creation & Editing System (Latest)
+## Version 2.6.7 - Guest Mode + Ratings + Speed HUD + Navigation Enhancements (Latest)
+
+**Release Date:** January 2026  
+**Focus:** Guest navigation access, place ratings, navigation avatar customization, speed HUD + speed limits, comprehensive navigation improvements  
+**Status:** Production Ready (Demo Mode Only)
+
+**⚠️ Important Note:** As of this version, SmartRoad runs exclusively in **demo mode**. No database has been set up on the server yet, and database integration has not been implemented. All features work with local/demo data. Database integration will be added in the future after server infrastructure is fully set up.
+
+### New Features
+
+#### Guest Mode (No Login Required)
+- ✅ **"Continue as Guest" option on login screen**
+  - Users can browse the map and use navigation without logging in
+  - Guest Profile screen shows Navigation Settings + About (with sign-in CTA)
+  - Contribution features remain gated (reporting, likes, comments, ratings, uploads, route saving)
+  - Auth-gated actions show helpful snackbars with "Sign in" action buttons
+
+#### Place Ratings (Waze-style)
+- ✅ **1–5 star rating system**
+  - Rating average + count shown in place preview
+  - Logged-in users can submit/update their rating
+  - Ratings stored in Supabase (schema ready; currently demo mode only)
+
+#### Navigation Avatar Customization (Waze-style)
+- ✅ **Customizable user location marker**
+  - Choose from: Arrow, Car, Motorcycle, Big Bike, Truck, Pedestrian
+  - Stored locally in app preferences (Hive)
+  - Works for both logged-in and guest users
+  - Accessible via Profile → Navigation Settings
+
+#### Speed HUD + Speed Limits + Overspeed Warnings
+- ✅ **Speed HUD during navigation**
+  - Shows current speed (km/h) from GPS
+  - Displays speed limit sign (best-effort lookup)
+- ✅ **Speed limit data**
+  - OSM Overpass API lookup for `maxspeed` tags (best-effort)
+  - Fallback to user-editable defaults per `highway` type
+  - Per-road overrides supported (stored locally)
+- ✅ **Overspeed warnings**
+  - Triggers when speed > (limit + tolerance)
+  - Configurable tolerance (default: 5 km/h)
+  - Throttled haptic feedback to avoid spamming
+  - Visual warning in Speed HUD
+
+#### Navigation Camera Improvements
+- ✅ **Auto-follow + map rotation**
+  - Map automatically centers and zooms in during navigation
+  - Map rotates to match user heading (or route direction on web)
+  - User location marker arrow rotates relative to map rotation
+- ✅ **Re-center button**
+  - Location button acts as "Re-center" during navigation
+  - Resumes auto-follow, zoom, and rotation after manual panning
+
+### Technical Changes
+
+#### New Files
+- `lib/models/navigation_avatar_style.dart` - Avatar style enum
+- `lib/models/navigation_settings.dart` - Navigation preferences model
+- `lib/services/app_preferences_service.dart` - Local storage (Hive) for navigation settings
+- `lib/providers/navigation_settings_provider.dart` - Riverpod provider for navigation settings
+- `lib/screens/profile/navigation_settings_screen.dart` - Settings UI (avatar, speed HUD, speed limits)
+- `lib/services/speed_limit_service.dart` - OSM Overpass speed limit lookup + defaults
+- `lib/widgets/navigation_speed_hud.dart` - Speed HUD widget (speed + limit + overspeed warning)
+
+#### Modified Files
+- `lib/screens/auth/login_screen.dart` - Added "Continue as Guest" button
+- `lib/screens/auth/signup_screen.dart` - Routes to MainNavigationScreen after signup
+- `lib/screens/profile/profile_screen.dart` - Guest Profile page (Navigation Settings + About + Sign in CTA)
+- `lib/screens/main_navigation_screen.dart` - FAB gated with sign-in snackbar
+- `lib/screens/map/map_screen.dart` - Guest mode support, speed HUD integration, navigation camera improvements, save route gating
+- `lib/widgets/user_location_marker.dart` - Avatar customization support
+- `lib/widgets/place_detail_sheet.dart` - Ratings UI + guest gating
+- `lib/services/supabase_service.dart` - Place ratings methods (getMyPlaceRating, getPlaceRatingsSummary, setPlaceRating)
+- `lib/main.dart` - RouteService initialization
+
+#### Database Schema (Future)
+- `supabase_places_schema.sql` - Added `place_ratings` table (ready for future database integration)
+
+---
+
+## Version 2.6.6 - Known Place Previews & Route Editing Fixes
+
+**Release Date:** January 2026  
+**Focus:** Known location previews (photos/likes/comments) + curved route editing + route saving UX  
+**Status:** Production Ready
+
+### New Features
+
+#### Known Location Previews (Waze-style)
+- ✅ **Known place markers on the map**
+  - Built-in list (starting set): VTX (Starmall Alabang), Festival Mall Alabang, SM City San Pablo
+  - Markers open a place preview with photos, likes, and comments
+- ✅ **Place photos with moderation**
+  - Users can submit photos (pending review)
+  - Admin review screen to approve/reject photos
+- ✅ **Place likes + comments**
+  - Like button + count
+  - Realtime comments (Supabase)
+
+### Fixes
+
+#### Route Creation & Editing
+- ✅ **Curved fallback route interpolation**
+  - Control-point editing now generates a smooth curve (no sharp kinks)
+- ✅ **Save route from preview / editing**
+  - "Save Route" available in route preview
+  - "Save" available in route editing controls
+  - Save action available during active navigation overlay
+
+### Technical Changes
+
+- Added `lib/utils/polyline_smoothing.dart` (Catmull–Rom smoothing)
+- Added known places + place preview UI:
+  - `assets/known_places.json`
+  - `lib/models/place*.dart`, `lib/services/known_places_service.dart`
+  - `lib/widgets/place_detail_sheet.dart`
+  - `lib/screens/admin/place_photo_review_screen.dart`
+- Extended `SupabaseService` for place photos, likes, and comments
+- Added `supabase_places_schema.sql` for required DB tables + RLS policies
+
+---
+
+## Version 2.6.5 - Route Creation & Editing System
 
 **Release Date:** January 2026  
 **Focus:** Route Creation with Custom Points & Control Point Editing  
@@ -97,7 +219,7 @@ This document tracks all version updates, feature additions, and significant cha
 
 ### Known Issues
 
-- ⚠️ Route interpolation creates straight lines between control points (not curved)
+- ✅ Fixed in 2.6.6: Route interpolation now generates smooth curves between control points
 - ⚠️ GraphHopper waypoint routing not fully tested (GraphHopper not set up)
 - ⚠️ Route drawing feature (draw route) not yet implemented
 

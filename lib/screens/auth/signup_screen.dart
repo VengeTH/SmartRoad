@@ -3,7 +3,7 @@ import "package:flutter/services.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "../../services/supabase_service.dart";
 import "../../core/theme/app_theme.dart";
-import "../map/map_screen.dart";
+import "../main_navigation_screen.dart";
 
 /// * Premium sign up screen with animations
 class SignUpScreen extends ConsumerStatefulWidget {
@@ -101,7 +101,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
         HapticFeedback.lightImpact();
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const MapScreen(),
+            pageBuilder: (context, animation, secondaryAnimation) => const MainNavigationScreen(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               return FadeTransition(
                 opacity: animation,

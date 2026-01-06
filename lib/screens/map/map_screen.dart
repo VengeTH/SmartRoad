@@ -12,10 +12,15 @@ import "package:dio/dio.dart";
 import "../../providers/hazards_provider.dart";
 import "../../providers/location_provider.dart";
 import "../../models/hazard.dart";
+import "../../models/place.dart";
+import "../../models/map_poi.dart";
+import "../../models/navigation_avatar_style.dart";
+import "../../models/navigation_settings.dart";
 import "../../core/constants/app_constants.dart";
 import "../../core/theme/app_theme.dart";
 import "../../widgets/hazard_marker.dart";
 import "../../widgets/hazard_detail_sheet.dart";
+import "../../widgets/place_detail_sheet.dart";
 import "../../widgets/hoa_gate_marker.dart";
 import "../../widgets/route_preview_sheet.dart";
 import "../../widgets/weather_tile_layers.dart";
@@ -26,8 +31,14 @@ import "../../services/location_service.dart";
 import "../../services/routing_service.dart";
 import "../../services/route_distance_tracker.dart";
 import "../../services/location_search_service.dart";
+import "../../services/known_places_service.dart";
+import "../../services/poi_search_service.dart";
+import "../../services/speed_limit_service.dart";
+import "../../services/supabase_service.dart";
+import "../../providers/map_ui_provider.dart";
 import "../../providers/hazards_provider.dart" show MapHazardsNotifier;
 import "../../providers/sticker_provider.dart";
+import "../../providers/navigation_settings_provider.dart";
 import "../../models/sticker.dart";
 import "../../widgets/distance_indicator_widget.dart";
 import "../../widgets/traffic_layer.dart";
@@ -37,6 +48,11 @@ import "../../widgets/route_creation_dialog.dart";
 import "../../providers/map_filter_provider.dart";
 import "../../providers/route_creation_provider.dart";
 import "../../models/saved_route.dart";
+import "../../widgets/map_poi_marker.dart";
+import "../../widgets/user_location_marker.dart";
+import "../../widgets/navigation_hazard_warning_banner.dart";
+import "../../widgets/navigation_speed_hud.dart";
+import "../../utils/polyline_smoothing.dart";
 // * Route utilities removed - using inline functions
 
 /// * Navigation overlay widget
@@ -240,6 +256,16 @@ class _NavigationOverlay extends StatelessWidget {
               tooltip: "Change Route",
               color: AppTheme.textSecondary,
             ),
+          if (onSaveRoute != null)
+            IconButton(
+              icon: const Icon(Icons.save),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                onSaveRoute!();
+              },
+              tooltip: "Save Route",
+              color: AppTheme.textSecondary,
+            ),
           IconButton(
             icon: const Icon(Icons.close),
             onPressed: () {
@@ -346,6 +372,7 @@ class _LocationOptionsSheet extends StatelessWidget {
   final String locationName;
   final String? address;
   final VoidCallback onGetDirections;
+  final VoidCallback onOpenCommunityPreview;
   final VoidCallback onSaveLocation;
   final VoidCallback onViewOnMap;
   final VoidCallback onShare;
@@ -355,6 +382,7 @@ class _LocationOptionsSheet extends StatelessWidget {
     required this.locationName,
     this.address,
     required this.onGetDirections,
+    required this.onOpenCommunityPreview,
     required this.onSaveLocation,
     required this.onViewOnMap,
     required this.onShare,
@@ -491,6 +519,27 @@ class _LocationOptionsSheet extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppTheme.spacingMD),
+                  // * Community preview (photos + likes + comments, moderated uploads)
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        onOpenCommunityPreview();
+                      },
+                      icon: const Icon(Icons.photo_library_outlined),
+                      label: const Text("Photos & Comments"),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppTheme.spacingMD,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spacingMD),
                   // * Secondary actions
                   Row(
                     children: [
@@ -610,6 +659,28 @@ class _MapControlButton extends StatelessWidget {
   }
 }
 
+class _UpcomingHazardWarning {
+  final Hazard hazard;
+  final double distanceAheadMeters;
+  final bool shouldHaptic;
+
+  const _UpcomingHazardWarning({
+    required this.hazard,
+    required this.distanceAheadMeters,
+    required this.shouldHaptic,
+  });
+}
+
+class _StableLocationResult {
+  final LatLng location;
+  final bool accepted;
+
+  const _StableLocationResult({
+    required this.location,
+    required this.accepted,
+  });
+}
+
 /// * Map screen showing hazards on OpenStreetMap
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -619,9 +690,36 @@ class MapScreen extends ConsumerStatefulWidget {
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
+  static const double _knownPlacesMinZoom = 9.0; // * Show known places earlier (was 11.0)
+  static const double _dynamicPoisMinZoom = 12.0; // * Show dynamic POIs earlier (was 16.0)
+  static const double _navigationFollowZoom = 16.8;
+  static const Duration _navigationCameraThrottle = Duration(milliseconds: 250);
+
+  // * Marker sizing/anchoring (Google Maps-like: icon at the point, label extends right).
+  static const double _poiMarkerHeight = MapPoiMarker.markerHeight;
+  static const double _poiMarkerAnchorLeft = MapPoiMarker.anchorLeftPx;
+  static const double _poiMarkerAnchorTop = _poiMarkerHeight / 2;
+
   late final MapController _mapController;
+  bool _isMapReady = false;
+  double _mapZoom = AppConstants.defaultZoom;
+  LatLng _mapCenter = LatLng(AppConstants.defaultLatitude, AppConstants.defaultLongitude);
+  double _mapRotationDegrees = 0.0;
+  LatLngBounds? _mapVisibleBounds;
+  LatLng? _pendingMapMoveCenter;
+  double? _pendingMapMoveZoom;
+  double? _pendingMapMoveRotationDegrees;
+  CameraFit? _pendingCameraFit;
   LatLng _currentLocation = LatLng(AppConstants.defaultLatitude, AppConstants.defaultLongitude);
+  double? _currentHeadingDegrees;
   Hazard? _selectedHazard;
+  Place? _selectedPlace;
+  List<Place> _knownPlaces = [];
+  List<MapPoi> _dynamicPois = [];
+  bool _isLoadingDynamicPois = false;
+  Timer? _poiDebounceTimer;
+  String? _lastPoiRequestKey;
+  DateTime? _lastPoiFetchedAt;
   bool _isInitialized = false;
   MapHazardsNotifier? _hazardsNotifier;
   
@@ -641,12 +739,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   final RouteDistanceTracker _distanceTracker = RouteDistanceTracker();
   final WeatherLayerManager _weatherLayerManager = WeatherLayerManager();
   final LocationSearchService _locationSearchService = LocationSearchService();
+  final SpeedLimitService _speedLimitService = SpeedLimitService();
   StreamSubscription<Position>? _positionSubscription;
   Timer? _zoomLimitTimer; // * Timer to enforce zoom limits
   bool _hasPreciseLocation = false;
   // * Cache country code to avoid repeated reverse geocoding calls
   String? _cachedCountryCode;
   LatLng? _countryCodeLocation; // * Location where country code was detected
+  DateTime? _lastCountryCodeFetchAt;
+  bool _isDetectingCountryCode = false;
   String _activeRoutingProfile = "car";
   bool _avoidTollsToggle = false;
   double _routeDistance = 0.0;
@@ -658,6 +759,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     // * Initialize map controller and location
     _mapController = MapController();
     _currentLocation = LatLng(AppConstants.defaultLatitude, AppConstants.defaultLongitude);
+    _mapCenter = _currentLocation;
+    _mapZoom = AppConstants.defaultZoom;
     _isInitialized = true;
     
     // * Listen to weather layer changes
@@ -667,62 +770,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       }
     });
     
-    // * Enforce zoom limits and bounds continuously using a periodic check
-    // * This ensures zoom limits are respected even with pinch gestures
-    // * Also restricts panning to Philippines area
-    _zoomLimitTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      final camera = _mapController.camera;
-      final currentZoom = camera.zoom;
-      final currentCenter = camera.center;
-      
-      // * Enforce zoom limits
-      if (currentZoom < AppConstants.minZoom || currentZoom > AppConstants.maxZoom) {
-        final clampedZoom = currentZoom.clamp(
-          AppConstants.minZoom,
-          AppConstants.maxZoom,
-        );
-        _mapController.move(currentCenter, clampedZoom);
-        return;
-      }
-      
-      // * Enforce Philippines bounds - restrict panning to Philippines area
-      final philippinesBounds = LatLngBounds(
-        LatLng(AppConstants.philippinesSouth, AppConstants.philippinesWest),
-        LatLng(AppConstants.philippinesNorth, AppConstants.philippinesEast),
-      );
-      
-      if (!philippinesBounds.contains(currentCenter)) {
-        // * Clamp center to Philippines bounds
-        final clampedLat = currentCenter.latitude.clamp(
-          AppConstants.philippinesSouth,
-          AppConstants.philippinesNorth,
-        );
-        final clampedLon = currentCenter.longitude.clamp(
-          AppConstants.philippinesWest,
-          AppConstants.philippinesEast,
-        );
-        _mapController.move(
-          LatLng(clampedLat, clampedLon),
-          currentZoom,
-        );
-      }
-    });
-    
     _startLocationStream();
+    _loadKnownPlaces();
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-      _loadCurrentLocation();
-        // * Load hazards after a short delay to ensure map is ready
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            _onMapReady();
-          }
-        });
+        _loadCurrentLocation();
       }
     });
   }
@@ -731,6 +784,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void dispose() {
     _positionSubscription?.cancel();
     _zoomLimitTimer?.cancel();
+    _poiDebounceTimer?.cancel();
     _mapController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -739,18 +793,398 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     // * RoutingService doesn't need dispose
     super.dispose();
   }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    // * Dev-friendly: re-load known places on hot reload so asset edits reflect immediately.
+    if (kDebugMode) {
+      KnownPlacesService().clearCache();
+      _loadKnownPlaces();
+    }
+  }
+
+  void _safeMoveMap(LatLng center, double zoom) {
+    if (!_isMapReady) {
+      _pendingMapMoveCenter = center;
+      _pendingMapMoveZoom = zoom;
+      _pendingMapMoveRotationDegrees = null;
+      return;
+    }
+
+    try {
+      _mapController.move(center, zoom);
+    } catch (_) {
+      // * Ignore: can happen if the controller is used during a transient rebuild.
+    }
+  }
+
+  void _safeMoveAndRotateMap(LatLng center, double zoom, double rotationDegrees) {
+    if (!_isMapReady) {
+      _pendingMapMoveCenter = center;
+      _pendingMapMoveZoom = zoom;
+      _pendingMapMoveRotationDegrees = rotationDegrees;
+      return;
+    }
+
+    try {
+      _mapController.moveAndRotate(center, zoom, rotationDegrees);
+    } catch (_) {
+      // * Ignore: can happen if the controller is used during a transient rebuild.
+    }
+  }
+
+  void _safeRotateMap(double rotationDegrees) {
+    if (!_isMapReady) return;
+
+    try {
+      _mapController.rotate(rotationDegrees);
+    } catch (_) {
+      // * Ignore: can happen if the controller is used during a transient rebuild.
+    }
+  }
+
+  void _safeFitCamera(CameraFit fit) {
+    if (!_isMapReady) {
+      _pendingCameraFit = fit;
+      return;
+    }
+
+    try {
+      _mapController.fitCamera(fit);
+    } catch (_) {
+      // * Ignore: can happen if the controller is used during a transient rebuild.
+    }
+  }
+
+  void _startZoomLimitTimer() {
+    _zoomLimitTimer?.cancel();
+    _zoomLimitTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (!_isMapReady) return;
+
+      try {
+        final camera = _mapController.camera;
+        final currentZoom = camera.zoom;
+        final currentCenter = camera.center;
+
+        // * Enforce zoom limits (extra safety for pinch gestures)
+        if (currentZoom < AppConstants.minZoom || currentZoom > AppConstants.maxZoom) {
+          final clampedZoom = currentZoom.clamp(
+            AppConstants.minZoom,
+            AppConstants.maxZoom,
+          );
+          _safeMoveMap(currentCenter, clampedZoom);
+          return;
+        }
+
+        // * Enforce Philippines bounds - restrict panning to Philippines area
+        final philippinesBounds = LatLngBounds(
+          LatLng(AppConstants.philippinesSouth, AppConstants.philippinesWest),
+          LatLng(AppConstants.philippinesNorth, AppConstants.philippinesEast),
+        );
+
+        if (!philippinesBounds.contains(currentCenter)) {
+          final clampedLat = currentCenter.latitude.clamp(
+            AppConstants.philippinesSouth,
+            AppConstants.philippinesNorth,
+          );
+          final clampedLon = currentCenter.longitude.clamp(
+            AppConstants.philippinesWest,
+            AppConstants.philippinesEast,
+          );
+          _safeMoveMap(LatLng(clampedLat, clampedLon), currentZoom);
+        }
+      } catch (_) {
+        // * Ignore: camera may be temporarily unavailable during dispose/rebuild.
+      }
+    });
+  }
+
+  void _handleFlutterMapReady() {
+    if (!mounted || _isMapReady) return;
+
+    try {
+      final camera = _mapController.camera;
+      setState(() {
+        _isMapReady = true;
+        _mapZoom = camera.zoom;
+        _mapCenter = camera.center;
+        _mapRotationDegrees = camera.rotation;
+        _mapVisibleBounds = camera.visibleBounds;
+      });
+    } catch (_) {
+      // * Worst case: mark as ready so queued moves can flush on the next frame.
+      if (mounted) {
+        setState(() {
+          _isMapReady = true;
+        });
+      }
+    }
+
+    _startZoomLimitTimer();
+
+    final pendingCenter = _pendingMapMoveCenter;
+    final pendingZoom = _pendingMapMoveZoom;
+    final pendingRotation = _pendingMapMoveRotationDegrees;
+    if (pendingCenter != null && pendingZoom != null) {
+      _pendingMapMoveCenter = null;
+      _pendingMapMoveZoom = null;
+      _pendingMapMoveRotationDegrees = null;
+      if (pendingRotation != null) {
+        _safeMoveAndRotateMap(pendingCenter, pendingZoom, pendingRotation);
+      } else {
+        _safeMoveMap(pendingCenter, pendingZoom);
+      }
+    }
+
+    final pendingFit = _pendingCameraFit;
+    if (pendingFit != null) {
+      _pendingCameraFit = null;
+      _safeFitCamera(pendingFit);
+    }
+
+    // * Kick initial loads now that we can safely use the MapController.
+    _onMapReady();
+    _scheduleDynamicPoiRefresh();
+  }
+
+  Future<void> _loadKnownPlaces() async {
+    try {
+      final places = await KnownPlacesService().getKnownPlaces(forceRefresh: kDebugMode);
+      if (!mounted) return;
+      setState(() {
+        _knownPlaces = places;
+      });
+      // * Refresh POIs so duplicates (e.g., "SM City San Pablo") disappear once known places load.
+      _scheduleDynamicPoiRefresh();
+    } catch (e) {
+      debugPrint("❌ [MapScreen] Failed to load known places: $e");
+    }
+  }
+
+  String _normalizePoiName(String raw) {
+    final lowered = raw.toLowerCase().trim();
+    final cleaned = lowered.replaceAll(RegExp(r"[^a-z0-9]+"), " ").trim();
+    return cleaned.replaceAll(RegExp(r"\s+"), " ");
+  }
+
+  Set<String> _buildKnownPlaceNameIndex() {
+    final index = <String>{};
+    for (final place in _knownPlaces) {
+      index.add(_normalizePoiName(place.name));
+      for (final alias in place.aliases) {
+        index.add(_normalizePoiName(alias));
+      }
+    }
+    return index;
+  }
+
+  /// * Builds a stable community place id for any location.
+  /// *
+  /// * - If Nominatim provides a place_id, we use `nominatim:<place_id>` for stability.
+  /// * - Otherwise we bucket by coordinates to avoid generating a new id for tiny differences.
+  String _buildCommunityPlaceId({
+    required LatLng location,
+    String? nominatimPlaceId,
+  }) {
+    final raw = nominatimPlaceId?.trim();
+    if (raw != null && raw.isNotEmpty && raw.toLowerCase() != "null") {
+      return "nominatim:$raw";
+    }
+
+    // * 1e5 bucket ≈ 1 meter latitude. This keeps ids stable for "same" place.
+    final latKey = (location.latitude * 100000).round();
+    final lonKey = (location.longitude * 100000).round();
+    return "loc:$latKey:$lonKey";
+  }
+
+  Place _buildCommunityPlace({
+    required String name,
+    required LatLng location,
+    String? category,
+    String? nominatimPlaceId,
+  }) {
+    return Place(
+      id: _buildCommunityPlaceId(location: location, nominatimPlaceId: nominatimPlaceId),
+      name: name.trim().isNotEmpty ? name.trim() : "Location",
+      latitude: location.latitude,
+      longitude: location.longitude,
+      category: category?.trim(),
+      aliases: const [],
+    );
+  }
+
+  List<String> _poiQueriesForZoom(double zoom) {
+    // * Show more POI types at higher zoom levels
+    if (zoom >= 14.0) {
+      return const [
+        "mall",
+        "terminal",
+        "bus station",
+        "hospital",
+        "gas station",
+        "school",
+      ];
+    }
+
+    // * Basic POI types for lower zoom levels
+    return const [
+      "mall",
+      "terminal",
+      "bus station",
+      "hospital",
+    ];
+  }
+
+  String _buildPoiRequestKey({required double zoom, required LatLng center}) {
+    final zoomBucket = zoom.floor(); // * Reduce refresh spam while zooming.
+    final latKey = (center.latitude * 1000).round(); // ~100m-ish bucket
+    final lonKey = (center.longitude * 1000).round();
+    return "$zoomBucket:$latKey:$lonKey";
+  }
+
+  void _scheduleDynamicPoiRefresh() {
+    if (!mounted || !_isMapReady) return;
+
+    final zoom = _mapZoom;
+    if (_isNavigating || zoom < _dynamicPoisMinZoom) {
+      if (_dynamicPois.isNotEmpty) {
+        setState(() => _dynamicPois = []);
+      }
+      return;
+    }
+
+    _poiDebounceTimer?.cancel();
+    _poiDebounceTimer = Timer(const Duration(milliseconds: 650), () {
+      if (mounted) {
+        _loadDynamicPoisForViewport();
+      }
+    });
+  }
+
+  Future<void> _loadDynamicPoisForViewport() async {
+    if (_isLoadingDynamicPois || !_isMapReady) return;
+
+    final zoom = _mapZoom;
+    if (_isNavigating || zoom < _dynamicPoisMinZoom) {
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastPoiFetchedAt != null && now.difference(_lastPoiFetchedAt!).inSeconds < 4) {
+      return;
+    }
+
+    final center = _mapCenter;
+    final requestKey = _buildPoiRequestKey(zoom: zoom, center: center);
+    if (_lastPoiRequestKey == requestKey &&
+        _lastPoiFetchedAt != null &&
+        now.difference(_lastPoiFetchedAt!).inSeconds < 20) {
+      return;
+    }
+
+    setState(() => _isLoadingDynamicPois = true);
+    try {
+      final bounds = _mapVisibleBounds;
+      if (bounds == null) return;
+      final queries = _poiQueriesForZoom(zoom);
+
+      final service = PoiSearchService();
+      final futures = <Future<List<MapPoi>>>[];
+      for (final query in queries) {
+        futures.add(service.searchInBounds(bounds: bounds, query: query, limit: 10));
+      }
+
+      final lists = await Future.wait(futures);
+      if (!mounted) return;
+
+      final knownNameIndex = _buildKnownPlaceNameIndex();
+
+      // * Pass 1: filter + dedupe by Nominatim place_id (poi.id)
+      final byId = <String, MapPoi>{};
+      for (final list in lists) {
+        for (final poi in list) {
+          final normalizedName = _normalizePoiName(poi.name);
+          if (normalizedName.isEmpty) continue;
+
+          // * Remove POIs that are clearly the same as our curated known places.
+          if (knownNameIndex.contains(normalizedName)) {
+            continue;
+          }
+
+          // * Also remove POIs too close to known places (keeps the map clean).
+          final tooCloseToKnown = _knownPlaces.any((p) {
+            return _calculateHaversineDistance(p.location, poi.location) < 250;
+          });
+          if (tooCloseToKnown) continue;
+
+          final existing = byId[poi.id];
+          if (existing == null) {
+            byId[poi.id] = poi;
+            continue;
+          }
+
+          final existingImportance = existing.importance ?? 0;
+          final nextImportance = poi.importance ?? 0;
+          if (nextImportance > existingImportance) {
+            byId[poi.id] = poi;
+          }
+        }
+      }
+
+      // * Pass 2: secondary dedupe by (name + ~55m coordinate bucket)
+      final byNameBucket = <String, MapPoi>{};
+      for (final poi in byId.values) {
+        final normalizedName = _normalizePoiName(poi.name);
+        final latKey = (poi.latitude * 2000).round();
+        final lonKey = (poi.longitude * 2000).round();
+        final dedupeKey = "$normalizedName:$latKey:$lonKey";
+
+        final existing = byNameBucket[dedupeKey];
+        if (existing == null) {
+          byNameBucket[dedupeKey] = poi;
+          continue;
+        }
+
+        final existingImportance = existing.importance ?? 0;
+        final nextImportance = poi.importance ?? 0;
+        if (nextImportance > existingImportance) {
+          byNameBucket[dedupeKey] = poi;
+        }
+      }
+
+      final merged = byNameBucket.values.toList()
+        ..sort((a, b) => (b.importance ?? 0).compareTo(a.importance ?? 0));
+
+      // * Keep POIs limited to avoid clutter (Google Maps shows only a handful).
+      final maxCount = zoom >= 15.0 ? 25 : 18; // * Show more POIs at higher zoom (was 18.0 -> 22, else 14)
+      final limited = merged.take(maxCount).toList();
+
+      setState(() {
+        _dynamicPois = limited;
+        _lastPoiRequestKey = requestKey;
+        _lastPoiFetchedAt = now;
+      });
+    } catch (e) {
+      debugPrint("❌ [MapScreen] Failed to load dynamic POIs: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingDynamicPois = false);
+      }
+    }
+  }
   
   /// * Detect country code from current location
   /// * Caches the result to avoid repeated reverse geocoding calls
   Future<void> _detectCountryCode() async {
-    // * Skip if we already have a cached country code for this location
-    if (_cachedCountryCode != null && 
-        _countryCodeLocation != null &&
-        _currentLocation.latitude == _countryCodeLocation!.latitude &&
-        _currentLocation.longitude == _countryCodeLocation!.longitude) {
+    if (_isDetectingCountryCode) {
       return;
     }
-    
+
     // * Skip if location is at default (0,0) or invalid
     if (_currentLocation.latitude == 0.0 && _currentLocation.longitude == 0.0) {
       return;
@@ -761,21 +1195,47 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       return;
     }
     
+    // * Throttle requests: country rarely changes and reverse-geocoding is expensive.
+    final now = DateTime.now();
+    if (_lastCountryCodeFetchAt != null &&
+        now.difference(_lastCountryCodeFetchAt!).inSeconds < 30) {
+      return;
+    }
+
+    // * If we already have a country code, only refresh it after moving far enough.
+    if (_cachedCountryCode != null && _countryCodeLocation != null) {
+      final movedMeters = _calculateHaversineDistance(_currentLocation, _countryCodeLocation!);
+      if (movedMeters < 8000) {
+        return;
+      }
+    }
+    
     try {
+      _isDetectingCountryCode = true;
+      _lastCountryCodeFetchAt = now;
+
       final countryCode = await _locationSearchService.getCountryCodeFromCoordinates(
         _currentLocation.latitude,
         _currentLocation.longitude,
       );
       
-      if (countryCode != null && mounted) {
-        setState(() {
-          _cachedCountryCode = countryCode;
-          _countryCodeLocation = _currentLocation;
-        });
-        debugPrint("🌍 [MapScreen] Detected country code: $countryCode");
+      final normalized = countryCode?.trim().toLowerCase();
+      if (normalized != null && normalized.isNotEmpty && mounted) {
+        final previous = _cachedCountryCode?.trim().toLowerCase();
+        final changed = previous != normalized;
+
+        // * Update cached values (no UI depends directly on this).
+        _cachedCountryCode = normalized;
+        _countryCodeLocation = _currentLocation;
+
+        if (changed && kDebugMode) {
+          debugPrint("🌍 [MapScreen] Detected country code: $normalized");
+        }
       }
     } catch (e) {
       debugPrint("❌ [MapScreen] Error detecting country code: $e");
+    } finally {
+      _isDetectingCountryCode = false;
     }
   }
   
@@ -840,11 +1300,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               'limit': 20, // * Get more results from current country
               'addressdetails': 1,
               'countrycodes': _cachedCountryCode!.toLowerCase(),
+              // * Use email instead of User-Agent on web (avoids CORS/preflight failures).
+              'email': 'contact@smartroad.app',
             },
             options: Options(
-              headers: {
-                'User-Agent': 'SmartRoad App',
-              },
+              headers: kIsWeb
+                  ? null
+                  : {
+                      'User-Agent': 'SmartRoad App (contact@smartroad.app)',
+                    },
             ),
           );
           
@@ -867,11 +1331,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             'format': 'json',
             'limit': 30, // * Get more to filter
             'addressdetails': 1,
+            // * Use email instead of User-Agent on web (avoids CORS/preflight failures).
+            'email': 'contact@smartroad.app',
           },
           options: Options(
-            headers: {
-              'User-Agent': 'SmartRoad App',
-            },
+            headers: kIsWeb
+                ? null
+                : {
+                    'User-Agent': 'SmartRoad App (contact@smartroad.app)',
+                  },
           ),
         );
         
@@ -1190,7 +1658,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       });
       
       // * Move map to location
-      _mapController.move(location, 15.0);
+      _safeMoveMap(location, 15.0);
       
       // * Show location options bottom sheet
       _showLocationOptionsSheet(result, location);
@@ -1201,23 +1669,55 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   
   /// * Show location options bottom sheet (like Waze/Google Maps)
   void _showLocationOptionsSheet(Map<String, dynamic> result, LatLng location) {
+    final fullName = (result["display_name"] ?? "Location").toString().trim();
+    final shortName = fullName.split(",").first.trim();
+    final nominatimPlaceId = result["place_id"]?.toString().trim();
+    final placeType = result["type"]?.toString().trim();
+
+    final communityPlace = _buildCommunityPlace(
+      name: shortName.isNotEmpty ? shortName : fullName,
+      location: location,
+      category: placeType,
+      nominatimPlaceId: nominatimPlaceId,
+    );
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => _LocationOptionsSheet(
         location: location,
-        locationName: result['display_name'] ?? 'Location',
-        address: result['address'] != null
-            ? _formatAddress(result['address'] as Map<String, dynamic>)
-            : null,
-        onGetDirections: () => _openDirections(location),
-        onSaveLocation: () => _saveLocation(result),
+        locationName: fullName.isNotEmpty ? fullName : "Location",
+        address:
+            result["address"] != null
+                ? _formatAddress(result["address"] as Map<String, dynamic>)
+                : null,
+        onGetDirections: () {
+          Navigator.of(context).pop();
+          _openDirections(location);
+        },
+        onOpenCommunityPreview: () {
+          Navigator.of(context).pop();
+          if (!mounted) return;
+          setState(() {
+            _selectedPlace = communityPlace;
+            _selectedHazard = null;
+            _showSearchResults = false;
+          });
+          _searchFocusNode.unfocus();
+        },
+        onSaveLocation: () {
+          Navigator.of(context).pop();
+          _saveLocation(result);
+        },
         onViewOnMap: () {
           Navigator.of(context).pop();
           // * Map is already moved to location
         },
-        onShare: () => _shareLocation(result, location),
+        onShare: () {
+          Navigator.of(context).pop();
+          _shareLocation(result, location);
+        },
       ),
     );
   }
@@ -1227,6 +1727,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   LatLng? _navigationDestination;
   String? _navigationMode; // 'car', 'motorcycle_sub400', 'motorcycle_400plus', 'truck', 'public_transit', 'tricycle'
   List<LatLng>? _navigationRoute;
+
+  // * Navigation camera (Google Maps / Waze-like)
+  bool _isNavigationFollowing = true;
+  bool _isNavigationMapRotationEnabled = true;
+  DateTime? _lastNavigationCameraUpdateAt;
   
   // * Route creation state
   bool _isDrawingRoute = false;
@@ -1238,11 +1743,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _selectingStartPoint = true;
   bool _isSelectingCustomPoints = false;
   bool _showSheetReopenButton = false; // * Show button to reopen minimized sheet
-  
-  // * Saved route following state
-  SavedRoute? _followingSavedRoute;
-  bool _strictRouteFollowing = true; // * Follow exact route, no reroute unless blocked
-  bool _allowRerouteWhenBlocked = true; // * Allow reroute only when route is blocked
   
   // * Route selection state
   List<RouteData> _availableRoutes = [];
@@ -1256,14 +1756,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // * Route color coding state
   List<LatLng> _traveledRoute = [];
   List<LatLng> _upcomingRoute = [];
-  double _traveledDistance = 0.0;
   
   // * Weather overlay state
   bool _showWeatherControls = false;
   
   // * Off-route detection state
   bool _isOffRoute = false;
-  double _offRouteDistance = 0.0;
   bool _isRerouting = false;
   DateTime? _lastRerouteTime;
   
@@ -1273,6 +1771,35 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   
   // * Distance indicators state
   DistanceIndicators? _distanceIndicators;
+
+  // * Navigation hazard warnings (Waze-style)
+  Hazard? _navigationHazardWarning;
+  double? _navigationHazardDistanceMeters;
+  final Map<String, DateTime> _navigationHazardMutedUntil = {};
+  final Map<String, DateTime> _navigationHazardHapticAt = {};
+
+  // * Navigation speed HUD + speed limits
+  double? _currentSpeedKph;
+  SpeedLimitResult _speedLimitResult = const SpeedLimitResult(
+    speedLimitKph: null,
+    source: SpeedLimitSource.unknown,
+    highwayType: null,
+    wayId: null,
+    rawMaxspeed: null,
+  );
+  bool _isOverspeeding = false;
+  DateTime? _lastOverspeedHapticAt;
+  DateTime? _lastSpeedLimitUpdateAt;
+  LatLng? _lastSpeedLimitUpdateLocation;
+  bool _isLoadingSpeedLimit = false;
+
+  // * Route cache for fast "hazard ahead" calculations
+  List<double>? _navigationRouteCumulativeMeters;
+  String? _navigationRouteSignature;
+
+  // * Location stability (filter out GPS jumps + reduce jitter)
+  DateTime? _lastAcceptedLocationAt;
+  LatLng? _lastAcceptedLocation;
   
   /// * Get navigation mode display name
   String _getNavigationModeName(String mode) {
@@ -1376,6 +1903,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               route: route,
               vehicleType: vehicleType,
               vehicleModeName: vehicleModeName,
+              onSaveRoute: () {
+                Navigator.of(context).pop(); // * Close preview sheet
+                if (mounted) {
+                  setState(() {
+                    _navigationMode = mode;
+                    _navigationDestination = destination;
+                    _customStartPoint = _currentLocation;
+                    _customEndPoint = destination;
+                  });
+                  _showSaveRouteDialog();
+                }
+              },
               onStartNavigation: () {
                 Navigator.of(context).pop(); // * Close preview sheet
                 _beginNavigation(destination, mode);
@@ -1419,6 +1958,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _navigationMode = mode;
       _activeRoutingProfile = mode == 'car' ? 'car' : 'motorcycle_sub400';
     });
+    // * Expose navigation state to shared UI (e.g., global FAB).
+    ref.read(mapIsNavigatingProvider.notifier).state = true;
     
     // * Initialize distance tracker
     if (_availableRoutes.isNotEmpty) {
@@ -1447,15 +1988,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       );
     }
     
-    // * Move map to show route
-    if (_navigationRoute != null && _navigationRoute!.isNotEmpty) {
-      _mapController.fitCamera(
-        CameraFit.bounds(
-          bounds: LatLngBounds.fromPoints(_navigationRoute!),
-          padding: const EdgeInsets.all(100),
-        ),
-      );
+    // * Navigation camera: zoom-in + follow current position (Google Maps / Waze-like).
+    if (mounted) {
+      setState(() {
+        _isNavigationFollowing = true;
+        _isNavigationMapRotationEnabled = true;
+        _lastNavigationCameraUpdateAt = null;
+      });
     }
+    _updateNavigationCamera(_currentLocation, force: true);
     
     // * Show navigation started message
     if (mounted) {
@@ -1497,53 +2038,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         return VehicleType.car;
     }
   }
-  
-  /// * Check if current time is within truck ban hours
-  bool _isTruckBanHours() {
-    final now = DateTime.now();
-    final hour = now.hour;
-    // * Truck ban: 6:00 AM - 10:00 AM and 5:00 PM - 10:00 PM
-    return (hour >= 6 && hour < 10) || (hour >= 17 && hour < 22);
-  }
-  
-  /// * Check if route contains expressway segments
-  /// * Uses known Philippine expressway bounding boxes
-  bool _routeContainsExpressway(List<dynamic> coordinates) {
-    // * Known Philippine expressway bounding boxes (approximate)
-    // * NLEX: 14.5-15.2°N, 120.5-121.0°E
-    // * SLEX: 14.0-14.6°N, 120.9-121.2°E
-    // * CAVITEX: 14.3-14.5°N, 120.8-121.0°E
-    // * TPLEX: 15.4-16.5°N, 120.2-120.8°E
-    // * Skyway: 14.4-14.6°N, 121.0-121.1°E
-    
-    final expresswayBounds = [
-      {'name': 'NLEX', 'latMin': 14.5, 'latMax': 15.2, 'lngMin': 120.5, 'lngMax': 121.0},
-      {'name': 'SLEX', 'latMin': 14.0, 'latMax': 14.6, 'lngMin': 120.9, 'lngMax': 121.2},
-      {'name': 'CAVITEX', 'latMin': 14.3, 'latMax': 14.5, 'lngMin': 120.8, 'lngMax': 121.0},
-      {'name': 'TPLEX', 'latMin': 15.4, 'latMax': 16.5, 'lngMin': 120.2, 'lngMax': 120.8},
-      {'name': 'Skyway', 'latMin': 14.4, 'latMax': 14.6, 'lngMin': 121.0, 'lngMax': 121.1},
-    ];
-    
-    for (var coord in coordinates) {
-      final lat = coord[1] as double;
-      final lng = coord[0] as double;
-      
-      for (var bound in expresswayBounds) {
-        final latMin = bound['latMin'] as double;
-        final latMax = bound['latMax'] as double;
-        final lngMin = bound['lngMin'] as double;
-        final lngMax = bound['lngMax'] as double;
-        if (lat >= latMin && lat <= latMax &&
-            lng >= lngMin && lng <= lngMax) {
-          return true;
-        }
-      }
-    }
-    
-    return false;
-  }
-  
-  
+ 
   /// * Calculate route using SmartRoad backend API (MVP)
   /// * 
   /// * [destination] - Destination point
@@ -1829,7 +2324,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final distanceToRoute = _calculateDistanceToRoute(currentPosition, _navigationRoute!);
     
     setState(() {
-      _offRouteDistance = distanceToRoute;
       _isOffRoute = distanceToRoute > 100.0; // * 100m threshold
     });
     
@@ -2122,7 +2616,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     
     // * Move map to show selected route
     if (_navigationRoute != null && _navigationRoute!.isNotEmpty) {
-      _mapController.fitCamera(
+      _safeFitCamera(
         CameraFit.bounds(
           bounds: LatLngBounds.fromPoints(_navigationRoute!),
           padding: const EdgeInsets.all(100),
@@ -2647,7 +3141,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     // * Fit map to route
     if (route.geometry.isNotEmpty) {
       final bounds = LatLngBounds.fromPoints(route.geometry);
-      _mapController.fitCamera(
+      _safeFitCamera(
         CameraFit.bounds(
           bounds: bounds,
           padding: const EdgeInsets.all(50),
@@ -2905,66 +3399,109 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     
     final routeStart = _navigationRoute!.first;
     final routeEnd = _navigationRoute!.last;
-    final updatedRoute = <LatLng>[];
     
     // * If no control points, keep original route
     if (_routeControlPoints.isEmpty) {
       return;
     }
     
-    // * Sort control points by distance from start to ensure proper order
-    final sortedControlPoints = List<LatLng>.from(_routeControlPoints);
-    sortedControlPoints.sort((a, b) {
-      final distA = _calculateDistance(routeStart, a);
-      final distB = _calculateDistance(routeStart, b);
-      return distA.compareTo(distB);
-    });
-    
-    // * Build route: Start → Control Point 1 → Control Point 2 → ... → End
-    updatedRoute.add(routeStart);
-    
-    LatLng prevPoint = routeStart;
-    for (final controlPoint in sortedControlPoints) {
-      // * Create smooth path from previous point to this control point
-      final distance = _calculateDistance(prevPoint, controlPoint);
-      final numSegments = (distance * 200).round().clamp(10, 50);
+    // * Sort control points by their projected position along the current route.
+    // * This keeps waypoints in a stable order even when the route curves.
+    final currentRouteForOrdering = List<LatLng>.from(_navigationRoute!);
+    double getProgressOnRoute(LatLng point) {
+      if (currentRouteForOrdering.length < 2) return 0.0;
       
-      for (int j = 1; j <= numSegments; j++) {
-        final t = j / numSegments;
-        final interpolated = LatLng(
-          prevPoint.latitude + (controlPoint.latitude - prevPoint.latitude) * t,
-          prevPoint.longitude + (controlPoint.longitude - prevPoint.longitude) * t,
+      double bestDistanceKm = double.infinity;
+      double bestProgress = 0.0;
+      
+      for (int i = 0; i < currentRouteForOrdering.length - 1; i++) {
+        final a = currentRouteForOrdering[i];
+        final b = currentRouteForOrdering[i + 1];
+        
+        final dx = b.longitude - a.longitude;
+        final dy = b.latitude - a.latitude;
+        final px = point.longitude - a.longitude;
+        final py = point.latitude - a.latitude;
+        
+        final lenSq = dx * dx + dy * dy;
+        double t = 0.0;
+        if (lenSq > 0) {
+          t = ((dx * px + dy * py) / lenSq).clamp(0.0, 1.0);
+        }
+        
+        final nearest = LatLng(
+          a.latitude + t * dy,
+          a.longitude + t * dx,
         );
-        updatedRoute.add(interpolated);
+        
+        final distKm = _calculateDistance(point, nearest);
+        if (distKm < bestDistanceKm) {
+          bestDistanceKm = distKm;
+          bestProgress = i + t;
+        }
       }
       
-      // * Ensure control point is included
-      updatedRoute.add(controlPoint);
-      prevPoint = controlPoint;
+      return bestProgress;
     }
     
-    // * Add final segment to end point
-    final finalDistance = _calculateDistance(prevPoint, routeEnd);
-    final finalNumSegments = (finalDistance * 200).round().clamp(10, 50);
+    final sortedControlPoints = List<LatLng>.from(_routeControlPoints);
+    sortedControlPoints.sort((a, b) {
+      final progA = getProgressOnRoute(a);
+      final progB = getProgressOnRoute(b);
+      return progA.compareTo(progB);
+    });
     
-    for (int j = 1; j <= finalNumSegments; j++) {
-      final t = j / finalNumSegments;
-      final interpolated = LatLng(
-        prevPoint.latitude + (routeEnd.latitude - prevPoint.latitude) * t,
-        prevPoint.longitude + (routeEnd.longitude - prevPoint.longitude) * t,
-      );
-      updatedRoute.add(interpolated);
+    // * Build route: Start → CP1 → CP2 → ... → End (with smooth curve generation)
+    final waypoints = <LatLng>[
+      routeStart,
+      ...sortedControlPoints,
+      routeEnd,
+    ];
+    
+    final updatedRoute = PolylineSmoothing.catmullRomThroughWaypoints(
+      waypoints,
+      targetSpacingMeters: 5.0,
+      minPointsPerSegment: 8,
+      maxPointsPerSegment: 120,
+    );
+    
+    // * Update distance + duration estimates to match the new geometry (useful for saving routes).
+    double updatedDistanceKm = 0.0;
+    for (int i = 0; i < updatedRoute.length - 1; i++) {
+      updatedDistanceKm += _calculateDistance(updatedRoute[i], updatedRoute[i + 1]);
     }
     
-    // * Add end point
-    updatedRoute.add(routeEnd);
+    final mode = _navigationMode ?? "car";
+    final avgSpeedKmh = () {
+      switch (mode) {
+        case "motorcycle_sub400":
+          return 40.0;
+        case "motorcycle_400plus":
+          return 50.0;
+        case "truck":
+          return 35.0;
+        case "pedestrian":
+          return 5.0;
+        case "car":
+        default:
+          return 45.0;
+      }
+    }();
+    final estimatedMinutes =
+        ((updatedDistanceKm / avgSpeedKmh) * 60).round().clamp(1, 24 * 60 * 7);
+    final updatedDuration = Duration(minutes: estimatedMinutes);
     
     // * Update route immediately - force rebuild
     if (mounted) {
       setState(() {
         _navigationRoute = List<LatLng>.from(updatedRoute); // * Create new list to force update
+        _routeDistance = updatedDistanceKm;
+        _routeDuration = updatedDuration;
       });
     }
+    
+    // * Refresh traveled/upcoming segments if navigation is active.
+    _updateRouteSegments();
   }
   
   /// * Calculate route with custom start and end points
@@ -3065,6 +3602,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 route: route,
                 vehicleType: vehicleType,
                 vehicleModeName: vehicleModeName,
+                onSaveRoute: () {
+                  if (Navigator.of(sheetContext).canPop()) {
+                    Navigator.of(sheetContext).pop();
+                  }
+                  if (mounted) {
+                    setState(() {
+                      _navigationMode = mode;
+                      _navigationDestination = end;
+                      _customStartPoint = start;
+                      _customEndPoint = end;
+                    });
+                    _showSaveRouteDialog();
+                  }
+                },
                 onStartNavigation: () {
                   if (Navigator.of(sheetContext).canPop()) {
                     Navigator.of(sheetContext).pop();
@@ -3172,6 +3723,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   
   /// * Show save dialog for drawn route
   void _showSaveDrawnRouteDialog(List<LatLng> points) {
+    if (!SupabaseService().isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Sign in to save routes"),
+          action: SnackBarAction(
+            label: "Sign in",
+            onPressed: () {
+              Navigator.of(context).pushNamed("/login");
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
     final startPoint = points.first;
     final endPoint = points.last;
     
@@ -3207,7 +3773,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           // * Fit map to route
           if (points.isNotEmpty) {
             final bounds = LatLngBounds.fromPoints(points);
-            _mapController.fitCamera(
+            _safeFitCamera(
               CameraFit.bounds(
                 bounds: bounds,
                 padding: const EdgeInsets.all(50),
@@ -3234,42 +3800,94 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       );
       return;
     }
-    
-    // * Map mode to VehicleType
-    VehicleType vehicleType;
-    switch (_navigationMode!) {
-      case 'motorcycle_sub400':
-        vehicleType = VehicleType.motorcycle;
-        break;
-      case 'motorcycle_400plus':
-        vehicleType = VehicleType.bigBike;
-        break;
-      case 'car':
-        vehicleType = VehicleType.car;
-        break;
-      case 'truck':
-        vehicleType = VehicleType.truck;
-        break;
-      case 'pedestrian':
-        vehicleType = VehicleType.pedestrian;
-        break;
-      default:
-        vehicleType = VehicleType.car;
+
+    if (!SupabaseService().isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Sign in to save routes"),
+          action: SnackBarAction(
+            label: "Sign in",
+            onPressed: () {
+              Navigator.of(context).pushNamed("/login");
+            },
+          ),
+        ),
+      );
+      return;
     }
+    
+    // * Resolve context for saving (supports route creation preview, editing mode, and active navigation).
+    final routePoints = List<LatLng>.from(_navigationRoute!);
+    final mode = _navigationMode ?? "car";
+    final vehicleType = _getVehicleTypeFromMode(mode);
+    
+    // * Prefer custom start/end points only if they match the current route geometry.
+    LatLng resolveStartPoint() {
+      final custom = _customStartPoint;
+      if (custom != null) {
+        final distKm = _calculateDistance(custom, routePoints.first);
+        if (distKm < 0.2) {
+          return custom;
+        }
+      }
+      return routePoints.first;
+    }
+
+    LatLng resolveEndPoint() {
+      final custom = _customEndPoint;
+      if (custom != null) {
+        final distKm = _calculateDistance(custom, routePoints.last);
+        if (distKm < 0.2) {
+          return custom;
+        }
+      }
+      return _navigationDestination ?? routePoints.last;
+    }
+
+    final startPoint = resolveStartPoint();
+    final endPoint = resolveEndPoint();
+    
+    // * Compute distance from geometry (km → meters).
+    double distanceKm = 0.0;
+    for (int i = 0; i < routePoints.length - 1; i++) {
+      distanceKm += _calculateDistance(routePoints[i], routePoints[i + 1]);
+    }
+    final distanceMeters = (distanceKm * 1000).round();
+    
+    // * Use existing duration if available; otherwise estimate by profile.
+    final duration = _routeDuration.inSeconds > 0 ? _routeDuration : () {
+      final avgSpeedKmh = () {
+        switch (mode) {
+          case "motorcycle_sub400":
+            return 40.0;
+          case "motorcycle_400plus":
+            return 50.0;
+          case "truck":
+            return 35.0;
+          case "pedestrian":
+            return 5.0;
+          case "car":
+          default:
+            return 45.0;
+        }
+      }();
+      final minutes = ((distanceKm / avgSpeedKmh) * 60).round().clamp(1, 24 * 60 * 7);
+      return Duration(minutes: minutes);
+    }();
     
     showDialog(
       context: context,
       builder: (context) => SaveRouteDialog(
-        routePoints: _navigationRoute!,
-        startPoint: _currentLocation,
-        endPoint: _navigationDestination!,
-        distanceMeters: (_routeDistance * 1000).round(),
-        duration: _routeDuration,
+        routePoints: routePoints,
+        startPoint: startPoint,
+        endPoint: endPoint,
+        distanceMeters: distanceMeters,
+        duration: duration,
         vehicleType: vehicleType,
-        onEditRoute: _navigationDestination != null && _navigationMode != null
+        onEditRoute: routePoints.length >= 2
             ? () {
                 Navigator.pop(context); // * Close save dialog
-                _startRouteEditing(_navigationDestination!, _navigationMode!, _currentLocation);
+                _startRouteEditing(endPoint, mode, startPoint);
               }
             : null,
       ),
@@ -3286,18 +3904,45 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _navigationDestination = null;
       _navigationMode = null;
       _navigationRoute = null;
+      _navigationRouteSignature = null;
+      _navigationRouteCumulativeMeters = null;
+      _isNavigationFollowing = true;
+      _isNavigationMapRotationEnabled = true;
+      _lastNavigationCameraUpdateAt = null;
       _availableRoutes = [];
       _selectedRouteIndex = 0;
       _traveledRoute = [];
       _upcomingRoute = [];
-      _traveledDistance = 0.0;
       _isOffRoute = false;
-      _offRouteDistance = 0.0;
       _isRerouting = false;
       _remainingDistance = 0.0;
       _remainingDuration = Duration.zero;
       _distanceIndicators = null;
+      _navigationHazardWarning = null;
+      _navigationHazardDistanceMeters = null;
+      _navigationHazardMutedUntil.clear();
+      _navigationHazardHapticAt.clear();
+      _currentSpeedKph = null;
+      _speedLimitResult = const SpeedLimitResult(
+        speedLimitKph: null,
+        source: SpeedLimitSource.unknown,
+        highwayType: null,
+        wayId: null,
+        rawMaxspeed: null,
+      );
+      _isOverspeeding = false;
+      _lastOverspeedHapticAt = null;
+      _lastSpeedLimitUpdateAt = null;
+      _lastSpeedLimitUpdateLocation = null;
+      _isLoadingSpeedLimit = false;
+      _lastAcceptedLocationAt = null;
+      _lastAcceptedLocation = null;
     });
+
+    // * Return to a north-up map when leaving navigation (matches Google Maps/Waze).
+    _safeRotateMap(0.0);
+    // * Expose navigation state to shared UI (e.g., global FAB).
+    ref.read(mapIsNavigatingProvider.notifier).state = false;
     
     // * Restart location stream with normal frequency (less frequent updates)
     _startLocationStream();
@@ -3311,13 +3956,253 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       );
     }
   }
+
+  double _toDegrees(double radians) => radians * (180.0 / math.pi);
+
+  double _normalizeDegrees(double degrees) {
+    if (!degrees.isFinite) return 0.0;
+    var normalized = degrees % 360.0;
+    if (normalized < 0) normalized += 360.0;
+    return normalized;
+  }
+
+  double _calculateBearingDegrees(LatLng start, LatLng end) {
+    final lat1 = _toRadians(start.latitude);
+    final lat2 = _toRadians(end.latitude);
+    final dLon = _toRadians(end.longitude - start.longitude);
+
+    final y = math.sin(dLon) * math.cos(lat2);
+    final x = math.cos(lat1) * math.sin(lat2) -
+        math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+
+    final bearingRad = math.atan2(y, x);
+    return _normalizeDegrees(_toDegrees(bearingRad));
+  }
+
+  double? _estimateRouteBearingDegrees(LatLng location) {
+    final route = _navigationRoute;
+    if (route == null || route.length < 2) return null;
+
+    LatLng? bestStart;
+    LatLng? bestEnd;
+    var bestDistance = double.infinity;
+
+    for (int i = 0; i < route.length - 1; i++) {
+      final start = route[i];
+      final end = route[i + 1];
+
+      final dx = end.longitude - start.longitude;
+      final dy = end.latitude - start.latitude;
+      final px = location.longitude - start.longitude;
+      final py = location.latitude - start.latitude;
+
+      final lenSq = dx * dx + dy * dy;
+      var t = 0.0;
+      if (lenSq > 0) {
+        t = ((dx * px + dy * py) / lenSq).clamp(0.0, 1.0);
+      }
+
+      final projected = LatLng(
+        start.latitude + t * dy,
+        start.longitude + t * dx,
+      );
+
+      final distanceToRoute = _calculateHaversineDistance(location, projected);
+      if (distanceToRoute < bestDistance) {
+        bestDistance = distanceToRoute;
+        bestStart = start;
+        bestEnd = end;
+      }
+    }
+
+    if (bestStart == null || bestEnd == null) return null;
+    return _calculateBearingDegrees(bestStart, bestEnd);
+  }
+
+  double? _computeNavigationRotationDegrees(LatLng location) {
+    if (!_isNavigationMapRotationEnabled) return null;
+
+    final heading = _currentHeadingDegrees;
+    final headingIsValid = heading != null &&
+        heading.isFinite &&
+        heading >= 0 &&
+        heading <= 360;
+    if (headingIsValid) {
+      return _normalizeDegrees(heading);
+    }
+
+    // * Fallback: rotate based on route direction if heading is unavailable (common on web).
+    return _estimateRouteBearingDegrees(location);
+  }
+
+  void _updateNavigationCamera(LatLng location, {bool force = false}) {
+    if (!_isNavigating || !_isNavigationFollowing) return;
+    if (!_isMapReady) return;
+
+    final now = DateTime.now();
+    if (!force && _lastNavigationCameraUpdateAt != null) {
+      final since = now.difference(_lastNavigationCameraUpdateAt!);
+      if (since < _navigationCameraThrottle) {
+        return;
+      }
+    }
+    _lastNavigationCameraUpdateAt = now;
+
+    // * Use a zoomed-in default when (re)centering, otherwise respect current zoom.
+    final desiredZoom = (force ? _navigationFollowZoom : _mapZoom).clamp(
+      AppConstants.minZoom,
+      AppConstants.maxZoom,
+    );
+
+    final rotation = _computeNavigationRotationDegrees(location);
+    if (rotation != null) {
+      _safeMoveAndRotateMap(location, desiredZoom, rotation);
+      return;
+    }
+
+    // * No rotation (north-up)
+    _safeMoveMap(location, desiredZoom);
+  }
+
+  void _recenterNavigationCamera() {
+    if (!_hasPreciseLocation) {
+      _requestLocationPermission();
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isNavigationFollowing = true;
+      });
+    }
+    _updateNavigationCamera(_currentLocation, force: true);
+  }
+
+  Future<void> _updateSpeedLimitIfNeeded({
+    required LatLng location,
+    required NavigationSettings settings,
+  }) async {
+    if (!_isNavigating) return;
+    if (!settings.showSpeedHud) return;
+    if (_isLoadingSpeedLimit) return;
+
+    final now = DateTime.now();
+    if (_lastSpeedLimitUpdateAt != null &&
+        now.difference(_lastSpeedLimitUpdateAt!).inSeconds < 6) {
+      return;
+    }
+
+    if (_lastSpeedLimitUpdateLocation != null) {
+      final movedMeters = _calculateHaversineDistance(location, _lastSpeedLimitUpdateLocation!);
+      if (movedMeters < 120) {
+        return;
+      }
+    }
+
+    _isLoadingSpeedLimit = true;
+    _lastSpeedLimitUpdateAt = now;
+    _lastSpeedLimitUpdateLocation = location;
+
+    try {
+      final result = await _speedLimitService.getSpeedLimit(
+        location: location,
+        settings: settings,
+      );
+      if (!mounted) return;
+      setState(() {
+        _speedLimitResult = result;
+      });
+    } finally {
+      _isLoadingSpeedLimit = false;
+    }
+  }
+
+  bool _computeIsOverspeeding({
+    required double? speedKph,
+    required SpeedLimitResult limit,
+    required NavigationSettings settings,
+  }) {
+    if (!settings.overspeedWarningsEnabled) return false;
+    if (speedKph == null || !speedKph.isFinite) return false;
+    final limitKph = limit.speedLimitKph;
+    if (limitKph == null || limitKph <= 0) return false;
+    final threshold = limitKph + settings.overspeedToleranceKph;
+    return speedKph > threshold;
+  }
+
+  void _maybeTriggerOverspeedHaptic(bool isOverspeeding) {
+    if (!isOverspeeding) return;
+    final now = DateTime.now();
+    final last = _lastOverspeedHapticAt;
+    if (last != null && now.difference(last).inSeconds < 12) {
+      return;
+    }
+    _lastOverspeedHapticAt = now;
+    HapticFeedback.mediumImpact();
+  }
+
+  LatLng _lerpLatLng(LatLng a, LatLng b, double t) {
+    final clamped = t.clamp(0.0, 1.0);
+    return LatLng(
+      a.latitude + (b.latitude - a.latitude) * clamped,
+      a.longitude + (b.longitude - a.longitude) * clamped,
+    );
+  }
+
+  _StableLocationResult _stabilizeLocationUpdate({
+    required LatLng current,
+    required LatLng candidate,
+    required DateTime now,
+    required bool hasAcceptedBefore,
+    required bool isNavigating,
+    required double? accuracyMeters,
+  }) {
+    // * Reject clearly invalid coordinates.
+    if (!candidate.latitude.isFinite ||
+        !candidate.longitude.isFinite ||
+        candidate.latitude.abs() > 90 ||
+        candidate.longitude.abs() > 180) {
+      return _StableLocationResult(location: current, accepted: false);
+    }
+
+    // * If the browser reports extremely poor accuracy, don't jump the marker.
+    final acc = accuracyMeters;
+    if (acc != null && acc.isFinite && acc > 2000) {
+      return _StableLocationResult(location: current, accepted: false);
+    }
+
+    // * Filter huge jumps that happen too fast (common in Web geolocation).
+    if (hasAcceptedBefore) {
+      final distanceMeters = _calculateHaversineDistance(current, candidate);
+      final lastAt = _lastAcceptedLocationAt;
+      if (lastAt != null) {
+        final dtSeconds = now.difference(lastAt).inSeconds.clamp(1, 3600);
+
+        // * Anything > 1.5km in < 10s is almost certainly a GPS glitch.
+        if (dtSeconds <= 10 && distanceMeters > 1500) {
+          return _StableLocationResult(location: current, accepted: false);
+        }
+
+        // * Anything > 8km in < 60s is also suspicious.
+        if (dtSeconds <= 60 && distanceMeters > 8000) {
+          return _StableLocationResult(location: current, accepted: false);
+        }
+      }
+    }
+
+    // * Smooth small jitter. During navigation we keep it more responsive.
+    final alpha = isNavigating ? 0.35 : 0.20;
+    final next = hasAcceptedBefore ? _lerpLatLng(current, candidate, alpha) : candidate;
+    return _StableLocationResult(location: next, accepted: true);
+  }
   
   /// * Open directions options
   Future<void> _openDirections(LatLng destination) async {
     try {
       if (mounted) {
-        Navigator.of(context).pop(); // * Close location options sheet
-        
+        // * Do NOT auto-pop here.
+        // ! The caller is responsible for closing any currently open sheet.
+        // * Auto-popping can accidentally pop the MapScreen route, breaking navigation.
         showModalBottomSheet(
           context: context,
           backgroundColor: Colors.transparent,
@@ -3432,7 +4317,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void _saveLocation(Map<String, dynamic> result) {
     // * TODO: Implement save location functionality
     if (mounted) {
-      Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Saved: ${result['display_name'] ?? 'Location'}"),
@@ -3453,7 +4337,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void _onMapLongPressed(LatLng point) async {
     try {
       // * Get address for the point using reverse geocoding
-      final locationService = LocationService();
       // * Use a simple mock result for now (can enhance with reverse geocoding later)
       final mockResult = {
         'display_name': '${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}',
@@ -3463,7 +4346,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       };
       
       // * Move map to location
-      _mapController.move(point, 15.0);
+      _safeMoveMap(point, 15.0);
       
       // * Show location options sheet (same as search result)
       _showLocationOptionsSheet(mockResult, point);
@@ -3480,7 +4363,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         "https://www.google.com/maps?q=${location.latitude},${location.longitude}";
     
     if (mounted) {
-      Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text("Location copied to clipboard"),
@@ -3514,12 +4396,30 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     
     _positionSubscription = Geolocator.getPositionStream(locationSettings: settings).listen(
       (position) {
-        final updated = LatLng(position.latitude, position.longitude);
+        final rawUpdated = LatLng(position.latitude, position.longitude);
+        final heading = position.heading;
+        final headingIsValid = heading.isFinite && heading >= 0 && heading <= 360;
         if (!mounted) return;
+
+        final now = DateTime.now();
+        final stable = _stabilizeLocationUpdate(
+          current: _currentLocation,
+          candidate: rawUpdated,
+          now: now,
+          hasAcceptedBefore: _lastAcceptedLocation != null,
+          isNavigating: _isNavigating,
+          accuracyMeters: position.accuracy.isFinite ? position.accuracy : null,
+        );
+        final updated = stable.location;
+        if (stable.accepted) {
+          _lastAcceptedLocationAt = now;
+          _lastAcceptedLocation = updated;
+        }
         
         setState(() {
           _currentLocation = updated;
           _hasPreciseLocation = true;
+          _currentHeadingDegrees = headingIsValid ? heading : _currentHeadingDegrees;
         });
         
         // * Detect country code when location is updated (only once per significant move)
@@ -3531,9 +4431,41 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           
           // * Update distance indicators
           final indicators = _distanceTracker.getDistanceIndicators(updated);
+          final hazards = ref.read(mapHazardsProvider);
+          final navigationSettings = ref.read(navigationSettingsProvider);
+          final hazardWarning = _computeUpcomingHazardWarning(
+            currentLocation: updated,
+            hazards: hazards,
+          );
+
+          final speedKph = position.speed.isFinite ? (position.speed * 3.6) : null;
+
           setState(() {
             _distanceIndicators = indicators;
+            _navigationHazardWarning = hazardWarning?.hazard;
+            _navigationHazardDistanceMeters = hazardWarning?.distanceAheadMeters;
+            _currentSpeedKph = speedKph;
           });
+
+          // * Update speed limit in the background (best-effort).
+          _updateSpeedLimitIfNeeded(location: updated, settings: navigationSettings);
+
+          final isOverspeeding = _computeIsOverspeeding(
+            speedKph: speedKph,
+            limit: _speedLimitResult,
+            settings: navigationSettings,
+          );
+          if (mounted) {
+            setState(() {
+              _isOverspeeding = isOverspeeding;
+            });
+          }
+          _maybeTriggerOverspeedHaptic(isOverspeeding);
+
+          if (hazardWarning != null && hazardWarning.shouldHaptic) {
+            // * Keep haptics subtle and throttled (safety-first)
+            HapticFeedback.lightImpact();
+          }
           
           // * Check if user is off-route
           final isOffRoute = _checkOffRoute(updated);
@@ -3543,8 +4475,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             _recalculateRouteFromCurrentPosition();
           }
           
-          // * During navigation, keep map centered on user with smooth following
-          _mapController.move(updated, _mapController.camera.zoom);
+          // * During navigation, keep the camera following unless the user manually panned/zoomed.
+          if (_isNavigationFollowing) {
+            _updateNavigationCamera(updated);
+          }
         } else {
           // * Only move map when not navigating (user can pan freely)
           // * Don't auto-center in normal mode to allow user exploration
@@ -3580,7 +4514,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           _hasPreciseLocation = true;
         });
         try {
-          _mapController.move(location, AppConstants.defaultZoom);
+          _safeMoveMap(location, AppConstants.defaultZoom);
           debugPrint("📍 [MapScreen] Map moved to last known location");
           // * Detect country code when location is updated
           _detectCountryCode();
@@ -3602,7 +4536,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           if (!_isNavigating) {
             // * Only move map if not navigating (navigation mode follows user automatically)
             try {
-              _mapController.move(location, _mapController.camera.zoom);
+              _safeMoveMap(location, _mapZoom);
               debugPrint("📍 [MapScreen] Map moved to fresh location");
             } catch (e) {
               debugPrint("❌ [MapScreen] Error moving map: $e");
@@ -3615,13 +4549,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           debugPrint("⚠️ [MapScreen] Could not get fresh location, using last known or default");
           if (lastKnown == null && mounted) {
             // * Only use default if we have no location at all
-            _mapController.move(_currentLocation, AppConstants.defaultZoom);
+            _safeMoveMap(_currentLocation, AppConstants.defaultZoom);
           }
         }
       } catch (e) {
         debugPrint("❌ [MapScreen] Error getting fresh location: $e");
         if (lastKnown == null && mounted) {
-          _mapController.move(_currentLocation, AppConstants.defaultZoom);
+          _safeMoveMap(_currentLocation, AppConstants.defaultZoom);
         }
       }
     } catch (e) {
@@ -3630,24 +4564,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       if (mounted) {
         _currentLocation = LatLng(AppConstants.defaultLatitude, AppConstants.defaultLongitude);
       }
-    }
-  }
-  
-  Future<void> _refreshLocation({bool centerOnMap = true}) async {
-    final locationService = LocationService();
-    final position = await locationService.getCurrentPosition();
-    if (!mounted) return;
-    if (position != null) {
-      final location = LatLng(position.latitude, position.longitude);
-      setState(() {
-        _currentLocation = location;
-        _hasPreciseLocation = true;
-      });
-      if (centerOnMap) {
-        _mapController.move(location, AppConstants.defaultZoom);
-      }
-    } else {
-      debugPrint("❌ [MapScreen] Unable to refresh location");
     }
   }
   
@@ -3729,7 +4645,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         });
         
         // * Move map to location
-        _mapController.move(location, AppConstants.defaultZoom);
+        _safeMoveMap(location, AppConstants.defaultZoom);
         
         // * Refresh the provider
         ref.invalidate(currentLocationProvider);
@@ -3892,6 +4808,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _currentLocation.latitude + offset,
         _currentLocation.longitude + offset,
       );
+      _scheduleDynamicPoiRefresh();
       // * Removed verbose logging to prevent console overflow
     } catch (e, stackTrace) {
       debugPrint("❌ [MapScreen] ERROR in _onMapMoved: $e");
@@ -3999,6 +4916,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           : AppConstants.defaultLongitude;
       final safeCenter = LatLng(safeLat, safeLon);
       final currentLocationForMarker = _hasPreciseLocation ? _currentLocation : null;
+      final navigationSettings = ref.watch(navigationSettingsProvider);
+      final mapZoom = _mapZoom;
+      final showKnownPlaces = !_isNavigating && mapZoom >= _knownPlacesMinZoom;
+      final showDynamicPois = !_isNavigating && mapZoom >= _dynamicPoisMinZoom;
+      final showHazardMarkers = mapZoom >= _knownPlacesMinZoom;
+      final showHoaMarkers = !_isNavigating && mapZoom >= 13.0;
     
     // * Listen to route creation trigger
     ref.listen<RouteCreationAction?>(routeCreationTriggerProvider, (previous, next) {
@@ -4040,22 +4963,55 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   // * Wrap in try-catch to prevent crashes
                   if (mounted) {
                     try {
-                      _onMapReady();
+                      _handleFlutterMapReady();
                     } catch (e) {
                       debugPrint("Error in onMapReady: $e");
                     }
                   }
                 },
               onMapEvent: (event) {
-                  // * Only handle move end events to avoid excessive calls
+                  final camera = event.camera;
+                  final nextZoom = camera.zoom;
+                  final nextCenter = camera.center;
+                  final nextRotation = camera.rotation;
+                  final nextBounds = camera.visibleBounds;
+
+                  // * Cache camera state for non-build logic (e.g., navigation following)
+                  _mapZoom = nextZoom;
+                  _mapCenter = nextCenter;
+                  _mapRotationDegrees = nextRotation;
+                  _mapVisibleBounds = nextBounds;
+
+                  // * If the user manually pans/zooms/rotates during navigation, stop auto-follow.
+                  if (_isNavigating && _isNavigationFollowing) {
+                    final shouldDisableFollow =
+                        (event is MapEventMoveStart && event.source == MapEventSource.dragStart) ||
+                        (event is MapEventRotateStart &&
+                            event.source != MapEventSource.mapController);
+                    if (shouldDisableFollow && mounted) {
+                      setState(() {
+                        _isNavigationFollowing = false;
+                      });
+                    }
+                  }
+
+                  // * Only rebuild on move end to update zoom-based UI/marker visibility
                   if (event is MapEventMoveEnd) {
+                    if (mounted) {
+                      setState(() {
+                        _mapZoom = nextZoom;
+                        _mapCenter = nextCenter;
+                        _mapRotationDegrees = nextRotation;
+                        _mapVisibleBounds = nextBounds;
+                      });
+                    }
                     try {
-                  _onMapMoved();
+                      _onMapMoved();
                     } catch (e, stackTrace) {
                       debugPrint("❌ [MapScreen] Error in onMapMoved callback: $e");
                       debugPrint("❌ [MapScreen] Stack: $stackTrace");
                     }
-                }
+                  }
               },
               onTap: (tapPosition, point) {
                   // * Handle custom point selection for navigation
@@ -4235,6 +5191,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     try {
                       setState(() {
                         _selectedHazard = null;
+                        _selectedPlace = null;
                         _showSearchResults = false;
                         _searchFocusNode.unfocus();
                       });
@@ -4486,53 +5443,205 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   markers: [
                     Marker(
                       point: currentLocationForMarker,
-                      width: 48,
-                      height: 48,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryColor,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 3,
-                          ),
-                          boxShadow: AppTheme.shadowMedium,
-                        ),
-                      child: const Icon(
-                        Icons.navigation,
-                          color: Colors.white,
-                          size: 24,
-                        ),
+                      width: 40,
+                      height: 40,
+                      child: UserLocationMarker(
+                        headingDegrees: _currentHeadingDegrees,
+                        mapRotationDegrees: _mapRotationDegrees,
+                        avatarIcon: navigationSettings.avatarStyle.icon,
                       ),
                     ),
                   ],
                 ),
-              // * Hazard markers
-              MarkerLayer(
-                markers: hazards
-                    .where((hazard) => 
-                        hazard.latitude.isFinite && 
-                        hazard.longitude.isFinite &&
-                        hazard.latitude != 0.0 &&
-                        hazard.longitude != 0.0)
-                    .map((hazard) {
-                  return Marker(
-                    point: LatLng(hazard.latitude, hazard.longitude),
-                    width: 40,
-                    height: 40,
-                    child: GestureDetector(
-                      onTap: () {
-                        if (mounted) {
-                        setState(() => _selectedHazard = hazard);
-                        }
+              // * Known place markers (famous / known locations)
+              // * Hide during active navigation to reduce distraction.
+              if (_knownPlaces.isNotEmpty && showKnownPlaces)
+                MarkerLayer(
+                  markers: _filterOverlappingMarkers<Place>(
+                    markers: _knownPlaces,
+                    getLocation: (p) => p.location,
+                    getWidth: (p) {
+                      final showLabel = mapZoom >= 12.0 || _selectedPlace?.id == p.id;
+                      return showLabel ? 200.0 : 40.0;
+                    },
+                    minPixelSpacing: 60.0, // * Minimum 60px spacing between known place markers
+                    zoom: mapZoom,
+                  ).map((place) {
+                    final category = place.category?.toLowerCase();
+                    final icon = switch (category) {
+                      "mall" => Icons.storefront_outlined,
+                      "terminal" => Icons.directions_bus_filled,
+                      _ => Icons.place_outlined,
+                    };
+                    final accentColor = switch (category) {
+                      "mall" => AppTheme.primaryColor,
+                      "terminal" => AppTheme.infoColor,
+                      _ => AppTheme.secondaryColor,
+                    };
+                    final showLabel = mapZoom >= 12.0 || _selectedPlace?.id == place.id; // * Show labels earlier (was 14.0)
+                    final markerWidth = showLabel ? 200.0 : 40.0;
+                    final markerAlignment = Marker.computePixelAlignment(
+                      width: markerWidth,
+                      height: _poiMarkerHeight,
+                      left: _poiMarkerAnchorLeft,
+                      top: _poiMarkerAnchorTop,
+                    );
+
+                    return Marker(
+                      point: place.location,
+                      width: markerWidth,
+                      height: _poiMarkerHeight,
+                      alignment: markerAlignment,
+                      child: MapPoiMarker(
+                        icon: icon,
+                        accentColor: accentColor,
+                        label: place.name,
+                        showLabel: showLabel,
+                        onTap: () {
+                          if (!mounted) return;
+                          setState(() {
+                            _selectedPlace = place;
+                            _selectedHazard = null;
+                            _showSearchResults = false;
+                          });
+                          _searchFocusNode.unfocus();
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              // * Dynamic POIs (Google Maps-like landmarks) - only show when zoomed in.
+              if (showDynamicPois && _dynamicPois.isNotEmpty)
+                MarkerLayer(
+                  markers: () {
+                    // * Filter overlapping markers, preserving original index for label visibility
+                    final filtered = _filterOverlappingMarkers<MapPoi>(
+                      markers: _dynamicPois,
+                      getLocation: (p) => p.location,
+                      getWidth: (p) {
+                        final originalIndex = _dynamicPois.indexOf(p);
+                        final showLabel = mapZoom >= 15.0 && originalIndex < 15;
+                        return showLabel ? 200.0 : 40.0;
                       },
-                      child: HazardMarker(hazard: hazard),
-                    ),
-                  );
-                }).toList(),
-              ),
+                      minPixelSpacing: 50.0, // * Minimum 50px spacing between dynamic POI markers
+                      zoom: mapZoom,
+                    );
+                    return filtered;
+                  }().asMap().entries.map((entry) {
+                    final poi = entry.value;
+                    final originalIndex = _dynamicPois.indexOf(poi); // * Get original index for label logic
+                    final type = (poi.type ?? "").toLowerCase();
+                    final icon = () {
+                      if (type.contains("mall") || type == "retail") {
+                        return Icons.storefront_outlined;
+                      }
+                      if (type.contains("bus") || type.contains("station") || type.contains("terminal")) {
+                        return Icons.directions_bus_filled;
+                      }
+                      if (type.contains("hospital") || type.contains("clinic")) {
+                        return Icons.local_hospital_outlined;
+                      }
+                      if (type.contains("school") || type.contains("university") || type.contains("college")) {
+                        return Icons.school_outlined;
+                      }
+                      if (type.contains("fuel") || type.contains("gas") || type.contains("petrol")) {
+                        return Icons.local_gas_station_outlined;
+                      }
+                      return Icons.place_outlined;
+                    }();
+
+                    final accentColor = () {
+                      if (type.contains("mall") || type == "retail") {
+                        return AppTheme.primaryColor;
+                      }
+                      if (type.contains("bus") || type.contains("station") || type.contains("terminal")) {
+                        return AppTheme.infoColor;
+                      }
+                      if (type.contains("hospital") || type.contains("clinic")) {
+                        return AppTheme.errorColor;
+                      }
+                      if (type.contains("school") || type.contains("university") || type.contains("college")) {
+                        return AppTheme.secondaryColor;
+                      }
+                      if (type.contains("fuel") || type.contains("gas") || type.contains("petrol")) {
+                        return AppTheme.warningColor;
+                      }
+                      return AppTheme.textSecondary;
+                    }();
+
+                    // * Show labels only when very zoomed in (and only for the most prominent POIs).
+                    final showLabel = mapZoom >= 15.0 && originalIndex < 15; // * Use original index for label logic
+                    final markerWidth = showLabel ? 200.0 : 40.0;
+                    final markerAlignment = Marker.computePixelAlignment(
+                      width: markerWidth,
+                      height: _poiMarkerHeight,
+                      left: _poiMarkerAnchorLeft,
+                      top: _poiMarkerAnchorTop,
+                    );
+
+                    return Marker(
+                      point: poi.location,
+                      width: markerWidth,
+                      height: _poiMarkerHeight,
+                      alignment: markerAlignment,
+                      child: MapPoiMarker(
+                        icon: icon,
+                        accentColor: accentColor,
+                        label: poi.name,
+                        showLabel: showLabel,
+                        onTap: () {
+                          if (!mounted) return;
+                          final communityPlace = Place(
+                            id: poi.id, // * Nominatim-backed id (`nominatim:<place_id>`)
+                            name: poi.name,
+                            latitude: poi.latitude,
+                            longitude: poi.longitude,
+                            category: (poi.type ?? poi.category)?.trim(),
+                            aliases: const [],
+                          );
+                          setState(() {
+                            // * Show the same place preview UI for dynamic POIs so users
+                            // * can upload moderated photos / comment / like (Waze-style).
+                            _selectedPlace = communityPlace;
+                            _selectedHazard = null;
+                            _showSearchResults = false;
+                          });
+                          _searchFocusNode.unfocus();
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              // * Hazard markers
+              if (showHazardMarkers)
+                MarkerLayer(
+                  markers: hazards
+                      .where((hazard) => 
+                          hazard.latitude.isFinite && 
+                          hazard.longitude.isFinite &&
+                          hazard.latitude != 0.0 &&
+                          hazard.longitude != 0.0)
+                      .map((hazard) {
+                    return Marker(
+                      point: LatLng(hazard.latitude, hazard.longitude),
+                      width: 34,
+                      height: 34,
+                      child: GestureDetector(
+                        onTap: () {
+                          if (mounted) {
+                          setState(() {
+                            _selectedHazard = hazard;
+                            _selectedPlace = null;
+                          });
+                          }
+                        },
+                        child: HazardMarker(hazard: hazard),
+                      ),
+                    );
+                  }).toList(),
+                ),
               // * HOA Gate markers
-              _buildHOAMarkers(),
+              if (showHoaMarkers) _buildHOAMarkers(),
             ],
           ),
             // * Map Controls - Top Right (below search bar)
@@ -4545,9 +5654,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   _MapControlButton(
                     icon: Icons.add,
                     onPressed: () {
-                      final currentZoom = _mapController.camera.zoom;
-                      _mapController.move(
-                        _mapController.camera.center,
+                      final currentZoom = _mapZoom;
+                      final currentCenter = _mapCenter;
+                      _safeMoveMap(
+                        currentCenter,
                         (currentZoom + 1).clamp(AppConstants.minZoom, AppConstants.maxZoom),
                       );
                     },
@@ -4558,9 +5668,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   _MapControlButton(
                     icon: Icons.remove,
                     onPressed: () {
-                      final currentZoom = _mapController.camera.zoom;
-                      _mapController.move(
-                        _mapController.camera.center,
+                      final currentZoom = _mapZoom;
+                      final currentCenter = _mapCenter;
+                      _safeMoveMap(
+                        currentCenter,
                         (currentZoom - 1).clamp(AppConstants.minZoom, AppConstants.maxZoom),
                       );
                     },
@@ -4569,18 +5680,30 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   const SizedBox(height: AppTheme.spacingMD),
                   // * Location Button
                   _MapControlButton(
-                    icon: _isNavigating ? Icons.navigation : Icons.gps_fixed,
+                    icon: _isNavigating
+                        ? (_isNavigationFollowing ? Icons.navigation : Icons.my_location)
+                        : Icons.gps_fixed,
                     onPressed: _hasPreciseLocation
                         ? () {
+                            if (_isNavigating) {
+                              // * Re-center and resume follow mode.
+                              _recenterNavigationCamera();
+                              return;
+                            }
+
                             // * Center on current location
-                            _mapController.move(_currentLocation, AppConstants.defaultZoom);
+                            _safeMoveMap(_currentLocation, AppConstants.defaultZoom);
                           }
                         : _requestLocationPermission,
                     tooltip: _hasPreciseLocation
-                        ? (_isNavigating ? "Center on my location" : "Center on my location")
+                        ? (_isNavigating
+                            ? (_isNavigationFollowing ? "Following route" : "Re-center")
+                            : "Center on my location")
                         : "Get my location",
                     backgroundColor: _hasPreciseLocation
-                        ? AppTheme.primaryColor
+                        ? (_isNavigating && !_isNavigationFollowing
+                            ? AppTheme.warningColor
+                            : AppTheme.primaryColor)
                         : AppTheme.textSecondary,
                   ),
                 ],
@@ -4903,6 +6026,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   isOffRoute: _isOffRoute,
                 ),
               ),
+              // * Speed HUD (Waze/Google Maps-like)
+              Positioned(
+                top: AppTheme.spacingMD,
+                left: AppTheme.spacingMD,
+                child: Builder(
+                  builder: (context) {
+                    final settings = ref.watch(navigationSettingsProvider);
+                    if (!settings.showSpeedHud) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return NavigationSpeedHud(
+                      speedKph: _currentSpeedKph,
+                      speedLimit: _speedLimitResult,
+                      isOverspeeding: _isOverspeeding,
+                      onTapLimit: () {
+                        // * TODO: Add per-road override UI (wayId-based) in a follow-up.
+                      },
+                    );
+                  },
+                ),
+              ),
               // * Distance indicators panel (below navigation overlay)
               if (_distanceIndicators != null && _distanceIndicators!.hasAny)
                 Positioned(
@@ -4914,8 +6059,59 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     compact: true,
                   ),
                 ),
+              // * Hazard warning banner (Waze-style)
+              if (_navigationHazardWarning != null &&
+                  _navigationHazardDistanceMeters != null)
+                Positioned(
+                  top: (_distanceIndicators != null && _distanceIndicators!.hasAny)
+                      ? 170
+                      : 120,
+                  left: AppTheme.spacingMD,
+                  right: AppTheme.spacingMD,
+                  child: NavigationHazardWarningBanner(
+                    hazard: _navigationHazardWarning!,
+                    distanceMeters: _navigationHazardDistanceMeters!,
+                    onDismiss: () {
+                      if (!mounted || _navigationHazardWarning == null) return;
+                      final hazardId = _navigationHazardWarning!.id;
+                      setState(() {
+                        // * Mute this hazard briefly to prevent immediate re-appearance.
+                        _navigationHazardMutedUntil[hazardId] =
+                            DateTime.now().add(const Duration(minutes: 5));
+                        _navigationHazardWarning = null;
+                        _navigationHazardDistanceMeters = null;
+                      });
+                    },
+                    onTap: () {
+                      if (!mounted || _navigationHazardWarning == null) return;
+                      setState(() {
+                        _selectedHazard = _navigationHazardWarning;
+                        _selectedPlace = null;
+                      });
+                    },
+                  ),
+                ),
             ],
             // * Hazard detail bottom sheet
+            if (_selectedPlace != null && !_isNavigating)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: PlaceDetailSheet(
+                  place: _selectedPlace!,
+                  onGetDirections: () {
+                    final destination = _selectedPlace!.location;
+                    if (mounted) {
+                      setState(() => _selectedPlace = null);
+                    }
+                    _openDirections(destination);
+                  },
+                  onClose: () {
+                    if (mounted) {
+                      setState(() => _selectedPlace = null);
+                    }
+                  },
+                ),
+              ),
             if (_selectedHazard != null)
               Positioned(
               bottom: 0,
@@ -4992,58 +6188,78 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       ),
                       const SizedBox(height: 12),
                       // * Control buttons
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           if (_routeControlPoints.isNotEmpty)
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: _recalculateRouteWithControlPoints,
-                                icon: const Icon(Icons.refresh, size: 18),
-                                label: const Text("Recalculate"),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.primaryColor,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: _recalculateRouteWithControlPoints,
+                                    icon: const Icon(Icons.refresh, size: 18),
+                                    label: const Text("Recalculate"),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppTheme.primaryColor,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      _routeControlPoints.clear();
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text("Control points cleared")),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.clear_all, size: 18),
+                                  label: const Text("Clear"),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          if (_routeControlPoints.isNotEmpty) const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: _showSaveRouteDialog,
+                                  icon: const Icon(Icons.save, size: 18),
+                                  label: const Text("Save"),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.successColor,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
                                 ),
                               ),
-                            ),
-                          if (_routeControlPoints.isNotEmpty) const SizedBox(width: 8),
-                          if (_routeControlPoints.isNotEmpty)
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                setState(() {
-                                  _routeControlPoints.clear();
-                                });
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("Control points cleared")),
-                                );
-                              },
-                              icon: const Icon(Icons.clear_all, size: 18),
-                              label: const Text("Clear"),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      _isEditingRoute = false;
+                                      _routeControlPoints = [];
+                                      _draggingControlPointIndex = null;
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text("Route editing mode disabled")),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.check, size: 18),
+                                  label: const Text("Done"),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                ),
                               ),
-                            ),
-                          if (_routeControlPoints.isNotEmpty) const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                setState(() {
-                                  _isEditingRoute = false;
-                                  _routeControlPoints = [];
-                                  _draggingControlPointIndex = null;
-                                });
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("Route editing mode disabled")),
-                                );
-                              },
-                              icon: const Icon(Icons.check, size: 18),
-                              label: const Text("Done"),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                            ),
+                            ],
                           ),
                         ],
                       ),
@@ -5169,8 +6385,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           markers: validHOAs.map((hoa) {
             return Marker(
               point: LatLng(hoa.latitude!, hoa.longitude!),
-              width: 40,
-              height: 40,
+              width: 34,
+              height: 34,
               child: GestureDetector(
                 onTap: () {
                   // * Could show HOA info dialog here
@@ -5290,6 +6506,234 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     
     final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
     return earthRadiusM * c;
+  }
+
+  String _buildRouteSignature(List<LatLng> route) {
+    if (route.isEmpty) return "0";
+    final first = route.first;
+    final last = route.last;
+    return "${route.length}:"
+        "${first.latitude.toStringAsFixed(5)},${first.longitude.toStringAsFixed(5)}:"
+        "${last.latitude.toStringAsFixed(5)},${last.longitude.toStringAsFixed(5)}";
+  }
+
+  List<double> _buildRouteCumulativeMeters(List<LatLng> route) {
+    if (route.isEmpty) return const [];
+    final cumulative = <double>[0.0];
+    var total = 0.0;
+    for (int i = 1; i < route.length; i++) {
+      total += _calculateHaversineDistance(route[i - 1], route[i]);
+      cumulative.add(total);
+    }
+    return cumulative;
+  }
+
+  void _ensureNavigationRouteCache() {
+    final route = _navigationRoute;
+    if (route == null || route.length < 2) {
+      _navigationRouteSignature = null;
+      _navigationRouteCumulativeMeters = null;
+      return;
+    }
+
+    final signature = _buildRouteSignature(route);
+    if (_navigationRouteSignature == signature &&
+        _navigationRouteCumulativeMeters != null &&
+        _navigationRouteCumulativeMeters!.length == route.length) {
+      return;
+    }
+
+    _navigationRouteSignature = signature;
+    _navigationRouteCumulativeMeters = _buildRouteCumulativeMeters(route);
+  }
+
+  Map<String, double>? _projectPointOntoRouteMeters({
+    required LatLng point,
+    required List<LatLng> route,
+    required List<double> cumulativeMeters,
+  }) {
+    if (route.length < 2 || cumulativeMeters.length != route.length) {
+      return null;
+    }
+
+    var bestDistance = double.infinity;
+    var bestAlong = 0.0;
+
+    for (int i = 0; i < route.length - 1; i++) {
+      final start = route[i];
+      final end = route[i + 1];
+
+      final dx = end.longitude - start.longitude;
+      final dy = end.latitude - start.latitude;
+      final px = point.longitude - start.longitude;
+      final py = point.latitude - start.latitude;
+
+      final lenSq = dx * dx + dy * dy;
+      var t = 0.0;
+      if (lenSq > 0) {
+        t = ((dx * px + dy * py) / lenSq).clamp(0.0, 1.0);
+      }
+
+      final projected = LatLng(
+        start.latitude + t * dy,
+        start.longitude + t * dx,
+      );
+
+      final distanceToRoute = _calculateHaversineDistance(point, projected);
+      if (distanceToRoute < bestDistance) {
+        bestDistance = distanceToRoute;
+        final segmentMeters = _calculateHaversineDistance(start, end);
+        bestAlong = cumulativeMeters[i] + (segmentMeters * t);
+      }
+    }
+
+    return {
+      "along": bestAlong,
+      "distance": bestDistance,
+    };
+  }
+
+  double _hazardWarningRangeMeters(Hazard hazard) {
+    final base = switch (hazard.severity) {
+      SeverityLevel.low => 250.0,
+      SeverityLevel.medium => 420.0,
+      SeverityLevel.high => 700.0,
+    };
+
+    switch (hazard.type) {
+      case HazardType.closure:
+      case HazardType.roadblock:
+        return base + 350.0;
+      case HazardType.accident:
+        return base + 200.0;
+      case HazardType.flood:
+      case HazardType.landslide:
+        return base + 250.0;
+      case HazardType.pothole:
+        return base;
+    }
+  }
+
+  bool _isHazardMuted(String hazardId) {
+    final until = _navigationHazardMutedUntil[hazardId];
+    if (until == null) return false;
+    return DateTime.now().isBefore(until);
+  }
+
+  _UpcomingHazardWarning? _computeUpcomingHazardWarning({
+    required LatLng currentLocation,
+    required List<Hazard> hazards,
+  }) {
+    if (!_isNavigating) return null;
+    final route = _navigationRoute;
+    if (route == null || route.length < 2) return null;
+
+    _ensureNavigationRouteCache();
+    final cumulativeMeters = _navigationRouteCumulativeMeters;
+    if (cumulativeMeters == null || cumulativeMeters.length != route.length) {
+      return null;
+    }
+
+    final currentProjection = _projectPointOntoRouteMeters(
+      point: currentLocation,
+      route: route,
+      cumulativeMeters: cumulativeMeters,
+    );
+    if (currentProjection == null) return null;
+    final currentAlong = currentProjection["along"];
+    if (currentAlong == null) return null;
+
+    // * Consider hazards that are near the route and ahead of the current position.
+    const maxDistanceToRouteMeters = 180.0;
+    Hazard? bestHazard;
+    var bestAhead = double.infinity;
+
+    for (final hazard in hazards) {
+      if (!hazard.latitude.isFinite || !hazard.longitude.isFinite) continue;
+      if (hazard.latitude == 0.0 && hazard.longitude == 0.0) continue;
+      if (_isHazardMuted(hazard.id)) continue;
+
+      final hazardLocation = LatLng(hazard.latitude, hazard.longitude);
+      final hazardProjection = _projectPointOntoRouteMeters(
+        point: hazardLocation,
+        route: route,
+        cumulativeMeters: cumulativeMeters,
+      );
+      if (hazardProjection == null) continue;
+
+      final distanceToRoute = hazardProjection["distance"];
+      final hazardAlong = hazardProjection["along"];
+      if (distanceToRoute == null || hazardAlong == null) continue;
+      if (distanceToRoute > maxDistanceToRouteMeters) continue;
+
+      final ahead = hazardAlong - currentAlong;
+      if (ahead < -30.0) continue; // * Behind the user
+
+      final range = _hazardWarningRangeMeters(hazard);
+      if (ahead > range) continue;
+
+      if (ahead < bestAhead) {
+        bestAhead = ahead;
+        bestHazard = hazard;
+      }
+    }
+
+    if (bestHazard == null) return null;
+
+    // * Throttle haptics per hazard id (avoid spamming).
+    final now = DateTime.now();
+    final lastHaptic = _navigationHazardHapticAt[bestHazard.id];
+    final shouldHaptic =
+        lastHaptic == null || now.difference(lastHaptic).inSeconds >= 25;
+    if (shouldHaptic) {
+      _navigationHazardHapticAt[bestHazard.id] = now;
+    }
+
+    return _UpcomingHazardWarning(
+      hazard: bestHazard,
+      distanceAheadMeters: bestAhead,
+      shouldHaptic: shouldHaptic,
+    );
+  }
+
+  /// * Filter markers to prevent overlapping (minimum pixel spacing).
+  /// *
+  /// * Returns a filtered list where no two markers are closer than [minPixelSpacing] pixels.
+  /// * Prioritizes earlier markers in the list (assumes they're already sorted by importance).
+  List<T> _filterOverlappingMarkers<T>({
+    required List<T> markers,
+    required LatLng Function(T) getLocation,
+    required double Function(T) getWidth,
+    required double minPixelSpacing,
+    required double zoom,
+  }) {
+    if (markers.isEmpty || !_isMapReady) return markers;
+
+    // * Convert minimum pixel spacing to approximate geographic distance at this zoom.
+    // * At zoom Z, 1 pixel ≈ 156543.03392 * cos(lat) / 2^Z meters.
+    // * We use a rough approximation: at equator, 1 pixel ≈ 156543 / 2^Z meters.
+    final metersPerPixel = 156543.03392 / math.pow(2, zoom);
+    final minMeters = minPixelSpacing * metersPerPixel;
+
+    final filtered = <T>[];
+    for (final marker in markers) {
+      final location = getLocation(marker);
+      final width = getWidth(marker);
+      final minDistance = math.max(minMeters, width * metersPerPixel * 1.2); // * At least 1.2x marker width
+
+      // * Check if this marker is too close to any already-filtered marker.
+      final tooClose = filtered.any((existing) {
+        final existingLocation = getLocation(existing);
+        final distance = _calculateHaversineDistance(location, existingLocation);
+        return distance < minDistance;
+      });
+
+      if (!tooClose) {
+        filtered.add(marker);
+      }
+    }
+
+    return filtered;
   }
 }
 

@@ -5,6 +5,8 @@ import "dart:typed_data";
 import "../models/hazard.dart";
 import "../models/user_profile.dart";
 import "../models/hazard_comment.dart";
+import "../models/place_comment.dart";
+import "../models/place_image.dart";
 import "../core/config/env.dart";
 import "../core/constants/app_constants.dart";
 
@@ -157,7 +159,7 @@ class SupabaseService {
         .maybeSingle();
     
     if (response == null) return null;
-    return UserProfile.fromJson(response as Map<String, dynamic>);
+    return UserProfile.fromJson(response);
   }
   
   /// * Update user profile
@@ -277,7 +279,7 @@ class SupabaseService {
         .select()
         .single();
     
-    return Hazard.fromJson(response as Map<String, dynamic>);
+    return Hazard.fromJson(response);
   }
   
   /// * Subscribe to realtime hazards updates
@@ -391,7 +393,7 @@ class SupabaseService {
     
     final List<HazardComment> comments = [];
     for (final item in response) {
-      final commentData = item as Map<String, dynamic>;
+      final Map<String, dynamic> commentData = item;
       final profileData = commentData['profiles'] as Map<String, dynamic>?;
       
       if (profileData != null) {
@@ -438,7 +440,7 @@ class SupabaseService {
         ''')
         .single();
     
-    final commentJson = response as Map<String, dynamic>;
+    final Map<String, dynamic> commentJson = response;
     final profileData = commentJson['profiles'] as Map<String, dynamic>?;
     
     if (profileData != null) {
@@ -561,6 +563,598 @@ class SupabaseService {
         .subscribe();
     
     return channel;
+  }
+
+  // * Place Preview (Known Locations) - Photos, Comments, Likes
+  // *
+  // * Expected tables in Supabase:
+  // * - place_comments
+  // * - place_images
+  // * - place_likes
+  // *
+  // * See `supabase_places_schema.sql` for the recommended schema + RLS policies.
+
+  /// * Get comments for a place
+  Future<List<PlaceComment>> getPlaceComments(String placeId) async {
+    if (isDemoMode) {
+      return [];
+    }
+    final c = client;
+    if (c == null) {
+      return [];
+    }
+
+    final response = await c
+        .from('place_comments')
+        .select('''
+          *,
+          profiles:user_id (
+            name,
+            photo_url
+          )
+        ''')
+        .eq('place_id', placeId)
+        .order('created_at', ascending: false);
+
+    final comments = <PlaceComment>[];
+    for (final item in response) {
+      final Map<String, dynamic> commentData = item;
+      final profileData = commentData['profiles'] as Map<String, dynamic>?;
+
+      if (profileData != null) {
+        commentData['user_name'] = profileData['name'];
+        commentData['user_photo_url'] = profileData['photo_url'];
+      }
+
+      comments.add(PlaceComment.fromJson(commentData));
+    }
+    return comments;
+  }
+
+  /// * Create a new comment on a place
+  Future<PlaceComment> createPlaceComment({
+    required String placeId,
+    required String text,
+  }) async {
+    if (isDemoMode) {
+      throw Exception("Creating place comments not available in demo mode");
+    }
+    if (!isAuthenticated) {
+      throw Exception("User must be authenticated to comment");
+    }
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+
+    final commentData = {
+      'place_id': placeId,
+      'text': text.trim(),
+    };
+
+    final response = await c
+        .from('place_comments')
+        .insert(commentData)
+        .select('''
+          *,
+          profiles:user_id (
+            name,
+            photo_url
+          )
+        ''')
+        .single();
+
+    final Map<String, dynamic> commentJson = response;
+    final profileData = commentJson['profiles'] as Map<String, dynamic>?;
+
+    if (profileData != null) {
+      commentJson['user_name'] = profileData['name'];
+      commentJson['user_photo_url'] = profileData['photo_url'];
+    }
+
+    return PlaceComment.fromJson(commentJson);
+  }
+
+  /// * Update a place comment
+  Future<PlaceComment> updatePlaceComment({
+    required String commentId,
+    required String text,
+  }) async {
+    if (isDemoMode) {
+      throw Exception("Updating place comments not available in demo mode");
+    }
+    if (!isAuthenticated) {
+      throw Exception("User must be authenticated to update comments");
+    }
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+
+    final response = await c
+        .from('place_comments')
+        .update({'text': text.trim()})
+        .eq('id', commentId)
+        .select('''
+          *,
+          profiles:user_id (
+            name,
+            photo_url
+          )
+        ''')
+        .single();
+
+    final Map<String, dynamic> commentJson = response;
+    final profileData = commentJson['profiles'] as Map<String, dynamic>?;
+
+    if (profileData != null) {
+      commentJson['user_name'] = profileData['name'];
+      commentJson['user_photo_url'] = profileData['photo_url'];
+    }
+
+    return PlaceComment.fromJson(commentJson);
+  }
+
+  /// * Delete a place comment
+  Future<void> deletePlaceComment(String commentId) async {
+    if (isDemoMode) {
+      throw Exception("Deleting place comments not available in demo mode");
+    }
+    if (!isAuthenticated) {
+      throw Exception("User must be authenticated to delete comments");
+    }
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+
+    await c.from('place_comments').delete().eq('id', commentId);
+  }
+
+  /// * Subscribe to realtime comments updates for a place
+  RealtimeChannel? subscribeToPlaceComments({
+    required String placeId,
+    required Function(Map<String, dynamic>) onInsert,
+    required Function(Map<String, dynamic>) onUpdate,
+    required Function(Map<String, dynamic>) onDelete,
+  }) {
+    if (isDemoMode) {
+      return null;
+    }
+    final c = client;
+    if (c == null) {
+      return null;
+    }
+
+    final channel = c.channel('place_comments_channel_$placeId');
+
+    channel
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'place_comments',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'place_id',
+            value: placeId,
+          ),
+          callback: (payload) => onInsert(payload.newRecord),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'place_comments',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'place_id',
+            value: placeId,
+          ),
+          callback: (payload) => onUpdate(payload.newRecord),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.delete,
+          schema: 'public',
+          table: 'place_comments',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'place_id',
+            value: placeId,
+          ),
+          callback: (payload) => onDelete(payload.oldRecord),
+        )
+        .subscribe();
+
+    return channel;
+  }
+
+  /// * Get images for a place (optionally filtered by [status])
+  Future<List<PlaceImage>> getPlaceImages({
+    required String placeId,
+    PlaceImageStatus? status,
+  }) async {
+    if (isDemoMode) {
+      return [];
+    }
+    final c = client;
+    if (c == null) {
+      return [];
+    }
+
+    var query = c
+        .from('place_images')
+        .select('''
+          *,
+          profiles:user_id (
+            name,
+            photo_url
+          )
+        ''')
+        .eq('place_id', placeId);
+
+    if (status != null) {
+      query = query.eq('status', status.value);
+    }
+
+    final response = await query.order('created_at', ascending: false);
+
+    final images = <PlaceImage>[];
+    for (final item in response) {
+      final Map<String, dynamic> imageData = item;
+      final profileData = imageData['profiles'] as Map<String, dynamic>?;
+
+      if (profileData != null) {
+        imageData['user_name'] = profileData['name'];
+        imageData['user_photo_url'] = profileData['photo_url'];
+      }
+
+      images.add(PlaceImage.fromJson(imageData));
+    }
+
+    return images;
+  }
+
+  /// * Create a new place image record (defaults to pending)
+  Future<PlaceImage> createPlaceImage({
+    required String placeId,
+    required String imageUrl,
+  }) async {
+    if (isDemoMode) {
+      throw Exception("Creating place images not available in demo mode");
+    }
+    if (!isAuthenticated) {
+      throw Exception("User must be authenticated to submit photos");
+    }
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+
+    final record = {
+      'place_id': placeId,
+      'image_url': imageUrl,
+      'status': PlaceImageStatus.pending.value,
+    };
+
+    final response = await c
+        .from('place_images')
+        .insert(record)
+        .select('''
+          *,
+          profiles:user_id (
+            name,
+            photo_url
+          )
+        ''')
+        .single();
+
+    final Map<String, dynamic> imageJson = response;
+    final profileData = imageJson['profiles'] as Map<String, dynamic>?;
+
+    if (profileData != null) {
+      imageJson['user_name'] = profileData['name'];
+      imageJson['user_photo_url'] = profileData['photo_url'];
+    }
+
+    return PlaceImage.fromJson(imageJson);
+  }
+
+  /// * Get pending images (admin moderation queue)
+  Future<List<PlaceImage>> getPendingPlaceImages() async {
+    if (isDemoMode) {
+      return [];
+    }
+    final c = client;
+    if (c == null) {
+      return [];
+    }
+
+    final response = await c
+        .from('place_images')
+        .select('''
+          *,
+          profiles:user_id (
+            name,
+            photo_url
+          )
+        ''')
+        .eq('status', PlaceImageStatus.pending.value)
+        .order('created_at', ascending: true);
+
+    final images = <PlaceImage>[];
+    for (final item in response) {
+      final Map<String, dynamic> imageData = item;
+      final profileData = imageData['profiles'] as Map<String, dynamic>?;
+
+      if (profileData != null) {
+        imageData['user_name'] = profileData['name'];
+        imageData['user_photo_url'] = profileData['photo_url'];
+      }
+
+      images.add(PlaceImage.fromJson(imageData));
+    }
+
+    return images;
+  }
+
+  /// * Approve a place image (admin)
+  Future<void> approvePlaceImage(String imageId) async {
+    if (isDemoMode) {
+      throw Exception("Moderation not available in demo mode");
+    }
+    if (!isAuthenticated) {
+      throw Exception("User must be authenticated to review photos");
+    }
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+
+    await c.from('place_images').update({
+      'status': PlaceImageStatus.approved.value,
+      'reviewed_by': currentUserId,
+      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+      'review_reason': null,
+    }).eq('id', imageId);
+  }
+
+  /// * Reject a place image (admin)
+  Future<void> rejectPlaceImage(String imageId, {String? reason}) async {
+    if (isDemoMode) {
+      throw Exception("Moderation not available in demo mode");
+    }
+    if (!isAuthenticated) {
+      throw Exception("User must be authenticated to review photos");
+    }
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+
+    await c.from('place_images').update({
+      'status': PlaceImageStatus.rejected.value,
+      'reviewed_by': currentUserId,
+      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+      'review_reason': reason?.trim(),
+    }).eq('id', imageId);
+  }
+
+  /// * Get likes count for a place
+  Future<int> getPlaceLikesCount(String placeId) async {
+    if (isDemoMode) {
+      return 0;
+    }
+    final c = client;
+    if (c == null) {
+      return 0;
+    }
+
+    final response = await c
+        .from('place_likes')
+        .select('user_id')
+        .eq('place_id', placeId);
+
+    return (response as List).length;
+  }
+
+  /// * Check if current user liked a place
+  Future<bool> hasLikedPlace(String placeId) async {
+    if (isDemoMode || !isAuthenticated) {
+      return false;
+    }
+    final c = client;
+    if (c == null) {
+      return false;
+    }
+
+    final userId = currentUserId;
+    if (userId == null) {
+      return false;
+    }
+
+    final existing = await c
+        .from('place_likes')
+        .select('place_id')
+        .eq('place_id', placeId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    return existing != null;
+  }
+
+  /// * Toggle like for current user on a place (like/unlike)
+  Future<void> togglePlaceLike(String placeId) async {
+    if (isDemoMode) {
+      throw Exception("Likes not available in demo mode");
+    }
+    if (!isAuthenticated) {
+      throw Exception("User must be authenticated to like");
+    }
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+
+    final userId = currentUserId;
+    if (userId == null) {
+      throw Exception("User not available");
+    }
+
+    final existing = await c
+        .from('place_likes')
+        .select('place_id')
+        .eq('place_id', placeId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (existing != null) {
+      await c
+          .from('place_likes')
+          .delete()
+          .eq('place_id', placeId)
+          .eq('user_id', userId);
+      return;
+    }
+
+    await c.from('place_likes').insert({
+      'place_id': placeId,
+      'user_id': userId,
+    });
+  }
+
+  /// * Get current user's rating for a place (1–5), or null if not rated.
+  Future<int?> getMyPlaceRating(String placeId) async {
+    if (isDemoMode || !isAuthenticated) {
+      return null;
+    }
+    final c = client;
+    if (c == null) {
+      return null;
+    }
+    final userId = currentUserId;
+    if (userId == null) {
+      return null;
+    }
+
+    final existing = await c
+        .from('place_ratings')
+        .select('rating')
+        .eq('place_id', placeId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (existing == null) {
+      return null;
+    }
+
+    final ratingValue = existing['rating'];
+    if (ratingValue is int) {
+      return ratingValue;
+    }
+    if (ratingValue is num) {
+      return ratingValue.toInt();
+    }
+    return null;
+  }
+
+  /// * Get ratings summary for a place.
+  /// *
+  /// * Returns:
+  /// * - avgRating: 0..5
+  /// * - ratingsCount: 0..n
+  Future<Map<String, dynamic>> getPlaceRatingsSummary(String placeId) async {
+    if (isDemoMode) {
+      return {
+        "avgRating": 0.0,
+        "ratingsCount": 0,
+      };
+    }
+    final c = client;
+    if (c == null) {
+      return {
+        "avgRating": 0.0,
+        "ratingsCount": 0,
+      };
+    }
+
+    final rows = await c
+        .from('place_ratings')
+        .select('rating')
+        .eq('place_id', placeId);
+
+    final ratings = <int>[];
+    for (final row in rows) {
+      final Map<String, dynamic> item = row;
+      final value = item['rating'];
+      if (value is int) {
+        ratings.add(value);
+        continue;
+      }
+      if (value is num) {
+        ratings.add(value.toInt());
+      }
+    }
+
+    if (ratings.isEmpty) {
+      return {
+        "avgRating": 0.0,
+        "ratingsCount": 0,
+      };
+    }
+
+    final total = ratings.fold<int>(0, (sum, r) => sum + r);
+    final avg = total / ratings.length;
+
+    return {
+      "avgRating": avg,
+      "ratingsCount": ratings.length,
+    };
+  }
+
+  /// * Create or update the current user's rating for a place (1–5).
+  Future<void> setPlaceRating({
+    required String placeId,
+    required int rating,
+  }) async {
+    if (rating < 1 || rating > 5) {
+      throw Exception("Rating must be between 1 and 5");
+    }
+    if (isDemoMode) {
+      throw Exception("Ratings not available in demo mode");
+    }
+    if (!isAuthenticated) {
+      throw Exception("User must be authenticated to rate places");
+    }
+    final c = client;
+    if (c == null) {
+      throw Exception("Supabase client not available");
+    }
+
+    final userId = currentUserId;
+    if (userId == null) {
+      throw Exception("User not available");
+    }
+
+    final existing = await c
+        .from('place_ratings')
+        .select('rating')
+        .eq('place_id', placeId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (existing != null) {
+      await c
+          .from('place_ratings')
+          .update({'rating': rating})
+          .eq('place_id', placeId)
+          .eq('user_id', userId);
+      return;
+    }
+
+    await c.from('place_ratings').insert({
+      'place_id': placeId,
+      'user_id': userId,
+      'rating': rating,
+    });
   }
 }
 

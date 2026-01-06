@@ -18,12 +18,25 @@ smartroad/
 
 **Note:** The Flutter app currently resides at the root level. For proper monorepo structure, it should be moved to `mobile/smartroad_flutter/` (see migration guide below).
 
+## ⚠️ Current Status: Demo Mode Only
+
+**Important:** As of now, SmartRoad is running in **demo mode only**. No database has been set up on the server yet, and database integration has not been implemented. All features work with local/demo data.
+
+**Database integration will be added in the future** after the server infrastructure is fully set up. Until then, the app operates completely offline with sample data, making it perfect for testing and demos.
+
+**What this means:**
+- All user data (profiles, hazards, routes, place photos/comments/ratings) is stored locally or uses demo data
+- No persistent storage across devices
+- No real-time sync between users
+- Full functionality available for testing without backend setup
+
 ## Features
 
 ### Core Features
-- **Authentication**: Email/password authentication via Supabase Auth with demo mode support
+- **Authentication (Optional)**: Email/password authentication via Supabase Auth with demo mode support
+- **Guest Mode**: Use SmartRoad without logging in (navigation + map browsing)
 - **Interactive Map**: OpenStreetMap integration with real-time hazard markers
-- **Hazard Reporting**: Report road hazards with type, severity, description, and photos
+- **Hazard Reporting**: Report road hazards with type, severity, description, and photos (requires login)
 - **Feed View**: Reverse-chronological list of all reported hazards
 - **User Profiles**: View and update profile information
 - **Realtime Updates**: Live updates when hazards are added/updated/deleted
@@ -55,6 +68,12 @@ smartroad/
   - Route progress tracking (traveled vs upcoming segments)
   - Visual route display with color-coded segments
   - Route preview sheet before navigation starts
+- **Speed HUD + Speed Limits (Waze-like)**:
+  - Shows current speed (km/h) while navigating
+  - Best-effort speed limit sign (OSM Overpass + defaults)
+  - Overspeed warnings (tolerance configurable)
+- **Customizable Navigation Avatar**:
+  - Choose arrow/car/motorcycle/etc. icon for the user marker
 - **Location Options**: Long-press map to pin location with options (Get Directions, Save, Share, View on Map)
 
 ### Map Features
@@ -75,6 +94,13 @@ smartroad/
   - **Geographic Bounds**: Map panning restricted to Philippines boundaries
   - **Continuous Enforcement**: Zoom and bounds limits enforced automatically
 - **HOA Gate Markers**: Color-coded gate markers (Red = Strict, Green = Open)
+
+### Place Previews (Known Places + Community)
+- **Known place markers** (starting set includes VTX, Festival Mall Alabang, SM City San Pablo)
+- **Place preview sheet** with:
+  - Approved photos (with admin moderation workflow)
+  - Likes + comments
+  - Ratings (1–5 stars)
 - **Weather Tile Layers**: 
   - Real-time weather visualization as map tile overlays
   - Three weather layers: Rain (precipitation), Heat (temperature), Clouds (cloud coverage)
@@ -107,11 +133,24 @@ smartroad/
 - **HOA Access Types**: Strict (residents only) vs Open (pay-to-pass available)
 - **Color-coded Gate Markers**: Visual indicators on map for gate access types
 
-### Demo Mode
+### Demo Mode (Current Default)
 - **Full Functionality Without Database**: App works completely offline with demo data
 - **Demo Account**: Pre-configured demo credentials for testing
 - **Sample Data**: Demo stickers, HOAs, and hazards for testing
 - **No Setup Required**: Perfect for quick demos and testing
+- **⚠️ Note**: Currently, SmartRoad runs exclusively in demo mode. Database integration will be implemented in the future after server setup is complete.
+
+### Guest vs Logged-in Capabilities
+- **Available without login**:
+  - Browse map, search locations, get directions, and navigate
+  - View hazards and hazard details (including comments)
+  - View known places / POIs and place previews (approved photos, comments, rating averages)
+  - Customize navigation avatar + speed HUD preferences (local settings)
+- **Requires login**:
+  - Report hazards
+  - Comment / like / rate places
+  - Upload place photos (moderated)
+  - Save routes
 
 ### Platform Support
 - **Mobile**: Android and iOS with native location services
@@ -180,7 +219,9 @@ docker-compose up -d graphhopper
 flutter pub get
 ```
 
-### 4. Supabase Setup (Optional - Demo Mode Available)
+### 4. Supabase Setup (Future - Currently Not Required)
+
+**⚠️ Note:** Database integration is not yet implemented. The app currently runs in demo mode only. The following setup instructions are for **future reference** when database integration is added.
 
 1. Create a new Supabase project at [supabase.com](https://supabase.com)
 2. Enable PostGIS extension in your Supabase project:
@@ -190,6 +231,7 @@ flutter pub get
    - Go to SQL Editor in Supabase dashboard
    - Copy and paste the contents of `supabase_schema.sql`
    - Execute the script
+   - Then run `supabase_places_schema.sql` to enable place previews (comments/likes/photos/ratings)
 4. Create Storage Buckets:
    - Go to Storage in Supabase dashboard
    - Create a bucket named `hazard-images` (for hazard photos)
@@ -199,7 +241,7 @@ flutter pub get
    - Create a bucket or folder for `stickers` (for physical sticker photos)
      - Same configuration as hazard-images
 
-**Note:** If Supabase is not configured, the app will automatically use **Demo Mode** with sample data.
+**Current Status:** The app automatically uses **Demo Mode** with sample data. No database setup is required at this time.
 
 ### 5. Weather Layers Setup
 

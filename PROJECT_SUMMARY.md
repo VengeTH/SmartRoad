@@ -254,9 +254,7 @@ The app is production-demo ready with:
 - Location search with autocomplete
 - Reverse geocoding
 - Platform-specific optimizations
-- Real-time location updates
-
-### Map Features
+- Real-time location updates### Map Features
 - Hazard filtering (type, severity, expiry)
 - Location search
 - Long-press to pin location

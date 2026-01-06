@@ -6,7 +6,7 @@ import "../../services/supabase_service.dart";
 import "../../core/constants/app_constants.dart";
 import "../../core/theme/app_theme.dart";
 import "../../providers/auth_provider.dart";
-import "../map/map_screen.dart";
+import "../main_navigation_screen.dart";
 
 /// * Premium login screen with animations and branding
 class LoginScreen extends ConsumerStatefulWidget {
@@ -97,7 +97,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         HapticFeedback.lightImpact();
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const MapScreen(),
+            pageBuilder: (context, animation, secondaryAnimation) => const MainNavigationScreen(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               return FadeTransition(
                 opacity: animation,
@@ -171,7 +171,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           HapticFeedback.lightImpact();
           Navigator.of(context).pushReplacement(
             PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => const MapScreen(),
+              pageBuilder: (context, animation, secondaryAnimation) => const MainNavigationScreen(),
               transitionsBuilder: (context, animation, secondaryAnimation, child) {
                 return FadeTransition(
                   opacity: animation,
@@ -193,7 +193,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         HapticFeedback.lightImpact();
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const MapScreen(),
+            pageBuilder: (context, animation, secondaryAnimation) => const MainNavigationScreen(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               return FadeTransition(
                 opacity: animation,
@@ -224,7 +224,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         if (mounted) {
           Navigator.of(context).pushReplacement(
             PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => const MapScreen(),
+              pageBuilder: (context, animation, secondaryAnimation) => const MainNavigationScreen(),
               transitionsBuilder: (context, animation, secondaryAnimation, child) {
                 return FadeTransition(opacity: animation, child: child);
               },
@@ -593,6 +593,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ),
                           ),
                         ),
+            const SizedBox(height: AppTheme.spacingSM),
+            OutlinedButton.icon(
+              onPressed: _isLoading
+                  ? null
+                  : () {
+                      HapticFeedback.lightImpact();
+                      Navigator.of(context).pushReplacement(
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation, secondaryAnimation) =>
+                              const MainNavigationScreen(),
+                          transitionsBuilder:
+                              (context, animation, secondaryAnimation, child) {
+                            return FadeTransition(opacity: animation, child: child);
+                          },
+                          transitionDuration: const Duration(milliseconds: 300),
+                        ),
+                      );
+                    },
+              icon: const Icon(Icons.explore_outlined),
+              label: const Text(
+                "Continue as Guest",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
             const SizedBox(height: AppTheme.spacingSM),
             // * Demo Mode Branding
             const SizedBox(height: AppTheme.spacingMD),

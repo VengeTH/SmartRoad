@@ -4,6 +4,12 @@
 
 This design guide establishes the visual identity, branding guidelines, and UI/UX standards for SmartRoad, a road safety and navigation application developed by The Heedful.
 
+## ⚠️ Current Status: Demo Mode Only
+
+**Important:** As of now, SmartRoad is running in **demo mode only**. No database has been set up on the server yet, and database integration has not been implemented. All features work with local/demo data.
+
+**Database integration will be added in the future** after the server infrastructure is fully set up. Until then, the app operates completely offline with sample data, making it perfect for testing and demos.
+
 ## Brand Identity
 
 ### Brand Elements
@@ -166,6 +172,165 @@ Based on 8px grid system:
 - Bottom padding
 ```
 
+## Location Previews (Known Places)
+
+SmartRoad supports **known-location previews** (e.g., malls, terminals) with community interaction.
+
+### Map Marker Guidelines
+
+- **Visibility**: Markers should be clear but not noisy; avoid large labels on the map.
+- **Shape**: Compact circular marker (≈34px) using `surfaceColor` with a subtle border + light shadow.
+- **Icons** (category-colored):
+  - Mall: `storefront_outlined`
+  - Terminal: `directions_bus_filled`
+  - Default landmark: `place_outlined`
+- **Safety**: Hide known-place markers during **active navigation** to reduce distraction.
+- **Zoom behavior**:
+  - Zoom < 9: hide known places
+  - Zoom ≥ 9: show known places (icon-only)
+  - Zoom ≥ 12: show known places with compact labels (pill style)
+  - Selected place: show label even if zoom is slightly lower (helps orientation after tap)
+
+### Place Preview Sheet
+
+- **Layout order**:
+  - Place name + optional category chip
+  - Get Directions / Start Navigation (primary action)
+  - Rating (average + count + user rating)
+  - Photo carousel (approved photos only)
+  - Like + Add Photo actions
+  - Content guideline note (photo moderation rules)
+  - Comments list + comment composer
+- **Behavior**: Draggable bottom sheet (compact by default; expandable to read comments/photos).
+- **Responsiveness**: Constrain max width on desktop (don’t stretch full-width).
+- **Tone**: Helpful, neutral, safety-first (no memes, no loud colors).
+
+## User Location Marker (Map)
+
+- **Style**: Google-Maps-like blue marker (white outer ring + blue inner circle).
+- **Heading**: Rotate the arrow when heading is available (device/course heading).
+- **Fallback**: If heading is unavailable/invalid, keep arrow unrotated.
+- **Navigation**: When the **map is rotated** (navigation mode), the marker rotates **relative** to the map so it still points “forward” on screen.
+
+## Navigation Camera (Active Navigation)
+
+- **Default behavior**: Auto-follow the user with a zoomed-in camera (Waze/Google Maps style).
+- **Rotation**: Prefer rotating the **map** to match heading; if heading is missing (common on web), rotate based on the route’s direction.
+- **User interaction**: If the user manually pans the map, auto-follow pauses.
+- **Re-center**: Provide a dedicated re-center action that restores follow + zoom + rotation.
+
+## Speed HUD & Speed Limits (Active Navigation)
+
+- **Speed HUD**: Show current speed (km/h) plus a speed limit sign.
+- **Overspeed warning**:
+  - Trigger when speed > (limit + tolerance)
+  - Use subtle haptics and throttle warnings to avoid spamming
+- **Speed limit sources (best-effort)**:
+  - User override (highest priority)
+  - OSM `maxspeed` tag (when available)
+  - Default per `highway` type (fallback, user-editable)
+  - Unknown (hide warning)
+
+## Guest Mode (No Login)
+
+SmartRoad supports a **guest mode** where the app remains useful without requiring an account.
+
+### Allowed (Guest)
+- Browse map, search, route preview, and start navigation
+- View hazards + hazard detail sheets
+- View place previews (approved photos, public comments, rating average)
+- Customize navigation avatar + speed HUD preferences (stored locally)
+
+### Requires Login
+- Report hazards
+- Upload place photos (moderated)
+- Like / comment / rate places
+- Save routes
+
+## Dynamic POIs (Google Maps-like Landmarks)
+
+SmartRoad can show extra nearby landmarks when the user zooms in.
+
+- **Source**: OpenStreetMap Nominatim (viewbox-bounded search)
+- **Interaction**:
+  - Tap opens the **Place Preview Sheet** (same UI as known places) so users can:
+    - Get directions / start navigation
+    - Upload moderated preview photos
+    - Like / comment (Waze-style)
+- **Zoom behavior**:
+  - Zoom < 12: hide dynamic POIs
+  - Zoom ≥ 12: show POIs (icon-only)
+  - Zoom ≥ 15: show labels for only the most prominent POIs (limit to ~15 to prevent clutter)
+- **De-duplication**:
+  - Filter out POIs that match known places (name/aliases) or are very close to a known place
+  - Deduplicate by name + coordinate bucket to avoid showing the same POI multiple times
+- **Debounce/Rate-limit**: Always debounce map move requests (avoid spamming Nominatim).
+
+## Hazard & HOA Markers (Map)
+
+SmartRoad uses a consistent marker style across the map to reduce visual noise while keeping safety-critical info easy to spot.
+
+### Hazard Marker Guidelines
+
+- **Priority**: Hazards must remain more attention-grabbing than known places (safety-first).
+- **Shape**: Compact circular marker (≈34px) using `surfaceColor` with a **severity-colored ring**.
+- **Icons** (type-based):
+  - Pothole: `warning_amber_rounded`
+  - Flood: `water_drop_outlined`
+  - Accident: `car_crash`
+  - Closure: `do_not_disturb_on_outlined`
+  - Landslide: `terrain`
+  - Roadblock: `construction_outlined`
+- **Interaction**: Tap opens hazard details. Avoid hover tooltips on desktop/web.
+
+### Navigation Hazard Warnings (Active Navigation)
+
+- **Goal**: Provide Waze-style awareness without distracting the driver.
+- **When**: Only during active navigation.
+- **UI**: Compact warning banner (“Pothole ahead • 250 m”) with severity color + close button.
+- **Logic**:
+  - Only show hazards that are **near the route** and **ahead** of the user.
+  - Use throttled haptics (subtle) to avoid spamming.
+  - Dismiss temporarily mutes that hazard so it doesn’t immediately reappear.
+
+### HOA Gate Marker Guidelines
+
+- **Shape**: Compact circular marker (≈34px) using `surfaceColor` with an access-colored ring.
+  - Residents-only: `errorColor`
+  - Pay-to-pass: `successColor`
+- **Icons**:
+  - Residents-only: `lock_outline`
+  - Pay-to-pass: `local_offer_outlined`
+- **Web UX**: Avoid hover tooltips (they cover the map while panning). Use tap/snackbar or a detail sheet instead.
+
+## Photo Moderation & Content Safety
+
+All user-submitted place photos must follow these rules:
+
+- **Allowed**: Accurate photos of the place/landmark (exterior/interior), signage, entrances.
+- **Forbidden**: Nudity/sexual content, violence, hate symbols, unrelated images, spam, personal documents.
+- **Workflow**:
+  - User uploads → photo is **Pending**
+  - Admin reviews → **Approved** or **Rejected** (optional reason)
+  - Only **Approved** photos are shown publicly
+
+### Admin Review UI
+
+- **Location**: Profile screen (Admin-only entry)
+- **Actions**: Approve / Reject (with optional reason)
+- **Feedback**: Short snackbars for success/error states
+
+## Route Editing UX (Use Navigation)
+
+- **Preview-first**: After selecting Start + End, show a route preview sheet immediately.
+- **Editability**: Users can adjust the route path via control points.
+- **Visual requirement**: When editing, the route line should appear **smooth/curved** (no sharp kinks).
+- **Controls**:
+  - Recalculate (when control points exist)
+  - Clear control points
+  - Save route
+  - Done (exit editing)
+
 ## Safety-First Principles
 
 1. **No Distractions During Navigation**
@@ -215,6 +380,7 @@ When adding branding:
 ## Version History
 
 - **v1.0** (2025-01-XX): Initial branding guidelines established
+- **v1.1** (2026-01-XX): Added known-location previews, photo moderation, and route editing UX notes
 
 ---
 

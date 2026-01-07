@@ -1,6 +1,5 @@
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "package:intl/intl.dart";
 import "../../providers/hazards_provider.dart";
 import "../../models/hazard.dart";
 import "../../widgets/hazard_marker.dart";

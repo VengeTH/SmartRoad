@@ -4,6 +4,45 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
+## Version 2.6.8 - 2026 UI Refresh + Map Search Recents + Routes UX Polish
+
+**Release Date:** January 2026  
+**Focus:** Modern UI refresh, map HUD improvements, search recents, routes UX polish  
+**Status:** Production Ready (Demo Mode Only)
+
+### UI/UX Refresh
+- ✅ **Modern Material 3 polish**
+  - Updated NavigationBar styling (indicator, icon/label weights)
+  - Cleaner card/chip/snackbar visuals across the app
+- ✅ **Premium auth screen**
+  - Responsive split layout on desktop, compact card on mobile
+  - No full-page scrolling (one-screen design)
+  - Demo credentials moved into a modal + copy actions
+- ✅ **Map HUD overhaul**
+  - Glass-style search bar + control dock for a modern “2026” feel
+  - Improved hit targets and contrast while staying consistent with the dark palette
+- ✅ **Map search now shows Recents**
+  - Previous searches and navigation destinations appear when focusing an empty search field
+  - Stored locally using Hive (works in demo mode)
+
+### Routes UX
+- ✅ **Polished empty states + filter bar**
+- ✅ **Redesigned Create Route dialog**
+- ✅ **Fixed duplicate Create Route CTA**
+  - Removed the extra empty-state button so only one “Create Route” entry point is shown (FAB)
+
+### Technical Changes
+- Added `lib/models/recent_location.dart`
+- Updated `lib/services/app_preferences_service.dart` to persist recents locally
+- Updated:
+  - `lib/screens/auth/login_screen.dart`
+  - `lib/screens/map/map_screen.dart`
+  - `lib/screens/routes/routes_screen.dart`
+  - `lib/widgets/create_route_dialog.dart`
+  - `lib/widgets/route_card.dart`
+
+---
+
 ## Version 2.6.7 - Guest Mode + Ratings + Speed HUD + Navigation Enhancements (Latest)
 
 **Release Date:** January 2026  

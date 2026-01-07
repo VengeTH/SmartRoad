@@ -172,6 +172,50 @@ Based on 8px grid system:
 - Bottom padding
 ```
 
+### Authentication Screens (Login / Sign up)
+
+- **Goal**: Auth screens must look premium (2026+) while staying calm, professional, and non-distracting.
+- **No page scrolling**: The auth layout must fit within **one viewport** on most devices. Avoid full-page `SingleChildScrollView` for auth screens.
+- **Responsive layout**:
+  - **Desktop / Wide**: Use a split layout
+    - Left: story/brand panel (value proposition)
+    - Right: auth card with max width ≈ 520px
+  - **Mobile / Narrow**: Show only the auth card to avoid vertical overflow
+    - Keep branding compact (small header row)
+    - Move “extra” information into modals (e.g., demo credentials)
+- **Demo credentials UX**:
+  - Show demo credentials inside a **dialog/modal**, not as a permanently expanded card
+  - Provide “Copy” actions for quick testing
+- **Background**:
+  - Use a subtle dark gradient background (no loud marketing colors)
+  - Avoid noisy patterns that distract from form completion
+
+### Map Screen HUD (Search + Controls)
+
+- **Goal**: The map UI must feel modern and “lightweight” while keeping safety-first clarity.
+- **Glass HUD**:
+  - Use a subtle blurred/glass surface for the top search bar and right-side control dock
+  - Keep borders thin and contrast high (avoid washed-out overlays)
+- **Search behavior**:
+  - When the search field is focused and empty, show **Recents**:
+    - Recent searches (selected places)
+    - Recent navigation destinations
+  - Provide a “Clear” action for recents
+  - Recents must be stored locally (works in demo mode)
+- **Layout**:
+  - Desktop: constrain search width (≈900px max)
+  - Mobile: full-width search bar with safe paddings
+
+### Routes Screen UX
+
+- **Goal**: Routes must feel like a product surface, not a placeholder screen.
+- **Empty states**:
+  - Use a centered premium empty-state card with clear hierarchy
+  - Avoid duplicate CTAs (only one “Create Route” entry point visible at a time)
+- **Create Route dialog**:
+  - Use a modern dialog with two option tiles (Draw Route / Use Navigation)
+  - Clear descriptions and large tap targets
+
 ## Location Previews (Known Places)
 
 SmartRoad supports **known-location previews** (e.g., malls, terminals) with community interaction.
@@ -381,6 +425,8 @@ When adding branding:
 
 - **v1.0** (2025-01-XX): Initial branding guidelines established
 - **v1.1** (2026-01-XX): Added known-location previews, photo moderation, and route editing UX notes
+- **v1.2** (2026-01-07): Refreshed auth screen layout (single-viewport, responsive) and navigation bar styling
+- **v1.3** (2026-01-07): Added glass map HUD, map search recents, and routes UX polish (dialog + empty states)
 
 ---
 

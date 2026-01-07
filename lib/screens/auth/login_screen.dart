@@ -77,7 +77,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
   
   Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
+    final formState = _formKey.currentState;
+    if (formState == null || !formState.validate()) return;
     
     // * Dismiss keyboard
     FocusScope.of(context).unfocus();
@@ -261,6 +262,87 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       }
     }
   }
+
+  Future<void> _continueAsGuest() async {
+    // * Dismiss keyboard
+    FocusScope.of(context).unfocus();
+    HapticFeedback.lightImpact();
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const MainNavigationScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 300),
+      ),
+    );
+  }
+
+  Future<void> _showDemoCredentialsDialog() async {
+    // * Keep the login screen compact; show demo details in a modal instead of expanding the page height.
+    if (!mounted) return;
+
+    HapticFeedback.selectionClick();
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        final theme = Theme.of(context);
+        return AlertDialog(
+          title: Row(
+            children: [
+              const Icon(
+                Icons.info_outline_rounded,
+                color: AppTheme.infoColor,
+              ),
+              const SizedBox(width: AppTheme.spacingSM),
+              Text(
+                "Demo Account",
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Use these credentials to explore SmartRoad in demo mode.",
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacingLG),
+              const _DemoCredentialRow(
+                icon: Icons.email_outlined,
+                label: "Email",
+                value: AppConstants.demoEmail,
+              ),
+              const SizedBox(height: AppTheme.spacingSM),
+              const _DemoCredentialRow(
+                icon: Icons.lock_outline,
+                label: "Password",
+                value: AppConstants.demoPassword,
+                isPassword: true,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
   
   @override
   Widget build(BuildContext context) {
@@ -270,60 +352,108 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
-      body: Container(
-        color: AppTheme.backgroundColor,
-        child: SafeArea(
-          child: Center(
-            child: ScrollConfiguration(
-              behavior: ScrollConfiguration.of(context).copyWith(
-                scrollbars: false,
-              ),
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                horizontal: isWide ? AppTheme.spacingXL : AppTheme.spacingLG,
-                vertical: AppTheme.spacingXL,
-              ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1200),
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SlideTransition(
-                    position: _slideAnimation,
-                    child: isWide
-                        ? Row(
-                            children: [
-                              Expanded(child: _buildStoryPanel(theme)),
-                              const SizedBox(width: AppTheme.spacingXL),
-                              Expanded(child: _buildLoginCard(theme, isWide)),
-                            ],
-                          )
-                        : Column(
-                            children: [
-                              _buildStoryPanel(theme),
-                              const SizedBox(height: AppTheme.spacingXL),
-                              _buildLoginCard(theme, isWide),
-                            ],
-                          ),
+      body: Stack(
+        children: [
+          const _AuthBackground(),
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompactHeight = constraints.maxHeight < 760;
+                final horizontalPadding =
+                    isWide ? AppTheme.spacingXL : AppTheme.spacingLG;
+                final verticalPadding =
+                    isCompactHeight ? AppTheme.spacingMD : AppTheme.spacingXL;
+
+                return Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                      vertical: verticalPadding,
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1200),
+                      child: FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: SlideTransition(
+                          position: _slideAnimation,
+                          child: isWide
+                              ? Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Expanded(
+                                      child: _buildStoryPanel(
+                                        theme,
+                                        compact: isCompactHeight,
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppTheme.spacingXL),
+                                    ConstrainedBox(
+                                      constraints:
+                                          const BoxConstraints(maxWidth: 520),
+                                      child: _buildLoginCard(
+                                        theme,
+                                        isWide: true,
+                                        compact: isCompactHeight,
+                                        showHeader: false,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 520),
+                                  child: _buildLoginCard(
+                                    theme,
+                                    isWide: false,
+                                    compact: isCompactHeight,
+                                    showHeader: true,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
-        ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildStoryPanel(ThemeData theme) {
+  Widget _buildStoryPanel(ThemeData theme, {required bool compact}) {
+    final sectionSpacing = compact ? AppTheme.spacingLG : AppTheme.spacingXL;
+    final features = [
+      const _StoryFeature(
+        icon: Icons.warning_amber_rounded,
+        title: "Realtime hazards",
+        subtitle: "Community reports with automatic freshness checks.",
+        iconColor: AppTheme.warningColor,
+      ),
+      const _StoryFeature(
+        icon: Icons.alt_route_rounded,
+        title: "PH-aware routing",
+        subtitle: "Tolls, restrictions, and local traffic rules in mind.",
+        iconColor: AppTheme.primaryColor,
+      ),
+      const _StoryFeature(
+        icon: Icons.groups_2_outlined,
+        title: "Built for teams",
+        subtitle: "Give enforcers and commuters the same live context.",
+        iconColor: AppTheme.infoColor,
+      ),
+    ];
+
     return Container(
-      padding: const EdgeInsets.all(AppTheme.spacingXL),
+      padding: EdgeInsets.all(compact ? AppTheme.spacingLG : AppTheme.spacingXL),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor.withOpacity(0.85),
         borderRadius: BorderRadius.circular(AppTheme.radiusXL),
         border: Border.all(color: AppTheme.borderColor, width: 1),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -362,6 +492,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               letterSpacing: -0.5,
             ),
           ),
+          const SizedBox(height: AppTheme.spacingSM),
+          Text(
+            "A calm, modern safety layer for everyday navigation.",
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: AppTheme.textSecondary,
+              height: 1.4,
+            ),
+          ),
           const SizedBox(height: AppTheme.spacingLG),
           Wrap(
             spacing: AppTheme.spacingSM,
@@ -372,61 +510,53 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               _StoryChip(label: "Community first"),
             ],
           ),
-          const SizedBox(height: AppTheme.spacingXL),
-          const _StoryBullet(
-            title: "Built with local traffic rules in mind",
-            subtitle: "Motorcycle lane filtering, truck bans, toll avoidance.",
-          ),
-          const _StoryBullet(
-            title: "Municipal-grade monitoring",
-            subtitle: "Color-coded hazards with automatic freshness checks.",
-          ),
-          const _StoryBullet(
-            title: "Designed for teams",
-            subtitle: "Give NCR enforcers and commuters the same live map.",
-          ),
-          const SizedBox(height: AppTheme.spacingXL),
-          Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "14 cities",
-                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    "Piloting across NCR",
-                    style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
-                  ),
-                ],
-              ),
-              const SizedBox(width: AppTheme.spacingXL),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "1200+",
-                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    "Hazards resolved",
-                    style: theme.textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
-                  ),
-                ],
-              ),
-            ],
+          SizedBox(height: sectionSpacing),
+          ...features.take(compact ? 2 : features.length),
+          if (!compact) ...[
+            SizedBox(height: sectionSpacing),
+            Row(
+              children: [
+                _StoryStat(
+                  value: "14 cities",
+                  label: "Piloting across NCR",
+                ),
+                const SizedBox(width: AppTheme.spacingXL),
+                _StoryStat(
+                  value: "1200+",
+                  label: "Hazards resolved",
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppTheme.spacingLG),
+          Text(
+            "Be Heedful on the Road",
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppTheme.textTertiary.withOpacity(0.9),
+              fontStyle: FontStyle.italic,
+              letterSpacing: 0.3,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildLoginCard(ThemeData theme, bool isWide) {
+  Widget _buildLoginCard(
+    ThemeData theme, {
+    required bool isWide,
+    required bool compact,
+    required bool showHeader,
+  }) {
+    final buttonVerticalPadding =
+        compact ? AppTheme.spacingSM : AppTheme.spacingMD;
+    final sectionSpacing =
+        compact ? AppTheme.spacingSM : AppTheme.spacingMD;
+
     return Form(
       key: _formKey,
       child: Container(
-        padding: EdgeInsets.all(isWide ? AppTheme.spacingLG : AppTheme.spacingMD),
+        padding: EdgeInsets.all(compact ? AppTheme.spacingMD : AppTheme.spacingLG),
         decoration: BoxDecoration(
           color: AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(AppTheme.radiusXL),
@@ -434,8 +564,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           boxShadow: AppTheme.shadowLarge,
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (showHeader) ...[
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.spacingSM,
+                      vertical: AppTheme.spacingXS,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withOpacity(0.15),
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.radiusFull),
+                    ),
+                    child: Text(
+                      "THE HEEDFUL",
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppTheme.primaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppTheme.spacingSM),
+                  Text(
+                    "SmartRoad",
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: sectionSpacing),
+            ],
             Text(
               "Sign in",
               style: theme.textTheme.headlineSmall?.copyWith(
@@ -449,98 +613,100 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 color: AppTheme.textSecondary,
               ),
             ),
-            const SizedBox(height: AppTheme.spacingMD),
+            SizedBox(height: sectionSpacing),
             // * Email Field
             TextFormField(
-                          controller: _emailController,
-                          focusNode: _emailFocusNode,
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          style: TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 16,
-                          ),
-                          decoration: InputDecoration(
-                            labelText: "Email",
-                            prefixIcon: const Icon(
-                              Icons.email_outlined,
-                              color: AppTheme.textSecondary,
-                              size: 24,
-                            ),
-                            suffixIcon: _emailController.text.isNotEmpty
-                                ? IconButton(
-                                    icon: const Icon(
-                                      Icons.clear,
-                                      size: 20,
-                                      color: AppTheme.textSecondary,
-                                    ),
-                                    onPressed: () {
-                                      _emailController.clear();
-                                      setState(() {});
-                                    },
-                                  )
-                                : null,
-                          ),
-                          onFieldSubmitted: (_) {
-                            _passwordFocusNode.requestFocus();
-                          },
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return "Please enter your email";
-                            }
-                            if (!value.contains("@")) {
-                              return "Please enter a valid email";
-                            }
-                            return null;
-                          },
-                          onChanged: (_) => setState(() {}),
+              controller: _emailController,
+              focusNode: _emailFocusNode,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 16,
+              ),
+              decoration: InputDecoration(
+                labelText: "Email",
+                prefixIcon: const Icon(
+                  Icons.email_outlined,
+                  color: AppTheme.textSecondary,
+                  size: 22,
+                ),
+                suffixIcon: _emailController.text.isNotEmpty
+                    ? IconButton(
+                        tooltip: "Clear email",
+                        icon: const Icon(
+                          Icons.clear,
+                          size: 18,
+                          color: AppTheme.textSecondary,
                         ),
-                        const SizedBox(height: AppTheme.spacingMD),
-                        // * Password Field
+                        onPressed: () {
+                          _emailController.clear();
+                          setState(() {});
+                        },
+                      )
+                    : null,
+              ),
+              onFieldSubmitted: (_) {
+                _passwordFocusNode.requestFocus();
+              },
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return "Please enter your email";
+                }
+                if (!value.contains("@")) {
+                  return "Please enter a valid email";
+                }
+                return null;
+              },
+              onChanged: (_) => setState(() {}),
+            ),
+            SizedBox(height: sectionSpacing),
+            // * Password Field
             TextFormField(
-                          controller: _passwordController,
-                          focusNode: _passwordFocusNode,
-                          obscureText: _obscurePassword,
-                          textInputAction: TextInputAction.done,
-                          style: TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 16,
-                          ),
-                          onFieldSubmitted: (_) {
-                            if (!_isLoading) {
-                              _handleLogin();
-                            }
-                          },
-                          decoration: InputDecoration(
-                            labelText: "Password",
-                            prefixIcon: const Icon(
-                              Icons.lock_outline,
-                              color: AppTheme.textSecondary,
-                              size: 24,
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
-                                color: AppTheme.textSecondary,
-                              ),
-                              onPressed: () {
-                                setState(() => _obscurePassword = !_obscurePassword);
-                              },
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return "Please enter your password";
-                            }
-                            if (value.length < 6) {
-                              return "Password must be at least 6 characters";
-                            }
-                            return null;
-                          },
-                        ),
-            const SizedBox(height: AppTheme.spacingMD),
+              controller: _passwordController,
+              focusNode: _passwordFocusNode,
+              obscureText: _obscurePassword,
+              textInputAction: TextInputAction.done,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 16,
+              ),
+              onFieldSubmitted: (_) {
+                if (!_isLoading) {
+                  _handleLogin();
+                }
+              },
+              decoration: InputDecoration(
+                labelText: "Password",
+                prefixIcon: const Icon(
+                  Icons.lock_outline,
+                  color: AppTheme.textSecondary,
+                  size: 22,
+                ),
+                suffixIcon: IconButton(
+                  tooltip: _obscurePassword ? "Show password" : "Hide password",
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    color: AppTheme.textSecondary,
+                  ),
+                  onPressed: () {
+                    setState(() => _obscurePassword = !_obscurePassword);
+                  },
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return "Please enter your password";
+                }
+                if (value.length < 6) {
+                  return "Password must be at least 6 characters";
+                }
+                return null;
+              },
+            ),
+            SizedBox(height: sectionSpacing),
             // * Login Button
             ElevatedButton(
               onPressed: _isLoading ? null : _handleLogin,
@@ -554,191 +720,134 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 ),
                 elevation: 4,
               ),
-                            child: _isLoading
-                                ? const SizedBox(
-                                    height: 22,
-                                    width: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                    ),
-                                  )
-                                : const Text(
-                                    "Login",
-                                    style: TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Text(
+                      "Login",
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
             ),
-            const SizedBox(height: AppTheme.spacingMD),
-            // * Demo Button
-            OutlinedButton(
-                          onPressed: _isLoading ? null : _handleDemoLogin,
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: AppTheme.spacingMD,
-                            ),
-                            side: BorderSide(
-                              color: AppTheme.primaryColor.withOpacity(0.5),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: const Text(
-                            "Try Demo Mode",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
+            SizedBox(height: sectionSpacing),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _handleDemoLogin,
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(
+                        vertical: buttonVerticalPadding,
+                      ),
+                      side: BorderSide(
+                        color: AppTheme.primaryColor.withOpacity(0.5),
+                        width: 1.5,
+                      ),
+                    ),
+                    icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                    label: const Text(
+                      "Demo Mode",
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppTheme.spacingSM),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _continueAsGuest,
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(
+                        vertical: buttonVerticalPadding,
+                      ),
+                    ),
+                    icon: const Icon(Icons.explore_outlined, size: 18),
+                    label: const Text(
+                      "Guest",
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: AppTheme.spacingSM),
-            OutlinedButton.icon(
-              onPressed: _isLoading
-                  ? null
-                  : () {
-                      HapticFeedback.lightImpact();
-                      Navigator.of(context).pushReplacement(
-                        PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) =>
-                              const MainNavigationScreen(),
-                          transitionsBuilder:
-                              (context, animation, secondaryAnimation, child) {
-                            return FadeTransition(opacity: animation, child: child);
-                          },
-                          transitionDuration: const Duration(milliseconds: 300),
-                        ),
-                      );
-                    },
-              icon: const Icon(Icons.explore_outlined),
+            TextButton.icon(
+              onPressed: _isLoading ? null : _showDemoCredentialsDialog,
+              icon: const Icon(Icons.info_outline_rounded, size: 18),
               label: const Text(
-                "Continue as Guest",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                "Demo credentials",
+                style: TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
-            const SizedBox(height: AppTheme.spacingSM),
-            // * Demo Mode Branding
-            const SizedBox(height: AppTheme.spacingMD),
-            Container(
-              padding: const EdgeInsets.all(AppTheme.spacingMD),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceColor,
-                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                border: Border.all(
-                  color: AppTheme.borderColor,
-                  width: 1,
-                ),
+            Text(
+              "Be Heedful on the Road",
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppTheme.textTertiary.withOpacity(0.85),
+                fontStyle: FontStyle.italic,
+                letterSpacing: 0.3,
               ),
-              child: Column(
-                children: [
-                  Text(
-                    "Be Heedful on the Road",
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w300,
-                      color: AppTheme.textTertiary,
-                      fontStyle: FontStyle.italic,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  const SizedBox(height: AppTheme.spacingXS),
-                  Text(
-                    "Smart navigation for real road conditions",
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.textTertiary,
-                    ),
-                  ),
-                ],
-              ),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: AppTheme.spacingSM),
-            // * Demo Credentials Info - Premium Card
-            Container(
-                          padding: const EdgeInsets.all(AppTheme.spacingMD),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                AppTheme.infoColor.withOpacity(0.15),
-                                AppTheme.accentColor.withOpacity(0.1),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-                            border: Border.all(
-                              color: AppTheme.infoColor.withOpacity(0.3),
-                              width: 1.5,
-                            ),
-                            boxShadow: AppTheme.shadowSmall,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.infoColor.withOpacity(0.2),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.info_outline_rounded,
-                                      size: 18,
-                                      color: AppTheme.infoColor,
-                                    ),
-                                  ),
-                                  const SizedBox(width: AppTheme.spacingSM),
-                                  Text(
-                                    "Demo Account",
-                                    style: theme.textTheme.labelLarge?.copyWith(
-                                      color: AppTheme.infoColor,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: AppTheme.spacingMD),
-                              _DemoCredentialRow(
-                                icon: Icons.email_outlined,
-                                label: "Email",
-                                value: AppConstants.demoEmail,
-                              ),
-                              const SizedBox(height: AppTheme.spacingSM),
-                              _DemoCredentialRow(
-                                icon: Icons.lock_outline,
-                                label: "Password",
-                                value: AppConstants.demoPassword,
-                                isPassword: true,
-                              ),
-                            ],
-                          ),
-                        ),
-            const SizedBox(height: AppTheme.spacingMD),
+            SizedBox(height: sectionSpacing),
             // * Sign Up Link
             Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              "Don't have an account? ",
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.of(context).pushNamed("/signup");
-                              },
-                              child: const Text("Sign up"),
-                            ),
-                          ],
-                        ),
-            const SizedBox(height: 20),
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  "Don't have an account? ",
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pushNamed("/signup");
+                  },
+                  child: const Text("Sign up"),
+                ),
+              ],
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// * Subtle, modern background used by the auth screens (web + mobile).
+class _AuthBackground extends StatelessWidget {
+  const _AuthBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppTheme.backgroundColor,
+              AppTheme.backgroundColor.withOpacity(0.9),
+              const Color(0xFF0B1224),
+            ],
+          ),
+        ),
+        child: const SizedBox.expand(),
       ),
     );
   }
@@ -776,52 +885,119 @@ class _StoryChip extends StatelessWidget {
 }
 
 /// * Story bullet widget
-class _StoryBullet extends StatelessWidget {
+/// * Compact feature row used on the auth story panel.
+class _StoryFeature extends StatelessWidget {
+  final IconData icon;
   final String title;
   final String subtitle;
+  final Color iconColor;
 
-  const _StoryBullet({
+  const _StoryFeature({
+    required this.icon,
     required this.title,
     required this.subtitle,
+    required this.iconColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: AppTheme.spacingMD),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            margin: const EdgeInsets.only(top: 6, right: AppTheme.spacingMD),
-            width: 6,
-            height: 6,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              color: AppTheme.primaryColor,
-              shape: BoxShape.circle,
+              color: iconColor.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+              border: Border.all(
+                color: iconColor.withOpacity(0.25),
+                width: 1,
+              ),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: iconColor,
             ),
           ),
+          const SizedBox(width: AppTheme.spacingMD),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.1,
                   ),
                 ),
                 const SizedBox(height: AppTheme.spacingXS),
                 Text(
                   subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  style: theme.textTheme.bodySmall?.copyWith(
                     color: AppTheme.textSecondary,
+                    height: 1.35,
                   ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// * Small stat used on the auth story panel.
+class _StoryStat extends StatelessWidget {
+  final String value;
+  final String label;
+
+  const _StoryStat({
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(AppTheme.spacingMD),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+          border: Border.all(
+            color: AppTheme.borderColor.withOpacity(0.9),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(height: AppTheme.spacingXS),
+            Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -843,6 +1019,8 @@ class _DemoCredentialRow extends StatelessWidget {
   
   @override
   Widget build(BuildContext context) {
+    final displayValue = isPassword ? "•" * value.length : value;
+
     return Row(
       children: [
         Icon(
@@ -859,11 +1037,31 @@ class _DemoCredentialRow extends StatelessWidget {
         ),
         Expanded(
           child: SelectableText(
-            isPassword ? "•" * value.length : value,
+            displayValue,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AppTheme.textSecondary,
               fontWeight: FontWeight.w500,
             ),
+          ),
+        ),
+        IconButton(
+          tooltip: "Copy $label",
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: value));
+            if (!context.mounted) return;
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("$label copied to clipboard"),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          },
+          icon: const Icon(
+            Icons.copy_rounded,
+            size: 18,
+            color: AppTheme.textSecondary,
           ),
         ),
       ],

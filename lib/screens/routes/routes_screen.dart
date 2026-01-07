@@ -10,6 +10,40 @@ import "../../widgets/route_card.dart";
 import "../../widgets/create_route_dialog.dart";
 import "../../providers/navigation_provider.dart";
 import "../../providers/route_creation_provider.dart";
+import "../../providers/auth_provider.dart";
+
+Future<void> _startRouteCreationFlow({
+  required BuildContext context,
+  required WidgetRef ref,
+}) async {
+  final option = await showDialog<CreateRouteOption>(
+    context: context,
+    barrierDismissible: true,
+    barrierColor: Colors.black.withOpacity(0.55),
+    builder: (context) => const CreateRouteDialog(),
+  );
+
+  if (option == null || !context.mounted) return;
+
+  // * Switch to Map tab
+  ref.read(navigationTabProvider.notifier).switchToMap();
+
+  // * Wait for MapScreen to be ready, then trigger the action
+  await Future.delayed(const Duration(milliseconds: 500));
+  if (!context.mounted) return;
+
+  // * Trigger the appropriate action based on selection
+  if (option == CreateRouteOption.draw) {
+    ref.read(routeCreationTriggerProvider.notifier).state =
+        RouteCreationAction.startDrawing;
+    return;
+  }
+
+  if (option == CreateRouteOption.navigation) {
+    ref.read(routeCreationTriggerProvider.notifier).state =
+        RouteCreationAction.useNavigation;
+  }
+}
 
 /// * Routes screen - View, create, and manage saved routes
 class RoutesScreen extends ConsumerStatefulWidget {
@@ -36,6 +70,63 @@ class _RoutesScreenState extends ConsumerState<RoutesScreen> with SingleTickerPr
   
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authStateProvider).valueOrNull;
+    final isGuest = user == null;
+
+    if (isGuest) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text("Routes"),
+          elevation: 0,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppTheme.spacingXL),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.route_outlined,
+                    size: 64,
+                    color: AppTheme.textSecondary.withOpacity(0.6),
+                  ),
+                  const SizedBox(height: AppTheme.spacingLG),
+                  Text(
+                    "Sign in to create or save routes",
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppTheme.spacingSM),
+                  Text(
+                    "Route creation and saving are disabled for guest accounts.",
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppTheme.spacingXL),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pushNamed("/login");
+                      },
+                      icon: const Icon(Icons.login),
+                      label: const Text("Sign in"),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Routes"),
@@ -59,34 +150,7 @@ class _RoutesScreenState extends ConsumerState<RoutesScreen> with SingleTickerPr
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: "create_route_fab",
-        onPressed: () async {
-          // * Show route creation dialog first - this will block until user selects or cancels
-          if (!mounted) return;
-          
-          final option = await showDialog<CreateRouteOption>(
-            context: context,
-            barrierDismissible: true,
-            builder: (context) => const CreateRouteDialog(),
-          );
-          
-          // * Only proceed if user selected an option (not cancelled)
-          if (option == null || !mounted) return;
-          
-          // * Switch to Map tab
-          ref.read(navigationTabProvider.notifier).switchToMap();
-          
-          // * Wait for MapScreen to be ready, then trigger the action
-          await Future.delayed(const Duration(milliseconds: 500));
-          
-          if (mounted) {
-            // * Trigger the appropriate action based on selection
-            if (option == CreateRouteOption.draw) {
-              ref.read(routeCreationTriggerProvider.notifier).state = RouteCreationAction.startDrawing;
-            } else if (option == CreateRouteOption.navigation) {
-              ref.read(routeCreationTriggerProvider.notifier).state = RouteCreationAction.useNavigation;
-            }
-          }
-        },
+        onPressed: () => _startRouteCreationFlow(context: context, ref: ref),
         icon: const Icon(Icons.add),
         label: const Text("Create Route"),
       ),
@@ -146,7 +210,16 @@ class _DiscoverTabState extends ConsumerState<_DiscoverTab> {
       children: [
         // * Filter chips
         Container(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceColor.withOpacity(0.65),
+            borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+            border: Border.all(
+              color: AppTheme.borderColor.withOpacity(0.9),
+              width: 1,
+            ),
+          ),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -188,31 +261,10 @@ class _DiscoverTabState extends ConsumerState<_DiscoverTab> {
               ? const Center(child: CircularProgressIndicator())
               : _discoveredRoutes.isEmpty
                   ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.explore_outlined,
-                            size: 64,
-                            color: AppTheme.textSecondary.withOpacity(0.5),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            "No routes found nearby",
-                            style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "Create a route to get started",
-                            style: TextStyle(
-                              color: AppTheme.textTertiary,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
+                      child: _RoutesEmptyState(
+                        icon: Icons.explore_outlined,
+                        title: "No routes found nearby",
+                        subtitle: "Create a route to get started.",
                       ),
                     )
                   : RefreshIndicator(
@@ -357,31 +409,11 @@ class _MyRoutesTabState extends ConsumerState<_MyRoutesTab> {
         ? const Center(child: CircularProgressIndicator())
         : _myRoutes.isEmpty
             ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.bookmark_border,
-                      size: 64,
-                      color: AppTheme.textSecondary.withOpacity(0.5),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      "No saved routes yet",
-                      style: TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "Create a route during navigation",
-                      style: TextStyle(
-                        color: AppTheme.textTertiary,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
+                child: _RoutesEmptyState(
+                  icon: Icons.bookmark_border,
+                  title: "No saved routes yet",
+                  subtitle:
+                      "Create a route during navigation, then save it here for quick access.",
                 ),
               )
             : RefreshIndicator(
@@ -479,7 +511,14 @@ class _PopularRoutesTabState extends ConsumerState<_PopularRoutesTab> {
     return _isLoading
         ? const Center(child: CircularProgressIndicator())
         : _popularRoutes.isEmpty
-            ? const Center(child: Text("No popular routes"))
+            ? const Center(
+                child: _RoutesEmptyState(
+                  icon: Icons.trending_up_rounded,
+                  title: "No popular routes yet",
+                  subtitle:
+                      "As the community uses and shares routes, you'll see trending routes here.",
+                ),
+              )
             : RefreshIndicator(
                 onRefresh: _loadPopularRoutes,
                 child: ListView.builder(
@@ -530,5 +569,81 @@ class _PopularRoutesTabState extends ConsumerState<_PopularRoutesTab> {
         );
       }
     }
+  }
+}
+
+class _RoutesEmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _RoutesEmptyState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.all(AppTheme.spacingXL),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Container(
+          padding: const EdgeInsets.all(AppTheme.spacingLG),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceColor.withOpacity(0.75),
+            borderRadius: BorderRadius.circular(AppTheme.radiusXL),
+            border: Border.all(
+              color: AppTheme.borderColor.withOpacity(0.9),
+              width: 1,
+            ),
+            boxShadow: AppTheme.shadowMedium,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                  border: Border.all(
+                    color: AppTheme.primaryColor.withOpacity(0.25),
+                    width: 1,
+                  ),
+                ),
+                child: Icon(
+                  icon,
+                  color: AppTheme.primaryColor,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacingLG),
+              Text(
+                title,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.2,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppTheme.spacingSM),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.textSecondary,
+                  height: 1.35,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

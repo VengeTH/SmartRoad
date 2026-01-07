@@ -162,13 +162,24 @@ class AppTheme {
         backgroundColor: surfaceColor,
         elevation: 0,
         foregroundColor: textPrimary,
+        surfaceTintColor: Colors.transparent,
       ),
       cardTheme: CardTheme(
         color: surfaceColor,
-        elevation: 2,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(radiusLG),
+          side: const BorderSide(
+            color: borderColor,
+            width: 1,
+          ),
         ),
+      ),
+      dividerTheme: const DividerThemeData(
+        color: borderColor,
+        thickness: 1,
+        space: 1,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -195,13 +206,71 @@ class AppTheme {
           ),
         ),
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 20,
+          horizontal: 18,
+          vertical: 16,
         ),
         labelStyle: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w500,
         ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: surfaceColor.withOpacity(0.94),
+        indicatorColor: primaryColor.withOpacity(0.18),
+        labelTextStyle: MaterialStateProperty.resolveWith((states) {
+          final isSelected = states.contains(MaterialState.selected);
+          return TextStyle(
+            color: isSelected ? textPrimary : textSecondary,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+            fontSize: 12,
+            letterSpacing: 0.2,
+          );
+        }),
+        iconTheme: MaterialStateProperty.resolveWith((states) {
+          final isSelected = states.contains(MaterialState.selected);
+          return IconThemeData(
+            color: isSelected ? primaryColor : textSecondary,
+            size: 24,
+          );
+        }),
+      ),
+      tabBarTheme: const TabBarTheme(
+        labelColor: textPrimary,
+        unselectedLabelColor: textSecondary,
+        indicatorColor: primaryColor,
+        dividerColor: borderColor,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: surfaceVariant,
+        contentTextStyle: const TextStyle(
+          color: textPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusMD),
+          side: const BorderSide(
+            color: borderColor,
+            width: 1,
+          ),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: surfaceVariant,
+        selectedColor: primaryColor.withOpacity(0.22),
+        side: const BorderSide(color: borderColor, width: 1),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusFull),
+        ),
+        labelStyle: const TextStyle(
+          color: textSecondary,
+          fontWeight: FontWeight.w600,
+        ),
+        secondaryLabelStyle: const TextStyle(
+          color: textPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

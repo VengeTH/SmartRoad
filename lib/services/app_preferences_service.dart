@@ -4,6 +4,7 @@ import "package:flutter/foundation.dart";
 import "package:hive_flutter/hive_flutter.dart";
 
 import "../models/navigation_settings.dart";
+import "../models/recent_location.dart";
 
 /// * Lightweight app preferences stored locally using Hive.
 /// *
@@ -12,6 +13,8 @@ import "../models/navigation_settings.dart";
 class AppPreferencesService {
   static const String _boxName = "app_preferences";
   static const String _keyNavigationSettings = "navigation_settings";
+  static const String _keyRecentLocations = "recent_locations_v1";
+  static const int _recentLocationsMaxItems = 10;
 
   static Box? _box;
 
@@ -61,6 +64,71 @@ class AppPreferencesService {
     final box = await _ensureBox();
     final encoded = jsonEncode(settings.toJson());
     await box.put(_keyNavigationSettings, encoded);
+  }
+
+  Future<List<RecentLocation>> loadRecentLocations() async {
+    final box = await _ensureBox();
+    final raw = box.get(_keyRecentLocations);
+    if (raw == null) return [];
+
+    try {
+      final decoded =
+          raw is String ? jsonDecode(raw) : raw;
+      if (decoded is! List) return [];
+
+      final items = decoded
+          .whereType<Map>()
+          .map((item) => RecentLocation.fromJson(Map<String, dynamic>.from(item)))
+          .where((item) =>
+              item.label.trim().isNotEmpty &&
+              item.latitude.isFinite &&
+              item.longitude.isFinite &&
+              (item.latitude != 0 || item.longitude != 0))
+          .toList();
+
+      items.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      return items.take(_recentLocationsMaxItems).toList();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint("❌ [AppPreferencesService] Failed to parse recents: $e");
+      }
+      return [];
+    }
+  }
+
+  Future<List<RecentLocation>> addRecentLocation({
+    required String label,
+    required double latitude,
+    required double longitude,
+    required RecentLocationKind kind,
+  }) async {
+    final box = await _ensureBox();
+    final now = DateTime.now();
+
+    final incoming = RecentLocation(
+      label: label.trim().isEmpty ? "Location" : label.trim(),
+      latitude: latitude,
+      longitude: longitude,
+      kind: kind,
+      updatedAt: now,
+    );
+
+    final existing = await loadRecentLocations();
+    final incomingKey = incoming.dedupeKey();
+
+    final merged = <RecentLocation>[
+      incoming,
+      ...existing.where((item) => item.dedupeKey() != incomingKey),
+    ].take(_recentLocationsMaxItems).toList();
+
+    final encoded = jsonEncode(merged.map((e) => e.toJson()).toList());
+    await box.put(_keyRecentLocations, encoded);
+    return merged;
+  }
+
+  Future<void> clearRecentLocations() async {
+    final box = await _ensureBox();
+    await box.delete(_keyRecentLocations);
   }
 }
 

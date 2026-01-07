@@ -1,30 +1,23 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+import "package:flutter_test/flutter_test.dart";
+import "package:flutter_riverpod/flutter_riverpod.dart";
 
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-
-import 'package:smartroad/main.dart';
+import "package:smartroad/main.dart";
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets("App boots to login after the splash screen", (tester) async {
+    // * Pump the app inside a ProviderScope (required by Riverpod).
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: SmartRoadApp(),
+      ),
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    // * Wait for the splash timeout (2s) + a small buffer.
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // * In demo mode (no Supabase env vars), auth is null, so login is shown.
+    expect(find.text("Sign in"), findsOneWidget);
+    expect(find.text("Login"), findsOneWidget);
   });
 }

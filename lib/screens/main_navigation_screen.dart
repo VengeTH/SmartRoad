@@ -33,17 +33,16 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
 
     return Scaffold(
       body: IndexedStack(index: currentIndex, children: _screens),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex,
-        onTap: (index) {
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: currentIndex,
+        onDestinationSelected: (index) {
           ref.read(navigationTabProvider.notifier).switchToTab(index);
         },
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: "Map"),
-          BottomNavigationBarItem(icon: Icon(Icons.feed), label: "Feed"),
-          BottomNavigationBarItem(icon: Icon(Icons.route), label: "Routes"),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.map_outlined), selectedIcon: Icon(Icons.map), label: "Map"),
+          NavigationDestination(icon: Icon(Icons.feed_outlined), selectedIcon: Icon(Icons.feed), label: "Feed"),
+          NavigationDestination(icon: Icon(Icons.route_outlined), selectedIcon: Icon(Icons.route), label: "Routes"),
+          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: "Profile"),
         ],
       ),
       floatingActionButton:

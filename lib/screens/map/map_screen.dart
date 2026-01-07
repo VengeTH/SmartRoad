@@ -1,5 +1,6 @@
 import "dart:async";
 import "dart:math" as math;
+import "dart:ui" show ImageFilter;
 
 import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
@@ -14,6 +15,7 @@ import "../../providers/location_provider.dart";
 import "../../models/hazard.dart";
 import "../../models/place.dart";
 import "../../models/map_poi.dart";
+import "../../models/recent_location.dart";
 import "../../models/navigation_avatar_style.dart";
 import "../../models/navigation_settings.dart";
 import "../../core/constants/app_constants.dart";
@@ -35,6 +37,7 @@ import "../../services/known_places_service.dart";
 import "../../services/poi_search_service.dart";
 import "../../services/speed_limit_service.dart";
 import "../../services/supabase_service.dart";
+import "../../services/app_preferences_service.dart";
 import "../../providers/map_ui_provider.dart";
 import "../../providers/hazards_provider.dart" show MapHazardsNotifier;
 import "../../providers/sticker_provider.dart";
@@ -627,24 +630,26 @@ class _MapControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveBackground =
+        backgroundColor ?? AppTheme.surfaceVariant.withOpacity(0.35);
+
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: backgroundColor ?? AppTheme.surfaceColor,
+        color: effectiveBackground,
         borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-        elevation: 4,
-        shadowColor: Colors.black.withOpacity(0.3),
         child: InkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+          hoverColor: AppTheme.primaryColor.withOpacity(0.08),
           child: Container(
-            width: 48,
-            height: 48,
+            width: 46,
+            height: 46,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppTheme.radiusMD),
               border: Border.all(
-                color: AppTheme.borderColor,
-                width: 1.5,
+                color: AppTheme.borderColor.withOpacity(0.9),
+                width: 1,
               ),
             ),
             child: Icon(
@@ -732,6 +737,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _showFilterPanel = false;
   int _visibleSearchResults = 10; // * Show first 10 results initially
   final Dio _dio = Dio();
+  final AppPreferencesService _appPreferencesService = AppPreferencesService();
+  List<RecentLocation> _recentLocations = [];
+  bool _isLoadingRecentLocations = false;
   // * Cache route distances for search results
   final Map<String, double?> _searchResultDistances = {};
   final Map<String, bool> _searchResultDistanceLoading = {};
@@ -769,9 +777,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         setState(() {}); // * Rebuild to update weather layers
       }
     });
+
+    _searchFocusNode.addListener(() {
+      if (!mounted) return;
+
+      // * Hide dropdown when focus is lost.
+      if (!_searchFocusNode.hasFocus) {
+        setState(() => _showSearchResults = false);
+        return;
+      }
+
+      // * Show recents when focusing an empty search field.
+      if (_searchController.text.trim().isEmpty) {
+        setState(() => _showSearchResults = true);
+      }
+    });
     
     _startLocationStream();
     _loadKnownPlaces();
+    _loadRecentLocations();
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -1535,6 +1559,89 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       return "${distanceKm.round()} km";
     }
   }
+
+  Future<void> _loadRecentLocations() async {
+    if (!mounted) return;
+    setState(() => _isLoadingRecentLocations = true);
+
+    try {
+      final items = await _appPreferencesService.loadRecentLocations();
+      if (!mounted) return;
+      setState(() {
+        _recentLocations = items;
+        _isLoadingRecentLocations = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingRecentLocations = false);
+      debugPrint("❌ [MapScreen] Failed to load recent locations: $e");
+    }
+  }
+
+  Future<void> _clearRecentLocations() async {
+    try {
+      await _appPreferencesService.clearRecentLocations();
+      if (!mounted) return;
+      setState(() {
+        _recentLocations = [];
+        _showSearchResults = false;
+      });
+    } catch (e) {
+      debugPrint("❌ [MapScreen] Failed to clear recents: $e");
+    }
+  }
+
+  Future<void> _rememberRecentLocation({
+    required RecentLocationKind kind,
+    required String label,
+    required LatLng location,
+  }) async {
+    if (!location.latitude.isFinite ||
+        !location.longitude.isFinite ||
+        (location.latitude == 0 && location.longitude == 0)) {
+      return;
+    }
+
+    try {
+      final merged = await _appPreferencesService.addRecentLocation(
+        label: label,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        kind: kind,
+      );
+
+      if (!mounted) return;
+      setState(() => _recentLocations = merged);
+    } catch (e) {
+      debugPrint("❌ [MapScreen] Failed to save recent location: $e");
+    }
+  }
+
+  String _formatRelativeTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final diff = now.difference(dateTime);
+
+    if (diff.inMinutes < 1) return "Just now";
+    if (diff.inHours < 1) return "${diff.inMinutes}m ago";
+    if (diff.inDays < 1) return "${diff.inHours}h ago";
+    return "${diff.inDays}d ago";
+  }
+
+  void _openRecentLocation(RecentLocation recent) {
+    final location = LatLng(recent.latitude, recent.longitude);
+
+    // * Re-center quickly, then present options (directions / preview / save).
+    _safeMoveMap(location, 15.0);
+
+    final mockResult = <String, dynamic>{
+      "display_name": recent.label,
+      "lat": recent.latitude.toString(),
+      "lon": recent.longitude.toString(),
+      "address": null,
+    };
+
+    _showLocationOptionsSheet(mockResult, location);
+  }
   
   /// * Handle end point selection - close dialog and calculate route safely
   Future<void> _handleEndPointSelected() async {
@@ -1650,6 +1757,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final lat = double.parse(result['lat'].toString());
       final lon = double.parse(result['lon'].toString());
       final location = LatLng(lat, lon);
+
+      final fullName =
+          (result["display_name"] ?? "Location").toString().trim();
+      final shortName = fullName.split(",").first.trim();
+      await _rememberRecentLocation(
+        kind: RecentLocationKind.search,
+        label: shortName.isNotEmpty ? shortName : fullName,
+        location: location,
+      );
       
       // * Close search results
       setState(() {
@@ -1694,7 +1810,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 : null,
         onGetDirections: () {
           Navigator.of(context).pop();
-          _openDirections(location);
+          _openDirections(
+            location,
+            destinationName: shortName.isNotEmpty
+                ? shortName
+                : (fullName.isNotEmpty ? fullName : "Location"),
+          );
         },
         onOpenCommunityPreview: () {
           Navigator.of(context).pop();
@@ -1793,6 +1914,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   LatLng? _lastSpeedLimitUpdateLocation;
   bool _isLoadingSpeedLimit = false;
 
+  bool get _canCreateOrSaveRoutes => SupabaseService().isAuthenticated;
+
   // * Route cache for fast "hazard ahead" calculations
   List<double>? _navigationRouteCumulativeMeters;
   String? _navigationRouteSignature;
@@ -1858,7 +1981,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
   
   /// * Start navigation (shows route preview first)
-  Future<void> _startNavigation(LatLng destination, String mode) async {
+  Future<void> _startNavigation(
+    LatLng destination,
+    String mode, {
+    String? destinationName,
+  }) async {
     try {
       if (mounted) {
         Navigator.of(context).pop(); // * Close location options sheet
@@ -1903,21 +2030,27 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               route: route,
               vehicleType: vehicleType,
               vehicleModeName: vehicleModeName,
-              onSaveRoute: () {
-                Navigator.of(context).pop(); // * Close preview sheet
-                if (mounted) {
-                  setState(() {
-                    _navigationMode = mode;
-                    _navigationDestination = destination;
-                    _customStartPoint = _currentLocation;
-                    _customEndPoint = destination;
-                  });
-                  _showSaveRouteDialog();
-                }
-              },
+              onSaveRoute: _canCreateOrSaveRoutes
+                  ? () {
+                      Navigator.of(context).pop(); // * Close preview sheet
+                      if (mounted) {
+                        setState(() {
+                          _navigationMode = mode;
+                          _navigationDestination = destination;
+                          _customStartPoint = _currentLocation;
+                          _customEndPoint = destination;
+                        });
+                        _showSaveRouteDialog();
+                      }
+                    }
+                  : null,
               onStartNavigation: () {
                 Navigator.of(context).pop(); // * Close preview sheet
-                _beginNavigation(destination, mode);
+                _beginNavigation(
+                  destination,
+                  mode,
+                  destinationName: destinationName,
+                );
               },
               onCancel: () {
                 Navigator.of(context).pop(); // * Close preview sheet
@@ -1951,7 +2084,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
   
   /// * Begin actual navigation (after preview confirmed)
-  void _beginNavigation(LatLng destination, String mode) async {
+  void _beginNavigation(
+    LatLng destination,
+    String mode, {
+    String? destinationName,
+  }) async {
+    final fallbackLabel =
+        "${destination.latitude.toStringAsFixed(5)}, ${destination.longitude.toStringAsFixed(5)}";
+    final label = (destinationName ?? fallbackLabel).trim();
+
+    await _rememberRecentLocation(
+      kind: RecentLocationKind.navigation,
+      label: label.isNotEmpty ? label : "Destination",
+      location: destination,
+    );
+
     setState(() {
       _isNavigating = true;
       _navigationDestination = destination;
@@ -3602,20 +3749,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 route: route,
                 vehicleType: vehicleType,
                 vehicleModeName: vehicleModeName,
-                onSaveRoute: () {
-                  if (Navigator.of(sheetContext).canPop()) {
-                    Navigator.of(sheetContext).pop();
-                  }
-                  if (mounted) {
-                    setState(() {
-                      _navigationMode = mode;
-                      _navigationDestination = end;
-                      _customStartPoint = start;
-                      _customEndPoint = end;
-                    });
-                    _showSaveRouteDialog();
-                  }
-                },
+                onSaveRoute: _canCreateOrSaveRoutes
+                    ? () {
+                        if (Navigator.of(sheetContext).canPop()) {
+                          Navigator.of(sheetContext).pop();
+                        }
+                        if (mounted) {
+                          setState(() {
+                            _navigationMode = mode;
+                            _navigationDestination = end;
+                            _customStartPoint = start;
+                            _customEndPoint = end;
+                          });
+                          _showSaveRouteDialog();
+                        }
+                      }
+                    : null,
                 onStartNavigation: () {
                   if (Navigator.of(sheetContext).canPop()) {
                     Navigator.of(sheetContext).pop();
@@ -4197,7 +4346,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
   
   /// * Open directions options
-  Future<void> _openDirections(LatLng destination) async {
+  Future<void> _openDirections(
+    LatLng destination, {
+    String? destinationName,
+  }) async {
     try {
       if (mounted) {
         // * Do NOT auto-pop here.
@@ -4259,7 +4411,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             title: "Big Bike (400cc+)",
                             subtitle: "High displacement motorcycles, tolls optional",
                             isActive: _activeRoutingProfile == 'motorcycle_400plus',
-                            onTap: () => _startNavigation(destination, 'motorcycle_400plus'),
+                            onTap: () => _startNavigation(
+                              destination,
+                              'motorcycle_400plus',
+                              destinationName: destinationName,
+                            ),
                           ),
                           const SizedBox(height: AppTheme.spacingMD),
                           // * Motorcycle (≤399cc)
@@ -4268,7 +4424,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             title: "Motorcycle (≤399cc)",
                             subtitle: "Standard motorcycles, automatically avoids toll roads",
                             isActive: _activeRoutingProfile == 'motorcycle_sub400',
-                            onTap: () => _startNavigation(destination, 'motorcycle_sub400'),
+                            onTap: () => _startNavigation(
+                              destination,
+                              'motorcycle_sub400',
+                              destinationName: destinationName,
+                            ),
                           ),
                           const SizedBox(height: AppTheme.spacingMD),
                           // * Car (Private)
@@ -4277,7 +4437,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             title: "Car (Private)",
                             subtitle: "Fastest routes, tolls optional",
                             isActive: _activeRoutingProfile == 'car',
-                            onTap: () => _startNavigation(destination, 'car'),
+                            onTap: () => _startNavigation(
+                              destination,
+                              'car',
+                              destinationName: destinationName,
+                            ),
                           ),
                           const SizedBox(height: AppTheme.spacingMD),
                           // * Truck
@@ -4286,7 +4450,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             title: "Truck",
                             subtitle: "Commercial vehicles, respects truck ban hours",
                             isActive: _activeRoutingProfile == 'truck',
-                            onTap: () => _startNavigation(destination, 'truck'),
+                            onTap: () => _startNavigation(
+                              destination,
+                              'truck',
+                              destinationName: destinationName,
+                            ),
                           ),
                           const SizedBox(height: AppTheme.spacingMD),
                           // * Pedestrian
@@ -4295,7 +4463,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             title: "Pedestrian",
                             subtitle: "Walking routes, shortest paths",
                             isActive: _activeRoutingProfile == 'pedestrian',
-                            onTap: () => _startNavigation(destination, 'pedestrian'),
+                            onTap: () => _startNavigation(
+                              destination,
+                              'pedestrian',
+                              destinationName: destinationName,
+                            ),
                           ),
                           const SizedBox(height: AppTheme.spacingXL),
                         ],
@@ -5648,65 +5820,101 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             Positioned(
               top: 80, // * Below search bar
               right: AppTheme.spacingMD,
-              child: Column(
-                children: [
-                  // * Zoom In Button
-                  _MapControlButton(
-                    icon: Icons.add,
-                    onPressed: () {
-                      final currentZoom = _mapZoom;
-                      final currentCenter = _mapCenter;
-                      _safeMoveMap(
-                        currentCenter,
-                        (currentZoom + 1).clamp(AppConstants.minZoom, AppConstants.maxZoom),
-                      );
-                    },
-                    tooltip: "Zoom in",
-                  ),
-                  const SizedBox(height: AppTheme.spacingXS),
-                  // * Zoom Out Button
-                  _MapControlButton(
-                    icon: Icons.remove,
-                    onPressed: () {
-                      final currentZoom = _mapZoom;
-                      final currentCenter = _mapCenter;
-                      _safeMoveMap(
-                        currentCenter,
-                        (currentZoom - 1).clamp(AppConstants.minZoom, AppConstants.maxZoom),
-                      );
-                    },
-                    tooltip: "Zoom out",
-                  ),
-                  const SizedBox(height: AppTheme.spacingMD),
-                  // * Location Button
-                  _MapControlButton(
-                    icon: _isNavigating
-                        ? (_isNavigationFollowing ? Icons.navigation : Icons.my_location)
-                        : Icons.gps_fixed,
-                    onPressed: _hasPreciseLocation
-                        ? () {
-                            if (_isNavigating) {
-                              // * Re-center and resume follow mode.
-                              _recenterNavigationCamera();
-                              return;
-                            }
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                  boxShadow: AppTheme.shadowLarge,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceColor.withOpacity(0.78),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                        border: Border.all(
+                          color: AppTheme.borderColor.withOpacity(0.85),
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          // * Zoom In Button
+                          _MapControlButton(
+                            icon: Icons.add,
+                            onPressed: () {
+                              final currentZoom = _mapZoom;
+                              final currentCenter = _mapCenter;
+                              _safeMoveMap(
+                                currentCenter,
+                                (currentZoom + 1).clamp(
+                                  AppConstants.minZoom,
+                                  AppConstants.maxZoom,
+                                ),
+                              );
+                            },
+                            tooltip: "Zoom in",
+                          ),
+                          const SizedBox(height: AppTheme.spacingXS),
+                          // * Zoom Out Button
+                          _MapControlButton(
+                            icon: Icons.remove,
+                            onPressed: () {
+                              final currentZoom = _mapZoom;
+                              final currentCenter = _mapCenter;
+                              _safeMoveMap(
+                                currentCenter,
+                                (currentZoom - 1).clamp(
+                                  AppConstants.minZoom,
+                                  AppConstants.maxZoom,
+                                ),
+                              );
+                            },
+                            tooltip: "Zoom out",
+                          ),
+                          const SizedBox(height: AppTheme.spacingMD),
+                          // * Location Button
+                          _MapControlButton(
+                            icon: _isNavigating
+                                ? (_isNavigationFollowing
+                                    ? Icons.navigation
+                                    : Icons.my_location)
+                                : Icons.gps_fixed,
+                            onPressed: _hasPreciseLocation
+                                ? () {
+                                    if (_isNavigating) {
+                                      // * Re-center and resume follow mode.
+                                      _recenterNavigationCamera();
+                                      return;
+                                    }
 
-                            // * Center on current location
-                            _safeMoveMap(_currentLocation, AppConstants.defaultZoom);
-                          }
-                        : _requestLocationPermission,
-                    tooltip: _hasPreciseLocation
-                        ? (_isNavigating
-                            ? (_isNavigationFollowing ? "Following route" : "Re-center")
-                            : "Center on my location")
-                        : "Get my location",
-                    backgroundColor: _hasPreciseLocation
-                        ? (_isNavigating && !_isNavigationFollowing
-                            ? AppTheme.warningColor
-                            : AppTheme.primaryColor)
-                        : AppTheme.textSecondary,
+                                    // * Center on current location
+                                    _safeMoveMap(
+                                      _currentLocation,
+                                      AppConstants.defaultZoom,
+                                    );
+                                  }
+                                : _requestLocationPermission,
+                            tooltip: _hasPreciseLocation
+                                ? (_isNavigating
+                                    ? (_isNavigationFollowing
+                                        ? "Following route"
+                                        : "Re-center")
+                                    : "Center on my location")
+                                : "Get my location",
+                            backgroundColor: _hasPreciseLocation
+                                ? (_isNavigating && !_isNavigationFollowing
+                                    ? AppTheme.warningColor
+                                    : AppTheme.primaryColor)
+                                : AppTheme.textSecondary,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ],
+                ),
               ),
             ),
             // * Search Bar - Top Center
@@ -5714,22 +5922,38 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               top: AppTheme.spacingMD,
               left: AppTheme.spacingMD,
               right: AppTheme.spacingMD,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceColor,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-                    border: Border.all(
-                      color: AppTheme.borderColor,
-                      width: 1.5,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 900),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusXL),
+                      boxShadow: AppTheme.shadowLarge,
                     ),
-                    boxShadow: AppTheme.shadowLarge,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusXL),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppTheme.surfaceColor.withOpacity(0.68),
+                                AppTheme.surfaceColor.withOpacity(0.92),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(AppTheme.radiusXL),
+                            border: Border.all(
+                              color: AppTheme.borderColor.withOpacity(0.85),
+                              width: 1,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextField(
                       controller: _searchController,
                       focusNode: _searchFocusNode,
                       decoration: InputDecoration(
@@ -5854,9 +6078,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         color: AppTheme.textPrimary,
                       ),
                       onChanged: (value) {
+                        final trimmed = value.trim();
+
+                        // * When the query is cleared, keep the dropdown open and show recents.
+                        if (trimmed.isEmpty) {
+                          setState(() {
+                            _searchResults = [];
+                            _visibleSearchResults = 10;
+                            _showSearchResults = true;
+                          });
+                          return;
+                        }
+
                         // * Debounce search
                         Future.delayed(const Duration(milliseconds: 500), () {
-                          if (_searchController.text == value && value.isNotEmpty) {
+                          if (_searchController.text == value &&
+                              value.trim().isNotEmpty) {
                             _searchLocation(value);
                           }
                         });
@@ -5867,15 +6104,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         }
                       },
                       onTap: () {
-                        if (_searchResults.isNotEmpty) {
-                          setState(() {
-                            _showSearchResults = true;
-                          });
-                        }
+                        setState(() => _showSearchResults = true);
                       },
                       ),
-                      // * Search Results Dropdown
-                      if (_showSearchResults && _searchResults.isNotEmpty)
+                      // * Search / Recents Dropdown
+                      if (_showSearchResults &&
+                          ((_searchController.text.trim().isEmpty &&
+                                  (_isLoadingRecentLocations ||
+                                      _recentLocations.isNotEmpty)) ||
+                              _searchResults.isNotEmpty))
                       Container(
                         margin: const EdgeInsets.only(top: AppTheme.spacingXS),
                         decoration: BoxDecoration(
@@ -5885,126 +6122,320 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             color: AppTheme.borderColor,
                             width: 1.5,
                           ),
-                          boxShadow: AppTheme.shadowLarge,
                         ),
                         constraints: const BoxConstraints(maxHeight: 400),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: ListView.separated(
-                                shrinkWrap: true,
-                                itemCount: _visibleSearchResults.clamp(0, _searchResults.length),
-                                separatorBuilder: (context, index) => Divider(
-                                  height: 1,
-                                  color: AppTheme.borderColor,
-                                ),
-                                itemBuilder: (context, index) {
-                            final result = _searchResults[index];
-                            final resultKey = "${result['lat']}_${result['lon']}";
-                            final distance = _searchResultDistances[resultKey];
-                            final isLoading = _searchResultDistanceLoading[resultKey] ?? false;
-                            
-                            return ListTile(
-                              leading: Icon(
-                                Icons.place,
-                                color: AppTheme.primaryColor,
-                              ),
-                              title: Text(
-                                result['display_name'] ?? 'Unknown location',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: AppTheme.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: result['address'] != null
-                                  ? Text(
-                                      _formatAddress(result['address'] as Map<String, dynamic>),
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: AppTheme.textSecondary,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    )
-                                  : null,
-                              trailing: distance != null
-                                  ? Row(
-                                      mainAxisSize: MainAxisSize.min,
+                        child: Builder(
+                          builder: (context) {
+                            final isQueryEmpty =
+                                _searchController.text.trim().isEmpty;
+
+                            if (isQueryEmpty) {
+                              return Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppTheme.spacingMD,
+                                      vertical: AppTheme.spacingSM,
+                                    ),
+                                    child: Row(
                                       children: [
                                         Text(
-                                          _formatDistance(distance),
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: AppTheme.primaryColor,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                          "Recents",
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w900,
+                                              ),
                                         ),
-                                        if (isLoading) ...[
-                                          const SizedBox(width: 8),
-                                          const SizedBox(
-                                            width: 12,
-                                            height: 12,
+                                        const Spacer(),
+                                        if (_recentLocations.isNotEmpty)
+                                          TextButton(
+                                            onPressed: _clearRecentLocations,
+                                            child: const Text("Clear"),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Divider(height: 1),
+                                  if (_isLoadingRecentLocations &&
+                                      _recentLocations.isEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.all(
+                                        AppTheme.spacingLG,
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: const [
+                                          SizedBox(
+                                            width: 16,
+                                            height: 16,
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                AppTheme.primaryColor,
+                                              ),
                                             ),
                                           ),
+                                          SizedBox(width: 12),
+                                          Text("Loading recents..."),
                                         ],
-                                      ],
-                                    )
-                                  : isLoading
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
-                                          ),
-                                        )
-                                      : null,
-                              onTap: () => _selectSearchResult(result),
-                              dense: true,
+                                      ),
+                                    ),
+                                  if (!_isLoadingRecentLocations &&
+                                      _recentLocations.isEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.all(
+                                        AppTheme.spacingLG,
+                                      ),
+                                      child: Text(
+                                        "No recent locations yet. Search a place and it will show up here.",
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: AppTheme.textSecondary,
+                                              height: 1.35,
+                                            ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  if (_recentLocations.isNotEmpty)
+                                    Flexible(
+                                      child: ListView.separated(
+                                        shrinkWrap: true,
+                                        itemCount: _recentLocations.length,
+                                        separatorBuilder:
+                                            (context, index) => const Divider(
+                                          height: 1,
+                                          color: AppTheme.borderColor,
+                                        ),
+                                        itemBuilder: (context, index) {
+                                          final recent = _recentLocations[index];
+                                          final kindLabel =
+                                              recent.kind == RecentLocationKind.navigation
+                                                  ? "Navigation"
+                                                  : "Search";
+
+                                          return ListTile(
+                                            leading: Icon(
+                                              recent.kind ==
+                                                      RecentLocationKind.navigation
+                                                  ? Icons.navigation_rounded
+                                                  : Icons.history_rounded,
+                                              color: AppTheme.primaryColor,
+                                            ),
+                                            title: Text(
+                                              recent.label,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(
+                                                    color: AppTheme.textPrimary,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                            ),
+                                            subtitle: Text(
+                                              "$kindLabel • ${_formatRelativeTime(recent.updatedAt)}",
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    color:
+                                                        AppTheme.textSecondary,
+                                                  ),
+                                            ),
+                                            onTap: () {
+                                              setState(() {
+                                                _showSearchResults = false;
+                                                _searchFocusNode.unfocus();
+                                              });
+                                              _openRecentLocation(recent);
+                                            },
+                                            dense: true,
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                ],
+                              );
+                            }
+
+                            // * Search results
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: ListView.separated(
+                                    shrinkWrap: true,
+                                    itemCount: _visibleSearchResults.clamp(
+                                      0,
+                                      _searchResults.length,
+                                    ),
+                                    separatorBuilder: (context, index) =>
+                                        const Divider(
+                                      height: 1,
+                                      color: AppTheme.borderColor,
+                                    ),
+                                    itemBuilder: (context, index) {
+                                      final result = _searchResults[index];
+                                      final resultKey =
+                                          "${result['lat']}_${result['lon']}";
+                                      final distance =
+                                          _searchResultDistances[resultKey];
+                                      final isLoading =
+                                          _searchResultDistanceLoading[
+                                                  resultKey] ??
+                                              false;
+
+                                      return ListTile(
+                                        leading: const Icon(
+                                          Icons.place,
+                                          color: AppTheme.primaryColor,
+                                        ),
+                                        title: Text(
+                                          result['display_name'] ??
+                                              "Unknown location",
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: AppTheme.textPrimary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        subtitle: result['address'] != null
+                                            ? Text(
+                                                _formatAddress(
+                                                  result['address']
+                                                      as Map<String, dynamic>,
+                                                ),
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.copyWith(
+                                                      color: AppTheme
+                                                          .textSecondary,
+                                                    ),
+                                                maxLines: 1,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                              )
+                                            : null,
+                                        trailing: distance != null
+                                            ? Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    _formatDistance(distance),
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.copyWith(
+                                                          color: AppTheme
+                                                              .primaryColor,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                  ),
+                                                  if (isLoading) ...[
+                                                    const SizedBox(width: 8),
+                                                    const SizedBox(
+                                                      width: 12,
+                                                      height: 12,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        valueColor:
+                                                            AlwaysStoppedAnimation<
+                                                                Color>(
+                                                          AppTheme.primaryColor,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              )
+                                            : isLoading
+                                                ? const SizedBox(
+                                                    width: 16,
+                                                    height: 16,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      valueColor:
+                                                          AlwaysStoppedAnimation<
+                                                              Color>(
+                                                        AppTheme.primaryColor,
+                                                      ),
+                                                    ),
+                                                  )
+                                                : null,
+                                        onTap: () => _selectSearchResult(result),
+                                        dense: true,
+                                      );
+                                    },
+                                  ),
+                                ),
+                                // * Show More button if there are more results
+                                if (_visibleSearchResults < _searchResults.length)
+                                  Container(
+                                    decoration: const BoxDecoration(
+                                      border: Border(
+                                        top: BorderSide(
+                                          color: AppTheme.borderColor,
+                                          width: 1,
+                                        ),
+                                      ),
+                                    ),
+                                    child: ListTile(
+                                      leading: const Icon(
+                                        Icons.expand_more,
+                                        color: AppTheme.primaryColor,
+                                      ),
+                                      title: Text(
+                                        "Show More (${_searchResults.length - _visibleSearchResults} more)",
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              color: AppTheme.primaryColor,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                      onTap: () {
+                                        setState(() {
+                                          // * Show 10 more results each time
+                                          _visibleSearchResults =
+                                              (_visibleSearchResults + 10)
+                                                  .clamp(
+                                            0,
+                                            _searchResults.length,
+                                          );
+                                        });
+                                      },
+                                      dense: true,
+                                    ),
+                                  ),
+                              ],
                             );
                           },
-                              ),
-                            ),
-                            // * Show More button if there are more results
-                            if (_visibleSearchResults < _searchResults.length)
-                              Container(
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    top: BorderSide(
-                                      color: AppTheme.borderColor,
-                                      width: 1,
-                                    ),
-                                  ),
-                                ),
-                                child: ListTile(
-                                  leading: Icon(
-                                    Icons.expand_more,
-                                    color: AppTheme.primaryColor,
-                                  ),
-                                  title: Text(
-                                    "Show More (${_searchResults.length - _visibleSearchResults} more)",
-                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: AppTheme.primaryColor,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  onTap: () {
-                                    setState(() {
-                                      // * Show 10 more results each time
-                                      _visibleSearchResults = (_visibleSearchResults + 10).clamp(0, _searchResults.length);
-                                    });
-                                  },
-                                  dense: true,
-                                ),
-                              ),
-                          ],
                         ),
                       ),
                     ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -6020,7 +6451,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   destination: _navigationDestination!,
                   onStop: _stopNavigation,
                   onChangeRoute: _availableRoutes.length > 1 ? _showRouteSelectionSheet : null,
-                  onSaveRoute: _showSaveRouteDialog,
+                  onSaveRoute: _canCreateOrSaveRoutes ? _showSaveRouteDialog : null,
                   remainingDistance: _remainingDistance > 0 ? _remainingDistance / 1000 : null,
                   remainingDuration: _remainingDuration,
                   isOffRoute: _isOffRoute,
@@ -6100,10 +6531,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   place: _selectedPlace!,
                   onGetDirections: () {
                     final destination = _selectedPlace!.location;
+                    final destinationName = _selectedPlace!.name;
                     if (mounted) {
                       setState(() => _selectedPlace = null);
                     }
-                    _openDirections(destination);
+                    _openDirections(
+                      destination,
+                      destinationName: destinationName,
+                    );
                   },
                   onClose: () {
                     if (mounted) {

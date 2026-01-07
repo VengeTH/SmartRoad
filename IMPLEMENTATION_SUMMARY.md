@@ -3,7 +3,7 @@
 **Project:** SmartRoad - Road Hazard Reporting & Navigation App  
 **Company:** The Heedful  
 **Motto:** "Be Heedful on the Road"  
-**Version:** 2.6.3  
+**Version:** 2.6.8  
 **Platform:** Flutter (Android, iOS, Web)  
 **Backend:** Supabase + Self-hosted GraphHopper
 
@@ -45,6 +45,7 @@ lib/
 │   └── theme/app_theme.dart        # Theme & styling
 ├── models/
 │   ├── hazard.dart                  # Hazard data model
+│   ├── recent_location.dart          # Local recents model (search/navigation)
 │   ├── sticker.dart                 # Sticker & HOA models
 │   └── user_profile.dart            # User profile model
 ├── providers/                       # Riverpod state management
@@ -129,6 +130,7 @@ lib/
 - ✅ HOA gate markers (color-coded: Red=Strict, Green=Open)
 - ✅ Marker tap → bottom sheet with details
 - ✅ Map controls (zoom in/out, center on location)
+- ✅ Glass-style map HUD (modern search bar + control dock)
 - ✅ Long-press to pin location
 - ✅ Location options sheet (Get Directions, Save, Share, View)
 - ✅ Search bar with autocomplete
@@ -162,7 +164,9 @@ lib/
   - Country code caching to avoid repeated API calls
   - Two-phase search: current country first, then global main cities
   - Result deduplication to prevent duplicate entries
-- ✅ Search history (via state management)
+- ✅ Search recents (persisted locally via Hive)
+  - Recent searches (selected places)
+  - Recent navigation destinations
 - ✅ **Route Distance Display**: Search results show route-based distances
 - ✅ **Error Handling**: Fixed RangeError by properly clamping ListView itemCount
   - Calculated using actual route (GraphHopper) with fallback to straight-line distance
@@ -550,6 +554,9 @@ lib/
 - ✅ Enhanced input fields (20px vertical padding)
 - ✅ Hidden scrollbars (cleaner appearance)
 - ✅ Updated icons (navigation, location, gates)
+- ✅ Premium auth screen layout (responsive, one-screen, no scroll)
+- ✅ Map glass HUD (search + controls)
+- ✅ Routes UX polish (empty states, cards, Create Route dialog)
 - ✅ Loading states
 - ✅ Error states
 - ✅ Empty states

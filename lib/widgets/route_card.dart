@@ -24,13 +24,9 @@ class RouteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-      ),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLG),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -86,10 +82,10 @@ class RouteCard extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.2),
+                        color: AppTheme.warningColor.withOpacity(0.18),
                         borderRadius: BorderRadius.circular(AppTheme.radiusSM),
                         border: Border.all(
-                          color: Colors.amber,
+                          color: AppTheme.warningColor.withOpacity(0.55),
                           width: 1,
                         ),
                       ),
@@ -98,7 +94,7 @@ class RouteCard extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: Colors.amber,
+                          color: AppTheme.warningColor,
                         ),
                       ),
                     )
@@ -142,7 +138,9 @@ class RouteCard extends StatelessWidget {
                     label: route.ratingAvg > 0
                         ? route.ratingAvg.toStringAsFixed(1)
                         : "New",
-                    color: route.ratingAvg > 0 ? Colors.amber : AppTheme.textSecondary,
+                    color: route.ratingAvg > 0
+                        ? AppTheme.warningColor
+                        : AppTheme.textSecondary,
                   ),
                 ],
               ),

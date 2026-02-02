@@ -4,7 +4,56 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
-## Version 2.6.8 - 2026 UI Refresh + Map Search Recents + Routes UX Polish
+## Version 2.6.9 - Commute Mode Overhaul & Safety Features (Latest)
+
+**Release Date:** February 2026  
+**Focus:** Proactive commute tracking, off-route safety alerts, UI/UX overhaul  
+**Status:** Production Ready (Demo Mode Only)
+
+### Commute Mode
+-  **Complete UI Overhaul**
+  - **Countdown Ring**: Beautiful circular progress indicator with status-based gradient colors
+  - **Arrival Celebration**: Confetti animation and bouncy checkmark upon arrival
+  - **Empty State**: Illustrated "Never miss your stop" screen with feature highlights
+  - **Enhanced Formatting**: Clearer distance (e.g., "1.2 km") and ETA (e.g., "1 hr 5 min") display
+  - **Status Indicators**: Visual indicators for all states (Location, Bus, Bell, Check, Warning, Alert)
+  - **Pulse Animation**: Heartbeat effect when approaching destination or in danger
+
+-  **Safety Alert Feature (Proactive Safety)**
+  - **Off-Route Detection**: Automatically detects if you stray 1-5km from your route (configurable)
+  - **Auto-SMS**: Sends emergency SMS to contacts after a 30-second countdown if off-route
+  - **Emergency Contacts**: Dedicated contact list for safety alerts (stored locally)
+  - **"I'm Safe" Button**: Dismisses false alarms before SMS is sent
+  - **Safety Overlay**: Full-screen orange alert for immediate attention
+
+-  **Core Commute Features**
+  - **"Lagpas-Baba" Protection**: Aggressive full-screen red alert if you miss your stop
+  - **Time-Based Backup Alarm**: Get alerted X minutes before arrival (based on Live ETA)
+  - **Background Tracking**: Works even when screen is off or app is minimized
+  - **Smart Settings**: Configurable alarm distance, vibration patterns, and sound options
+
+### Map & Filtering
+-  **Fixed Map Filter Panel**
+  - "Reset Filters" button now properly constrained to prevent UI overflow
+  - Improved layout spacing for filter controls
+
+### Technical Changes
+- **New Services**:
+  - `CommuteService`: Background location tracking, distance calculations, and off-route logic
+  - `EmergencySmsService`: SMS generation and linking for safety alerts
+- **New Widgets**:
+  - `CountdownRingWidget`, `ArrivalCelebration`, `CommuteEmptyState`
+  - `SafetyAlertOverlay`, `SafetySettingsSheet`, `LagpasAlertOverlay`
+- **State Management**:
+  - Enhanced `CommuteState` with fields for safety monitoring and progress tracking
+  - Updated `CommuteProvider` to handle new safety actions
+- **Bug Fixes**:
+  - Fixed switch statement exhaustiveness for new `CommuteStatus.danger` state
+  - Fixed recursive `AnimatedBuilder` issue in celebration widget
+
+---
+
+## Version 2.6.8 - 2026 UI Refresh + Map Search Recents + Routes UX Polish (Latest)
 
 **Release Date:** January 2026  
 **Focus:** Modern UI refresh, map HUD improvements, search recents, routes UX polish  
@@ -43,7 +92,7 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
-## Version 2.6.7 - Guest Mode + Ratings + Speed HUD + Navigation Enhancements (Latest)
+## Version 2.6.7 - Guest Mode + Ratings + Speed HUD + Navigation Enhancements
 
 **Release Date:** January 2026  
 **Focus:** Guest navigation access, place ratings, navigation avatar customization, speed HUD + speed limits, comprehensive navigation improvements  
@@ -260,7 +309,7 @@ This document tracks all version updates, feature additions, and significant cha
 
 - ✅ Fixed in 2.6.6: Route interpolation now generates smooth curves between control points
 - ⚠️ GraphHopper waypoint routing not fully tested (GraphHopper not set up)
-- ⚠️ Route drawing feature (draw route) not yet implemented
+- ⚠️ Route drawing exists, but saving/editing flow may be inconsistent in demo mode (no backend persistence)
 
 ---
 
@@ -471,6 +520,7 @@ This document tracks all version updates, feature additions, and significant cha
   - ✅ Improved tile loading and error handling
   - ✅ Better debugging and logging for weather tile requests
   - ✅ Fixed layer availability checks for all three weather types
+  - ⚠️ Web note: weather tiles on web require an API key or proxy configuration; some providers may be blocked by CORS without a proxy
 
 #### Map Wrapping
 - **Infinite Horizontal Scrolling:**
@@ -1266,6 +1316,8 @@ This document tracks all version updates, feature additions, and significant cha
 - Permission-based routing logic not yet implemented (structure prepared)
 - AI verification requires GEMINI_API_KEY to be configured
 - Physical sticker upload requires Supabase Storage bucket setup
+- On web, GraphHopper routing is disabled by default unless `ENABLE_GRAPH_HOPPER_WEB=true` and CORS/network allow it (routing may fall back to straight-line)
+- On web, weather layers require `OPENWEATHERMAP_API_KEY` or a proxy URL (`WEATHER_PROXY_URL`) to avoid missing-key/CORS limitations
 
 ---
 

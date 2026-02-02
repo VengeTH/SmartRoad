@@ -130,5 +130,117 @@ class AppPreferencesService {
     final box = await _ensureBox();
     await box.delete(_keyRecentLocations);
   }
+
+  // ============================================================
+  // * COMMUTE MODE SETTINGS
+  // ============================================================
+
+  static const String _keyCommuteSettings = "commute_settings_v1";
+  static const String _keyRecentCommuteDestinations = "recent_commute_destinations_v1";
+
+  /// * Load commute settings
+  Future<Map<String, dynamic>> loadCommuteSettings() async {
+    final box = await _ensureBox();
+    final raw = box.get(_keyCommuteSettings);
+    if (raw == null || raw is! String || raw.trim().isEmpty) {
+      return {
+        "alarmDistanceMeters": 500,
+        "useTimeBackupAlarm": true,
+        "backupAlarmMinutes": 5,
+        "vibrateOnAlarm": true,
+        "playSoundOnAlarm": true,
+      };
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+      return {
+        "alarmDistanceMeters": 500,
+        "useTimeBackupAlarm": true,
+        "backupAlarmMinutes": 5,
+        "vibrateOnAlarm": true,
+        "playSoundOnAlarm": true,
+      };
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint("❌ [AppPreferencesService] Failed to parse commute settings: $e");
+      }
+      return {
+        "alarmDistanceMeters": 500,
+        "useTimeBackupAlarm": true,
+        "backupAlarmMinutes": 5,
+        "vibrateOnAlarm": true,
+        "playSoundOnAlarm": true,
+      };
+    }
+  }
+
+  /// * Save commute settings
+  Future<void> saveCommuteSettings(Map<String, dynamic> settings) async {
+    final box = await _ensureBox();
+    final encoded = jsonEncode(settings);
+    await box.put(_keyCommuteSettings, encoded);
+  }
+
+  /// * Load recent commute destinations
+  Future<List<Map<String, dynamic>>> loadRecentCommuteDestinations() async {
+    final box = await _ensureBox();
+    final raw = box.get(_keyRecentCommuteDestinations);
+    if (raw == null) return [];
+
+    try {
+      final decoded = raw is String ? jsonDecode(raw) : raw;
+      if (decoded is! List) return [];
+
+      return decoded
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .take(10)
+          .toList();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint("❌ [AppPreferencesService] Failed to parse commute destinations: $e");
+      }
+      return [];
+    }
+  }
+
+  /// * Add a recent commute destination
+  Future<List<Map<String, dynamic>>> addRecentCommuteDestination({
+    required String name,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final box = await _ensureBox();
+    
+    final incoming = {
+      "name": name.trim().isEmpty ? "Location" : name.trim(),
+      "lat": latitude,
+      "lng": longitude,
+      "updatedAt": DateTime.now().toIso8601String(),
+    };
+
+    final existing = await loadRecentCommuteDestinations();
+    
+    // * Remove duplicate by coordinates
+    final filtered = existing.where((item) {
+      final lat = item["lat"] as double?;
+      final lng = item["lng"] as double?;
+      if (lat == null || lng == null) return true;
+      return (lat - latitude).abs() > 0.0001 || (lng - longitude).abs() > 0.0001;
+    }).toList();
+
+    final merged = <Map<String, dynamic>>[incoming, ...filtered].take(10).toList();
+
+    final encoded = jsonEncode(merged);
+    await box.put(_keyRecentCommuteDestinations, encoded);
+    return merged;
+  }
 }
 

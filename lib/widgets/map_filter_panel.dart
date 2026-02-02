@@ -181,17 +181,28 @@ class MapFilterPanel extends ConsumerWidget {
                   ),
                   const SizedBox(height: AppTheme.spacingXL),
                   // * Reset Button
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      HapticFeedback.mediumImpact();
-                      filterNotifier.resetFilters();
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text("Reset Filters"),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.mediumImpact();
+                        filterNotifier.resetFilters();
+                      },
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text("Reset Filters"),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppTheme.spacingMD,
+                          horizontal: AppTheme.spacingLG,
+                        ),
+                        side: BorderSide(
+                          color: AppTheme.primaryColor.withOpacity(0.5),
+                        ),
+                      ),
                     ),
                   ),
+                  // * Bottom padding for safe area
+                  const SizedBox(height: AppTheme.spacingMD),
                 ],
               ),
             ),

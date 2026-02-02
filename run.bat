@@ -61,5 +61,9 @@ if not "%TOMTOM_API_KEY%"=="" (
 )
 echo.
 
+REM Set Flutter path
+set FLUTTER_EXE=flutter
+if exist "D:\Tools\flutter\bin\flutter.bat" set FLUTTER_EXE="D:\Tools\flutter\bin\flutter.bat"
+
 REM Run Flutter
-flutter run %DART_DEFINES% %*
+%FLUTTER_EXE% run %DART_DEFINES% %*

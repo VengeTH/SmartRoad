@@ -160,7 +160,7 @@ class NotificationService {
       subText: 'Commute Mode',
       styleInformation: BigTextStyleInformation(
         'Distance: $distanceText • ETA: $etaText',
-        contentTitle: '📍 Going to $destinationName',
+        contentTitle: 'Going to $destinationName',
       ),
     );
     
@@ -177,7 +177,7 @@ class NotificationService {
     
     await _notifications.show(
       _CommuteNotificationIds.tracking,
-      '📍 Going to $destinationName',
+      'Going to $destinationName',
       'Distance: $distanceText • ETA: $etaText',
       details,
       payload: 'commute_tracking',
@@ -285,7 +285,7 @@ class NotificationService {
     
     await _notifications.show(
       _CommuteNotificationIds.lagpas,
-      '🚨 LAGPAS KA NA!',
+      'LAGPAS KA NA!',
       'You passed $destinationName!',
       details,
       payload: 'commute_lagpas',
@@ -329,7 +329,7 @@ class NotificationService {
     
     await _notifications.show(
       _CommuteNotificationIds.arrival,
-      '✅ You\'ve arrived!',
+      'You\'ve arrived!',
       'Welcome to $destinationName',
       details,
       payload: 'commute_arrival',

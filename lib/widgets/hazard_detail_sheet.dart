@@ -5,7 +5,7 @@ import "../providers/comments_provider.dart";
 import "../services/supabase_service.dart";
 import "../core/theme/app_theme.dart";
 
-/// * Bottom sheet showing hazard details with comments (Waze-style)
+/// * Bottom sheet showing hazard details with comments (community-style)
 class HazardDetailSheet extends ConsumerStatefulWidget {
   final Hazard hazard;
   final VoidCallback onClose;

@@ -1,5 +1,5 @@
 -- ============================================================================
--- * HAZARD COMMENTS MODULE (Waze-style commenting)
+-- * HAZARD COMMENTS MODULE
 -- ============================================================================
 -- Run this after the main supabase_schema.sql
 

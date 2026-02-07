@@ -3,9 +3,11 @@ import "package:flutter/services.dart";
 
 import "../../core/theme/app_theme.dart";
 import "../../models/commute_state.dart";
+import "../../services/emergency_sms_service.dart";
 
 /// * Safety Settings Sheet
 /// * Bottom sheet for configuring safety alert features
+/// * V2: Added grace period, sustained detection, night mode, cooldown settings
 class SafetySettingsSheet extends StatefulWidget {
   final SafetySettings settings;
   final Function(SafetySettings) onSave;
@@ -26,8 +28,19 @@ class _SafetySettingsSheetState extends State<SafetySettingsSheet> {
   late bool _autoSmsEnabled;
   late List<EmergencyContact> _contacts;
   
+  // * V2: New settings
+  late int _gracePeriodSeconds;
+  late int _sustainedOffRouteSeconds;
+  late bool _useTimeOfDaySensitivity;
+  late int _nightModeStartHour;
+  late int _nightModeEndHour;
+  late double _nightModeThresholdMultiplier;
+  late int _alertCooldownMinutes;
+  
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  
+  bool _showAdvanced = false;
 
   @override
   void initState() {
@@ -36,6 +49,15 @@ class _SafetySettingsSheetState extends State<SafetySettingsSheet> {
     _thresholdKm = widget.settings.offRouteThresholdKm;
     _autoSmsEnabled = widget.settings.autoSmsEnabled;
     _contacts = List.from(widget.settings.emergencyContacts);
+    
+    // * V2: New settings
+    _gracePeriodSeconds = widget.settings.gracePeriodSeconds;
+    _sustainedOffRouteSeconds = widget.settings.sustainedOffRouteSeconds;
+    _useTimeOfDaySensitivity = widget.settings.useTimeOfDaySensitivity;
+    _nightModeStartHour = widget.settings.nightModeStartHour;
+    _nightModeEndHour = widget.settings.nightModeEndHour;
+    _nightModeThresholdMultiplier = widget.settings.nightModeThresholdMultiplier;
+    _alertCooldownMinutes = widget.settings.alertCooldownMinutes;
   }
 
   @override
@@ -51,6 +73,13 @@ class _SafetySettingsSheetState extends State<SafetySettingsSheet> {
       emergencyContacts: _contacts,
       offRouteThresholdKm: _thresholdKm,
       autoSmsEnabled: _autoSmsEnabled,
+      gracePeriodSeconds: _gracePeriodSeconds,
+      sustainedOffRouteSeconds: _sustainedOffRouteSeconds,
+      useTimeOfDaySensitivity: _useTimeOfDaySensitivity,
+      nightModeStartHour: _nightModeStartHour,
+      nightModeEndHour: _nightModeEndHour,
+      nightModeThresholdMultiplier: _nightModeThresholdMultiplier,
+      alertCooldownMinutes: _alertCooldownMinutes,
     );
     widget.onSave(newSettings);
     Navigator.of(context).pop();
@@ -144,6 +173,58 @@ class _SafetySettingsSheetState extends State<SafetySettingsSheet> {
       _contacts.removeAt(index);
     });
     HapticFeedback.lightImpact();
+  }
+  
+  void _showMessagePreview() {
+    final smsService = EmergencySmsService();
+    final preview = smsService.previewEmergencyMessage(
+      destinationName: "Work",
+      areaName: "Quezon City",
+    );
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surfaceColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.sms_outlined, color: Colors.orange),
+            SizedBox(width: AppTheme.spacingSM),
+            Text(
+              "Message Preview",
+              style: TextStyle(color: AppTheme.textPrimary),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Container(
+            padding: const EdgeInsets.all(AppTheme.spacingMD),
+            decoration: BoxDecoration(
+              color: AppTheme.backgroundColor,
+              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+              border: Border.all(color: AppTheme.borderColor),
+            ),
+            child: Text(
+              preview,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.textSecondary,
+                fontFamily: 'monospace',
+                height: 1.5,
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Close"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -268,121 +349,270 @@ class _SafetySettingsSheetState extends State<SafetySettingsSheet> {
                 const SizedBox(height: AppTheme.spacingLG),
                 
                 // * Threshold slider
-                Container(
-                  padding: const EdgeInsets.all(AppTheme.spacingMD),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceColor,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                    border: Border.all(color: AppTheme.borderColor.withOpacity(0.5)),
+                _buildSettingCard(
+                  icon: Icons.straighten,
+                  title: "Off-route threshold",
+                  subtitle: "Trigger alert if you're this far from route",
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.spacingSM,
+                      vertical: AppTheme.spacingXS,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSM),
+                    ),
+                    child: Text(
+                      "${_thresholdKm.toStringAsFixed(1)} km",
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.straighten,
-                            color: AppTheme.textSecondary,
-                            size: 20,
-                          ),
-                          const SizedBox(width: AppTheme.spacingSM),
-                          Text(
-                            "Off-route threshold",
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: AppTheme.textPrimary,
-                            ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppTheme.spacingSM,
-                              vertical: AppTheme.spacingXS,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(AppTheme.radiusSM),
-                            ),
-                            child: Text(
-                              "${_thresholdKm.toStringAsFixed(1)} km",
-                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                color: Colors.orange,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
+                  child: Slider(
+                    value: _thresholdKm,
+                    min: 1.0,
+                    max: 5.0,
+                    divisions: 8,
+                    activeColor: Colors.orange,
+                    onChanged: (value) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _thresholdKm = value);
+                    },
+                  ),
+                ),
+                
+                const SizedBox(height: AppTheme.spacingMD),
+                
+                // * Grace period slider
+                _buildSettingCard(
+                  icon: Icons.timer_outlined,
+                  title: "Grace period",
+                  subtitle: "Time to cancel before alert is sent",
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.spacingSM,
+                      vertical: AppTheme.spacingXS,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSM),
+                    ),
+                    child: Text(
+                      "$_gracePeriodSeconds sec",
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.w600,
                       ),
-                      const SizedBox(height: AppTheme.spacingXS),
-                      Text(
-                        "Trigger alert if you're this far from your expected route",
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppTheme.textSecondary,
-                        ),
+                    ),
+                  ),
+                  child: Slider(
+                    value: _gracePeriodSeconds.toDouble(),
+                    min: 15,
+                    max: 90,
+                    divisions: 5,
+                    activeColor: Colors.blue,
+                    onChanged: (value) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _gracePeriodSeconds = value.round());
+                    },
+                  ),
+                ),
+                
+                const SizedBox(height: AppTheme.spacingMD),
+                
+                // * Sustained detection slider
+                _buildSettingCard(
+                  icon: Icons.access_time,
+                  title: "Sustained detection",
+                  subtitle: "How long off-route before triggering",
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.spacingSM,
+                      vertical: AppTheme.spacingXS,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSM),
+                    ),
+                    child: Text(
+                      "${(_sustainedOffRouteSeconds / 60).toStringAsFixed(0)} min",
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: Colors.green,
+                        fontWeight: FontWeight.w600,
                       ),
-                      const SizedBox(height: AppTheme.spacingSM),
-                      Slider(
-                        value: _thresholdKm,
-                        min: 1.0,
-                        max: 5.0,
-                        divisions: 8,
-                        activeColor: Colors.orange,
-                        onChanged: (value) {
-                          HapticFeedback.selectionClick();
-                          setState(() => _thresholdKm = value);
-                        },
-                      ),
-                    ],
+                    ),
+                  ),
+                  child: Slider(
+                    value: _sustainedOffRouteSeconds.toDouble(),
+                    min: 60,
+                    max: 300,
+                    divisions: 4,
+                    activeColor: Colors.green,
+                    onChanged: (value) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _sustainedOffRouteSeconds = value.round());
+                    },
                   ),
                 ),
                 
                 const SizedBox(height: AppTheme.spacingMD),
                 
                 // * Auto SMS toggle
-                Container(
-                  padding: const EdgeInsets.all(AppTheme.spacingMD),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceColor,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                    border: Border.all(color: AppTheme.borderColor.withOpacity(0.5)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.sms_outlined,
-                        color: AppTheme.textSecondary,
-                        size: 20,
-                      ),
-                      const SizedBox(width: AppTheme.spacingMD),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Auto-send SMS",
-                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                            Text(
-                              "Automatically text contacts after 30s countdown",
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ],
+                _buildToggleCard(
+                  icon: Icons.sms_outlined,
+                  title: "Auto-send SMS",
+                  subtitle: "Automatically text contacts after countdown",
+                  value: _autoSmsEnabled,
+                  onChanged: (value) {
+                    HapticFeedback.lightImpact();
+                    setState(() => _autoSmsEnabled = value);
+                  },
+                ),
+                
+                const SizedBox(height: AppTheme.spacingMD),
+                
+                // * Time of day sensitivity
+                _buildToggleCard(
+                  icon: Icons.nightlight_round,
+                  title: "Night mode sensitivity",
+                  subtitle: "Stricter detection at night (${_nightModeStartHour}:00 - ${_nightModeEndHour}:00)",
+                  value: _useTimeOfDaySensitivity,
+                  onChanged: (value) {
+                    HapticFeedback.lightImpact();
+                    setState(() => _useTimeOfDaySensitivity = value);
+                  },
+                ),
+                
+                const SizedBox(height: AppTheme.spacingLG),
+                
+                // * Advanced settings toggle
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _showAdvanced = !_showAdvanced);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(AppTheme.spacingMD),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceColor,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                      border: Border.all(color: AppTheme.borderColor.withOpacity(0.5)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.tune, color: AppTheme.textSecondary, size: 20),
+                        const SizedBox(width: AppTheme.spacingMD),
+                        Text(
+                          "Advanced Settings",
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: AppTheme.textPrimary,
+                          ),
                         ),
-                      ),
-                      Switch.adaptive(
-                        value: _autoSmsEnabled,
-                        onChanged: (value) {
-                          HapticFeedback.lightImpact();
-                          setState(() => _autoSmsEnabled = value);
-                        },
-                        activeColor: Colors.orange,
-                      ),
-                    ],
+                        const Spacer(),
+                        Icon(
+                          _showAdvanced ? Icons.expand_less : Icons.expand_more,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+                
+                if (_showAdvanced) ...[
+                  const SizedBox(height: AppTheme.spacingMD),
+                  
+                  // * Alert cooldown
+                  _buildSettingCard(
+                    icon: Icons.hourglass_empty,
+                    title: "Alert cooldown",
+                    subtitle: "Prevent repeat alerts",
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.spacingSM,
+                        vertical: AppTheme.spacingXS,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSM),
+                      ),
+                      child: Text(
+                        "$_alertCooldownMinutes min",
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: Colors.purple,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    child: Slider(
+                      value: _alertCooldownMinutes.toDouble(),
+                      min: 5,
+                      max: 30,
+                      divisions: 5,
+                      activeColor: Colors.purple,
+                      onChanged: (value) {
+                        HapticFeedback.selectionClick();
+                        setState(() => _alertCooldownMinutes = value.round());
+                      },
+                    ),
+                  ),
+                  
+                  const SizedBox(height: AppTheme.spacingMD),
+                  
+                  // * Night mode threshold
+                  if (_useTimeOfDaySensitivity)
+                    _buildSettingCard(
+                      icon: Icons.percent,
+                      title: "Night threshold",
+                      subtitle: "How much stricter at night",
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.spacingSM,
+                          vertical: AppTheme.spacingXS,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(AppTheme.radiusSM),
+                        ),
+                        child: Text(
+                          "${(_nightModeThresholdMultiplier * 100).round()}%",
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: Colors.indigo,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      child: Slider(
+                        value: _nightModeThresholdMultiplier,
+                        min: 0.5,
+                        max: 1.0,
+                        divisions: 5,
+                        activeColor: Colors.indigo,
+                        onChanged: (value) {
+                          HapticFeedback.selectionClick();
+                          setState(() => _nightModeThresholdMultiplier = value);
+                        },
+                      ),
+                    ),
+                  
+                  const SizedBox(height: AppTheme.spacingMD),
+                  
+                  // * Preview message button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _showMessagePreview,
+                      icon: const Icon(Icons.preview_outlined),
+                      label: const Text("Preview Alert Message"),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                        side: const BorderSide(color: Colors.orange),
+                        padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
+                      ),
+                    ),
+                  ),
+                ],
                 
                 const SizedBox(height: AppTheme.spacingLG),
                 
@@ -508,6 +738,98 @@ class _SafetySettingsSheetState extends State<SafetySettingsSheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+  
+  Widget _buildSettingCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Widget trailing,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.spacingMD),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+        border: Border.all(color: AppTheme.borderColor.withOpacity(0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: AppTheme.textSecondary, size: 20),
+              const SizedBox(width: AppTheme.spacingSM),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              trailing,
+            ],
+          ),
+          const SizedBox(height: AppTheme.spacingXS),
+          Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppTheme.spacingSM),
+          child,
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildToggleCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.spacingMD),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+        border: Border.all(color: AppTheme.borderColor.withOpacity(0.5)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: AppTheme.textSecondary, size: 20),
+          const SizedBox(width: AppTheme.spacingMD),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeColor: Colors.orange,
+          ),
+        ],
       ),
     );
   }

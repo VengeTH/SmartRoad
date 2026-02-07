@@ -206,6 +206,25 @@ Based on 8px grid system:
   - Desktop: constrain search width (≈900px max)
   - Mobile: full-width search bar with safe paddings
 
+### Music Controls
+
+- **Goal**: Reduce driver distraction by allowing quick access to a preferred music app without hunting for icons while driving.
+- **Map chip behavior**:
+  - **When music is playing**: show the compact mini-player with basic controls.
+  - **When no music is playing**: show a compact “No music playing” chip.
+    - **Tap**: opens the default app (if set) or the **installed music app picker**.
+    - **Long-press**: always opens the picker (so the user can switch app without going to settings).
+- **Chip label when idle**: show "No music playing" or "Open {AppName}" when a default app is set.
+- **Music app picker**:
+  - Shows **only installed** supported apps (Spotify, YouTube Music, etc.).
+  - Uses a **bottom sheet** with large touch targets.
+  - Offers a “Remember as default” option (can be changed later).
+- **Settings**:
+  - Profile → **Music Controls** includes “Default music app” with **Change** and **Clear** actions.
+- **Deep links**:
+  - SmartRoad registers `smartroad://map`, `smartroad://music`, and `smartroad://music/open` so other apps can open SmartRoad (e.g. to map tab or music picker).
+  - Keep deep-link behavior **non-blocking** and safety-first (no noisy popups during navigation).
+
 ### Routes Screen UX
 
 - **Goal**: Routes must feel like a product surface, not a placeholder screen.
@@ -258,7 +277,7 @@ SmartRoad supports **known-location previews** (e.g., malls, terminals) with com
 
 ## Navigation Camera (Active Navigation)
 
-- **Default behavior**: Auto-follow the user with a zoomed-in camera (Waze/Google Maps style).
+- **Default behavior**: Auto-follow the user with a zoomed-in camera (driver-focused, like common navigation apps).
 - **Rotation**: Prefer rotating the **map** to match heading; if heading is missing (common on web), rotate based on the route’s direction.
 - **User interaction**: If the user manually pans the map, auto-follow pauses.
 - **Re-center**: Provide a dedicated re-center action that restores follow + zoom + rotation.
@@ -300,7 +319,7 @@ SmartRoad can show extra nearby landmarks when the user zooms in.
   - Tap opens the **Place Preview Sheet** (same UI as known places) so users can:
     - Get directions / start navigation
     - Upload moderated preview photos
-    - Like / comment (Waze-style)
+    - Like / comment (community-style)
 - **Zoom behavior**:
   - Zoom < 12: hide dynamic POIs
   - Zoom ≥ 12: show POIs (icon-only)
@@ -329,7 +348,7 @@ SmartRoad uses a consistent marker style across the map to reduce visual noise w
 
 ### Navigation Hazard Warnings (Active Navigation)
 
-- **Goal**: Provide Waze-style awareness without distracting the driver.
+- **Goal**: Provide hazard and place awareness without distracting the driver.
 - **When**: Only during active navigation.
 - **UI**: Compact warning banner (“Pothole ahead • 250 m”) with severity color + close button.
 - **Logic**:
@@ -427,6 +446,7 @@ When adding branding:
 - **v1.1** (2026-01-XX): Added known-location previews, photo moderation, and route editing UX notes
 - **v1.2** (2026-01-07): Refreshed auth screen layout (single-viewport, responsive) and navigation bar styling
 - **v1.3** (2026-01-07): Added glass map HUD, map search recents, and routes UX polish (dialog + empty states)
+- **v1.4** (2026-02-07): Added music app picker, default music app setting, and `smartroad://` deep links
 
 ---
 

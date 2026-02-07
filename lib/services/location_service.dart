@@ -14,7 +14,7 @@ class LocationService {
     final status = await Permission.location.request();
     return status.isGranted;
     } catch (e) {
-      debugPrint("❌ [LocationService] Error requesting permission: $e");
+      debugPrint("[LocationService] ERROR: Error requesting permission: $e");
       return false;
     }
   }
@@ -25,7 +25,7 @@ class LocationService {
     final status = await Permission.location.status;
     return status.isGranted;
     } catch (e) {
-      debugPrint("❌ [LocationService] Error checking permission: $e");
+      debugPrint("[LocationService] ERROR: Error checking permission: $e");
       return false;
     }
   }
@@ -39,10 +39,10 @@ class LocationService {
       // * Check if permission is granted
       final hasPermission = await isPermissionGranted();
       if (!hasPermission) {
-        debugPrint("📍 [LocationService] Permission not granted, requesting...");
+        debugPrint("[LocationService] Permission not granted, requesting...");
         final granted = await requestPermission();
         if (!granted) {
-          debugPrint("❌ [LocationService] Permission denied by user");
+          debugPrint("[LocationService] ERROR: Permission denied by user");
           return null;
         }
       }
@@ -51,7 +51,7 @@ class LocationService {
       if (!kIsWeb) {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-          debugPrint("❌ [LocationService] Location services disabled");
+          debugPrint("[LocationService] ERROR: Location services disabled");
         return null;
       }
       }
@@ -68,11 +68,11 @@ class LocationService {
         timeLimit: timeout,
       );
       
-      debugPrint("✅ [LocationService] Got position: ${position.latitude}, ${position.longitude}");
+      debugPrint("[LocationService] OK: Got position: ${position.latitude}, ${position.longitude}");
       return position;
     } catch (e, stackTrace) {
-      debugPrint("❌ [LocationService] Error getting position: $e");
-      debugPrint("❌ [LocationService] Stack: $stackTrace");
+      debugPrint("[LocationService] ERROR: Error getting position: $e");
+      debugPrint("[LocationService] ERROR: Stack: $stackTrace");
       return null;
     }
   }
@@ -86,13 +86,13 @@ class LocationService {
     try {
       final position = await Geolocator.getLastKnownPosition();
       if (position != null) {
-        debugPrint("📍 [LocationService] Got last known position: ${position.latitude}, ${position.longitude}");
+        debugPrint("[LocationService] Got last known position: ${position.latitude}, ${position.longitude}");
       } else {
-        debugPrint("📍 [LocationService] No last known position available");
+        debugPrint("[LocationService] No last known position available");
       }
       return position;
     } catch (e) {
-      debugPrint("❌ [LocationService] Error getting last known position: $e");
+      debugPrint("[LocationService] ERROR: Error getting last known position: $e");
       return null;
     }
   }

@@ -68,13 +68,32 @@ smartroad/
   - Route progress tracking (traveled vs upcoming segments)
   - Visual route display with color-coded segments
   - Route preview sheet before navigation starts
-- **Speed HUD + Speed Limits (Waze-like)**:
+- **Speed HUD + Speed Limits**:
   - Shows current speed (km/h) while navigating
   - Best-effort speed limit sign (OSM Overpass + defaults)
   - Overspeed warnings (tolerance configurable)
 - **Customizable Navigation Avatar**:
   - Choose arrow/car/motorcycle/etc. icon for the user marker
 - **Location Options**: Long-press map to pin location with options (Get Directions, Save, Share, View on Map)
+
+### Music Control
+- **Floating Mini-Player**: Control music without leaving navigation; shows track, artist, and album art when playing
+- **Universal Support**: Works with Spotify, YouTube Music, and other supported apps (Android media session)
+- **Open Music When Idle**: When no music is playing, the map chip shows "No music playing" or "Open {AppName}" if a default is set
+  - **Tap**: Opens the default music app (if set) or an **installed music app picker**
+  - **Long-press**: Always opens the music app picker to choose or switch app
+- **Default Music App**: Set and change your preferred app in **Profile → Music Controls → Default music app** (Change / Clear)
+- **Music App Picker**: Bottom sheet listing only **installed** supported apps (Spotify, YouTube Music, YouTube, Apple Music, SoundCloud, Deezer, Amazon Music, Samsung Music, VLC) with "Remember as default" option
+- **Deep Links**: Other apps can open SmartRoad via `smartroad://map` or `smartroad://music`; supports "apps open SmartRoad" integration
+- **Smart UI**: Expands for play/pause/skip when media is active; collapses to save space
+
+### Commute Mode V2 (Security & Convenience)
+- **Smart Alarms**: Speed-adaptive wake-up alerts for accurate arrival
+- **Multi-Stage Alarm**: Progressive wake-up (Vibrate -> Sound -> Alarm)
+- **Safety System**: Off-route detection with auto-SMS, grace period, and night mode
+- **Manual SOS**: Immediate emergency alert button
+- **Low Power**: Battery saver mode for long commutes
+- **Overshoot Recovery**: Bilingual guidance when passing destination
 
 ### Map Features
 - **Hazard Filtering**: Filter by type, severity, and expiry status
@@ -417,7 +436,7 @@ lib/
 │   ├── config/          # Environment configuration
 │   ├── constants/       # App constants
 │   └── theme/           # App theme
-├── models/              # Data models (Hazard, UserProfile, Sticker)
+├── models/              # Data models (Hazard, UserProfile, Sticker, MusicAppDescriptor)
 ├── providers/           # Riverpod state providers
 │   ├── auth_provider.dart
 │   ├── hazards_provider.dart
@@ -446,14 +465,20 @@ lib/
 │   ├── weather_service.dart
 │   ├── weather_layer_manager.dart
 │   ├── weather_tile_generator.dart
-│   └── rainviewer_service.dart
+│   ├── rainviewer_service.dart
+│   ├── music_control_service.dart
+│   ├── music_app_launcher_service.dart
+│   └── deep_link_service.dart
 └── widgets/             # Reusable widgets
     ├── hazard_marker.dart
     ├── hazard_detail_sheet.dart
     ├── hoa_gate_marker.dart
     ├── distance_indicator_widget.dart
     ├── weather_layer_controls.dart
-    └── weather_tile_layers.dart
+    ├── weather_tile_layers.dart
+    ├── music_control_widget.dart
+    ├── music_control_settings_card.dart
+    └── music_app_picker_sheet.dart
 ```
 
 ## Key Dependencies
@@ -470,6 +495,10 @@ lib/
 - `qr_flutter`: QR code generation for gate passes
 - `mobile_scanner`: QR code scanning for guard validation
 - `permission_handler`: Location and camera permissions
+- `flutter_media_controller`: Media session control (Android)
+- `app_links`: Deep link handling (`smartroad://` schemes)
+- `android_intent_plus`: Launch installed music apps (Android)
+- `url_launcher`: SMS, URLs, and fallbacks
 
 ## Troubleshooting
 
@@ -564,9 +593,10 @@ lib/
 10. **Report Hazard**: Tap "Report Hazard" button, fill form, submit
 11. **View Feed**: Switch to Feed tab, see all hazards
 12. **Profile**: View profile, update name/photo
-13. **Gate Pass**: View QR code for gate access (if you have stickers)
-14. **My Stickers**: Manage stickers, upload physical stickers (requires GEMINI_API_KEY)
-15. **HOA Gates**: See color-coded gate markers on map (Red = Strict, Green = Open)
+13. **Music Control**: When no music is playing, tap the music chip on the map to open the music app picker; choose an app (e.g. Spotify) and optionally set it as default; in Profile → Music Controls you can change or clear the default music app
+14. **Gate Pass**: View QR code for gate access (if you have stickers)
+15. **My Stickers**: Manage stickers, upload physical stickers (requires GEMINI_API_KEY)
+16. **HOA Gates**: See color-coded gate markers on map (Red = Strict, Green = Open)
 16. **Permission-Based Routing**: Test routing with/without stickers to see blocked shortcuts
 17. **Realtime**: Open app on two devices, report on one, see update on other
 

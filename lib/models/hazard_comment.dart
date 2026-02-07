@@ -1,4 +1,4 @@
-/// * Comment model for hazards (similar to Waze comments)
+/// * Comment model for hazards
 class HazardComment {
   final String id;
   final String hazardId;

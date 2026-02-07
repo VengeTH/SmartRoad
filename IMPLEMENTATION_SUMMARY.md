@@ -3,7 +3,7 @@
 **Project:** SmartRoad - Road Hazard Reporting & Navigation App  
 **Company:** The Heedful  
 **Motto:** "Be Heedful on the Road"  
-**Version:** 2.6.8  
+**Version:** 2.7.0  
 **Platform:** Flutter (Android, iOS, Web)  
 **Backend:** Supabase + Self-hosted GraphHopper
 
@@ -30,7 +30,8 @@
 17. [Backend Infrastructure](#backend-infrastructure)
 18. [Security Features](#security-features)
 19. [Technical Stack](#technical-stack)
-20. [Known Limitations](#known-limitations)
+20. [Music Control System](#music-control-system)
+21. [Known Limitations](#known-limitations)
 
 ---
 
@@ -73,11 +74,17 @@ lib/
 │   ├── offline_cache_service.dart   # Offline caching
 │   ├── sticker_service.dart         # Sticker operations
 │   ├── sticker_verifier_service.dart # AI verification
+│   ├── music_control_service.dart    # Media session control
+│   ├── music_app_launcher_service.dart # Launch installed music apps
+│   ├── deep_link_service.dart        # smartroad:// link handling
 │   └── demo_service.dart           # Demo mode data
 └── widgets/                        # Reusable widgets
     ├── hazard_marker.dart
     ├── hazard_detail_sheet.dart
-    └── hoa_gate_marker.dart
+    ├── hoa_gate_marker.dart
+    ├── music_control_widget.dart
+    ├── music_control_settings_card.dart
+    └── music_app_picker_sheet.dart
 ```
 
 ### State Management
@@ -786,6 +793,39 @@ lib/
 
 ---
 
+## MUSIC CONTROL SYSTEM
+
+### Features Implemented
+- **Floating Widget**: Draggable, expandable mini-player
+- **Media Integration**:
+  - Listens to active media sessions (Android)
+  - Displays current track, artist, album art (via `thumbnailUrl` base64 from plugin)
+  - Controls: Play, Pause, Next, Previous
+- **UI States**:
+  - Collapsed: Minimal pill with album art (or "No music playing" / "Open {AppName}" when idle)
+  - Expanded: Full controls with large art, or "Open music app" when idle
+  - Hidden: Automatically hides when no media is playing (configurable)
+- **Music App Picker**:
+  - When no music is playing: **tap** chip opens default app (if set) or a bottom-sheet picker of **installed** music apps
+  - **Long-press** chip always opens the picker
+  - Picker shows: Spotify, YouTube Music, YouTube, Apple Music, SoundCloud, Deezer, Amazon Music, Samsung Music, VLC (only installed ones)
+  - "Remember as default" option in picker; default stored in `AppPreferencesService` (key `default_music_app_id_v1`)
+- **Default Music App**: Change or clear in **Profile → Music Controls → Default music app** (Change / Clear)
+- **Deep Links**: `DeepLinkService` handles `smartroad://map`, `smartroad://music`, `smartroad://music/open`; Android manifest and iOS URL scheme configured; allows other apps to open SmartRoad (e.g. from music apps)
+- **State Management**:
+  - `MusicControlProvider`: Manages playback state and permissions
+  - `MusicControlService`: Handles system media channels (uses `thumbnailUrl`, not `artwork`)
+  - `MusicAppLauncherService`: Resolves installed apps, launches app / Play Store
+  - `AppPreferencesService`: get/set default music app id
+- **Models**: `MusicAppDescriptor` (`lib/models/music_app.dart`) – id, displayName, androidPackageName, icon, accentColor, playStoreUrl; `fromId()` for supported apps
+- **Widgets**: `MusicAppPickerSheet` (picker UI), `MusicControlWidget` (map chip), `MusicControlSettingsCard` (Profile section)
+- **Permissions**:
+  - `BIND_NOTIFICATION_LISTENER_SERVICE`: For media metadata
+  - `POST_NOTIFICATIONS`: For showing controls (optional)
+  - Android `<queries>` for music app packages and Play Store (for launch + fallback)
+
+---
+
 ## 🔒 SECURITY FEATURES
 
 ### Authentication Security
@@ -828,6 +868,7 @@ lib/
 - **Images:** image_picker 1.0.7
 - **QR:** qr_flutter 4.1.0, mobile_scanner 5.2.3
 - **Notifications:** flutter_local_notifications 17.0.0
+- **Media & links:** flutter_media_controller, app_links, android_intent_plus, url_launcher
 - **UI:** Material Design, Cupertino Icons
 
 ### Backend
@@ -961,9 +1002,16 @@ lib/
 
 ---
 
-**Last Updated:** December 2025  
-**Version:** 2.6.2  
+**Last Updated:** February 2026  
+**Version:** 2.7.0  
 **Status:** MVP Ready (90% Complete) - Investor Demo Ready
+
+### Recent Updates (v2.7.0)
+- ✅ Music app picker: tap music chip when no music opens default app or installed-app picker; long-press always opens picker
+- ✅ Default music app: stored in AppPreferencesService; change/clear in Profile → Music Controls
+- ✅ Deep links: smartroad://map, smartroad://music, smartroad://music/open (DeepLinkService, Android + iOS)
+- ✅ MusicAppDescriptor model; MusicAppLauncherService; MusicAppPickerSheet widget
+- ✅ Media artwork via plugin thumbnailUrl (base64), not artwork getter
 
 ### Recent Updates (v2.6.3)
 - ✅ Added smart country-prioritized location search

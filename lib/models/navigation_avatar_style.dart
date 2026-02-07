@@ -1,6 +1,6 @@
 import "package:flutter/material.dart";
 
-/// * User-selectable navigation avatar (Waze-style).
+/// * User-selectable navigation avatar.
 enum NavigationAvatarStyle {
   arrow,
   car,

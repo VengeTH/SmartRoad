@@ -8,7 +8,7 @@
 -- Database integration will be added in the future after server infrastructure is fully set up.
 --
 -- Features enabled:
--- - Place comments (Waze-style)
+-- - Place comments
 -- - Place likes
 -- - Place photos with admin review (pending → approved/rejected)
 -- - Place ratings (1–5 stars)

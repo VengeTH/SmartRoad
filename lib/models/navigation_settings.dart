@@ -1,6 +1,6 @@
 import "navigation_avatar_style.dart";
 
-/// * User navigation preferences (Waze/Google Maps-like).
+/// * User navigation preferences.
 class NavigationSettings {
   final NavigationAvatarStyle avatarStyle;
 

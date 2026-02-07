@@ -4,7 +4,50 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
-## Version 2.6.9 - Commute Mode Overhaul & Safety Features (Latest)
+## Version 2.7.0 - Comprehensive Experience Upgrade: Music & Commute V2 (Latest)
+
+**Release Date:** February 2026
+**Focus:** Music Integration, Smart Commute Safety, System-wide Polish
+**Status:** Production Ready (Demo Mode Only)
+
+### Music Control System
+- **Floating Music Player**: Draggable widget for controlling media playback
+- **Universal Integration**: Works with Spotify, YouTube Music, and system media
+- **Smart Expansion**: Tap to expand for full controls (Play/Pause, Skip, Previous)
+- **Rich Media Info**: Displays album art (via `thumbnailUrl`), track title, and artist name
+- **Seamless State**: Syncs with system notification state
+- **Music App Picker**:
+  - When no music is playing, tap the map music chip to open a picker of **installed** music apps (Spotify, YouTube Music, YouTube, Apple Music, SoundCloud, Deezer, Amazon Music, Samsung Music, VLC)
+  - **Long-press** the chip to always open the picker
+  - Option to "Remember as default" in the picker
+- **Default Music App**: Stored in app preferences; chip label shows "Open {AppName}" when set; change or clear in **Profile → Music Controls → Default music app**
+- **Deep Links**: Other apps can open SmartRoad via `smartroad://map`, `smartroad://music`, `smartroad://music/open` (Android manifest + iOS URL scheme; handled by `DeepLinkService`)
+
+### Commute Mode V2 (Complete Overhaul)
+- **Smart Alarm Buffer**: Speed-adaptive alarms (earlier alerts for faster travel)
+- **Multi-Stage Alarm**:
+  1. **Stage 1**: Soft vibration (90s before)
+  2. **Stage 2**: Medium vibration + sound (60s before)
+  3. **Stage 3**: Continuous loud alarm (30s before)
+- **Quick Save Daily Stops**: Safe "Home", "Work", "School" for one-tap commute start
+- **Ultra-Low Power Mode**: Reduces GPS polling and disables high-drain features
+- **Overshoot Recovery ("Lagpas-Baba")**:
+  - Full-screen red alert when passing destination
+  - Bilingual guidance (Filipino/English) for recovery
+- **Enhanced Safety Alerts**:
+  - **Grace Period**: Cancel accidental alerts before SMS is sent
+  - **Night Mode**: Stricter off-route checks between 9PM-5AM
+  - **Sustained Logic**: Prevents false alarms from GPS drift
+  - **Manual SOS**: Long-press button for immediate emergency alert
+- **Emoji-Free Design**: Professional, clean UI text and logs system-wide
+
+### Polish & Improvements
+- **Improved Documentation**: Updated all project summaries and implementation plans
+- **Performance**: Optimized map rendering and state management
+
+---
+
+## Version 2.6.9 - Commute Mode Overhaul & Safety Features
 
 **Release Date:** February 2026  
 **Focus:** Proactive commute tracking, off-route safety alerts, UI/UX overhaul  
@@ -109,13 +152,13 @@ This document tracks all version updates, feature additions, and significant cha
   - Contribution features remain gated (reporting, likes, comments, ratings, uploads, route saving)
   - Auth-gated actions show helpful snackbars with "Sign in" action buttons
 
-#### Place Ratings (Waze-style)
+#### Place Ratings
 - ✅ **1–5 star rating system**
   - Rating average + count shown in place preview
   - Logged-in users can submit/update their rating
   - Ratings stored in Supabase (schema ready; currently demo mode only)
 
-#### Navigation Avatar Customization (Waze-style)
+#### Navigation Avatar Customization
 - ✅ **Customizable user location marker**
   - Choose from: Arrow, Car, Motorcycle, Big Bike, Truck, Pedestrian
   - Stored locally in app preferences (Hive)
@@ -180,7 +223,7 @@ This document tracks all version updates, feature additions, and significant cha
 
 ### New Features
 
-#### Known Location Previews (Waze-style)
+#### Known Location Previews
 - ✅ **Known place markers on the map**
   - Built-in list (starting set): VTX (Starmall Alabang), Festival Mall Alabang, SM City San Pablo
   - Markers open a place preview with photos, likes, and comments
@@ -336,7 +379,7 @@ This document tracks all version updates, feature additions, and significant cha
   - ✅ Added continuous zoom limit enforcement using periodic timer (100ms checks)
   - ✅ Added Philippines geographic bounds enforcement
   - ✅ Map center is automatically clamped to Philippines bounds when panning
-  - ✅ Prevents users from zooming out beyond the Philippines area (similar to Waze)
+  - ✅ Prevents users from zooming out beyond the Philippines area (region-locked zoom)
 
 #### Weather Layer Visibility
 - **Fixed Weather Layers Not Showing When Zoomed In:**

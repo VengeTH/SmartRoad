@@ -54,6 +54,8 @@ import "../../widgets/map_poi_marker.dart";
 import "../../widgets/user_location_marker.dart";
 import "../../widgets/navigation_hazard_warning_banner.dart";
 import "../../widgets/navigation_speed_hud.dart";
+import "../../widgets/music_control_widget.dart";
+import "../../providers/music_control_provider.dart";
 import "../../utils/polyline_smoothing.dart";
 // * Route utilities removed - using inline functions
 
@@ -365,7 +367,7 @@ class _DirectionOption extends StatelessWidget {
   }
 }
 
-/// * Location options bottom sheet (like Waze/Google Maps)
+/// * Location options bottom sheet (pin location actions)
 class _LocationOptionsSheet extends StatelessWidget {
   final LatLng location;
   final String locationName;
@@ -728,7 +730,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     AppConstants.defaultLatitude,
     AppConstants.defaultLongitude,
   );
-  // * Persistent dropped pin (Waze/Google Maps-like).
+  // * Persistent dropped pin.
   LatLng? _pinnedLocation;
   String? _pinnedLocationLabel;
   double? _currentHeadingDegrees;
@@ -2177,7 +2179,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  /// * Show location options bottom sheet (like Waze/Google Maps)
+  /// * Show location options bottom sheet
   void _showLocationOptionsSheet(Map<String, dynamic> result, LatLng location) {
     final fullName = (result["display_name"] ?? "Location").toString().trim();
     final shortName = fullName.split(",").first.trim();
@@ -2243,7 +2245,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   _navigationMode; // 'car', 'motorcycle_sub400', 'motorcycle_400plus', 'truck', 'public_transit', 'tricycle'
   List<LatLng>? _navigationRoute;
 
-  // * Navigation camera (Google Maps / Waze-like)
+  // * Navigation camera (driver-focused follow mode)
   bool _isNavigationFollowing = true;
   bool _isNavigationMapRotationEnabled = true;
   DateTime? _lastNavigationCameraUpdateAt;
@@ -2288,7 +2290,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // * Distance indicators state
   DistanceIndicators? _distanceIndicators;
 
-  // * Navigation hazard warnings (Waze-style)
+  // * Navigation hazard warnings (on-route alerts)
   Hazard? _navigationHazardWarning;
   double? _navigationHazardDistanceMeters;
   final Map<String, DateTime> _navigationHazardMutedUntil = {};
@@ -2543,7 +2545,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       );
     }
 
-    // * Navigation camera: zoom-in + follow current position (Google Maps / Waze-like).
+    // * Navigation camera: zoom-in + follow current position (driver-focused).
     if (mounted) {
       setState(() {
         _isNavigationFollowing = true;
@@ -4707,7 +4709,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _lastAcceptedLocation = null;
     });
 
-    // * Return to a north-up map when leaving navigation (matches Google Maps/Waze).
+    // * Return to a north-up map when leaving navigation.
     _safeRotateMap(0.0);
     // * Expose navigation state to shared UI (e.g., global FAB).
     ref.read(mapIsNavigatingProvider.notifier).state = false;
@@ -6562,7 +6564,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                 );
                                 setState(() {
                                   // * Show the same place preview UI for dynamic POIs so users
-                                  // * can upload moderated photos / comment / like (Waze-style).
+                                  // * can upload moderated photos / comment / like (community-style).
                                   _selectedPlace = communityPlace;
                                   _selectedHazard = null;
                                   _showSearchResults = false;
@@ -7308,7 +7310,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   isOffRoute: _isOffRoute,
                 ),
               ),
-              // * Speed HUD (Waze/Google Maps-like)
+              // * Speed HUD (driver-focused)
               Positioned(
                 top: AppTheme.spacingMD,
                 left: AppTheme.spacingMD,
@@ -7341,7 +7343,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     compact: true,
                   ),
                 ),
-              // * Hazard warning banner (Waze-style)
+              // * Hazard warning banner (on-route alerts)
               if (_navigationHazardWarning != null &&
                   _navigationHazardDistanceMeters != null)
                 Positioned(
@@ -7588,6 +7590,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   },
                 ),
               ),
+            // * Music Control Widget (compact mini-player)
+            Positioned(
+              bottom: 110, // * Above bottom navigation
+              left: AppTheme.spacingMD,
+              child: const MusicControlWidget(),
+            ),
             // * Weather layer controls toggle button
             Positioned(
               bottom: 100, // * Above bottom navigation

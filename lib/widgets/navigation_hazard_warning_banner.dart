@@ -3,7 +3,7 @@ import "package:flutter/material.dart";
 import "../core/theme/app_theme.dart";
 import "../models/hazard.dart";
 
-/// * Waze-style hazard warning banner shown during active navigation.
+/// * Hazard warning banner shown during active navigation.
 /// *
 /// * Keeps the UI compact and non-intrusive while still providing timely warnings
 /// * for hazards ahead (e.g., potholes, floods).

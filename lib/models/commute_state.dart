@@ -21,6 +21,30 @@ enum CommuteStatus {
   danger,
 }
 
+/// * Multi-stage alarm levels for progressive escalation
+enum AlarmStage {
+  /// No alarm active
+  none,
+  
+  /// First stage: soft vibration only (~60+ seconds before)
+  stage1Soft,
+  
+  /// Second stage: medium vibration + soft sound (~30-60 seconds)
+  stage2Medium,
+  
+  /// Final stage: loud continuous alarm (<30 seconds)
+  stage3Loud,
+}
+
+/// * Saved stop categories for quick access
+enum StopCategory {
+  work,
+  school,
+  home,
+  terminal,
+  custom,
+}
+
 /// * Emergency contact for safety alerts
 class EmergencyContact {
   final String name;
@@ -61,12 +85,44 @@ class SafetySettings {
   /// Cooldown between auto-SMS in minutes
   final int smsCooldownMinutes;
   
+  /// Grace period in seconds before auto-sending alert (default: 30)
+  final int gracePeriodSeconds;
+  
+  /// Minimum sustained off-route time in seconds before triggering (default: 120 = 2 min)
+  final int sustainedOffRouteSeconds;
+  
+  /// Deviation angle threshold in degrees (default: 45)
+  final double deviationAngleThreshold;
+  
+  /// Whether to use time-of-day sensitivity
+  final bool useTimeOfDaySensitivity;
+  
+  /// Night mode start hour (24h format, default: 21 = 9PM)
+  final int nightModeStartHour;
+  
+  /// Night mode end hour (24h format, default: 5 = 5AM)
+  final int nightModeEndHour;
+  
+  /// Multiplier for off-route threshold during night (default: 0.7 = stricter)
+  final double nightModeThresholdMultiplier;
+  
+  /// Cooldown period after alert in minutes (default: 15)
+  final int alertCooldownMinutes;
+  
   const SafetySettings({
     this.enabled = false,
     this.emergencyContacts = const [],
     this.offRouteThresholdKm = 3.0,
     this.autoSmsEnabled = false,
     this.smsCooldownMinutes = 5,
+    this.gracePeriodSeconds = 30,
+    this.sustainedOffRouteSeconds = 120,
+    this.deviationAngleThreshold = 45.0,
+    this.useTimeOfDaySensitivity = true,
+    this.nightModeStartHour = 21,
+    this.nightModeEndHour = 5,
+    this.nightModeThresholdMultiplier = 0.7,
+    this.alertCooldownMinutes = 15,
   });
   
   SafetySettings copyWith({
@@ -75,6 +131,14 @@ class SafetySettings {
     double? offRouteThresholdKm,
     bool? autoSmsEnabled,
     int? smsCooldownMinutes,
+    int? gracePeriodSeconds,
+    int? sustainedOffRouteSeconds,
+    double? deviationAngleThreshold,
+    bool? useTimeOfDaySensitivity,
+    int? nightModeStartHour,
+    int? nightModeEndHour,
+    double? nightModeThresholdMultiplier,
+    int? alertCooldownMinutes,
   }) {
     return SafetySettings(
       enabled: enabled ?? this.enabled,
@@ -82,6 +146,14 @@ class SafetySettings {
       offRouteThresholdKm: offRouteThresholdKm ?? this.offRouteThresholdKm,
       autoSmsEnabled: autoSmsEnabled ?? this.autoSmsEnabled,
       smsCooldownMinutes: smsCooldownMinutes ?? this.smsCooldownMinutes,
+      gracePeriodSeconds: gracePeriodSeconds ?? this.gracePeriodSeconds,
+      sustainedOffRouteSeconds: sustainedOffRouteSeconds ?? this.sustainedOffRouteSeconds,
+      deviationAngleThreshold: deviationAngleThreshold ?? this.deviationAngleThreshold,
+      useTimeOfDaySensitivity: useTimeOfDaySensitivity ?? this.useTimeOfDaySensitivity,
+      nightModeStartHour: nightModeStartHour ?? this.nightModeStartHour,
+      nightModeEndHour: nightModeEndHour ?? this.nightModeEndHour,
+      nightModeThresholdMultiplier: nightModeThresholdMultiplier ?? this.nightModeThresholdMultiplier,
+      alertCooldownMinutes: alertCooldownMinutes ?? this.alertCooldownMinutes,
     );
   }
   
@@ -91,6 +163,14 @@ class SafetySettings {
     "offRouteThresholdKm": offRouteThresholdKm,
     "autoSmsEnabled": autoSmsEnabled,
     "smsCooldownMinutes": smsCooldownMinutes,
+    "gracePeriodSeconds": gracePeriodSeconds,
+    "sustainedOffRouteSeconds": sustainedOffRouteSeconds,
+    "deviationAngleThreshold": deviationAngleThreshold,
+    "useTimeOfDaySensitivity": useTimeOfDaySensitivity,
+    "nightModeStartHour": nightModeStartHour,
+    "nightModeEndHour": nightModeEndHour,
+    "nightModeThresholdMultiplier": nightModeThresholdMultiplier,
+    "alertCooldownMinutes": alertCooldownMinutes,
   };
   
   factory SafetySettings.fromJson(Map<String, dynamic> json) {
@@ -102,6 +182,14 @@ class SafetySettings {
       offRouteThresholdKm: (json["offRouteThresholdKm"] as num?)?.toDouble() ?? 3.0,
       autoSmsEnabled: json["autoSmsEnabled"] as bool? ?? false,
       smsCooldownMinutes: json["smsCooldownMinutes"] as int? ?? 5,
+      gracePeriodSeconds: json["gracePeriodSeconds"] as int? ?? 30,
+      sustainedOffRouteSeconds: json["sustainedOffRouteSeconds"] as int? ?? 120,
+      deviationAngleThreshold: (json["deviationAngleThreshold"] as num?)?.toDouble() ?? 45.0,
+      useTimeOfDaySensitivity: json["useTimeOfDaySensitivity"] as bool? ?? true,
+      nightModeStartHour: json["nightModeStartHour"] as int? ?? 21,
+      nightModeEndHour: json["nightModeEndHour"] as int? ?? 5,
+      nightModeThresholdMultiplier: (json["nightModeThresholdMultiplier"] as num?)?.toDouble() ?? 0.7,
+      alertCooldownMinutes: json["alertCooldownMinutes"] as int? ?? 15,
     );
   }
 }
@@ -126,6 +214,33 @@ class CommuteSettings {
   /// Safety settings for off-route detection
   final SafetySettings safetySettings;
   
+  // * NEW: Smart Alarm Buffer settings
+  
+  /// Whether to use smart alarm buffer based on speed
+  final bool useSmartAlarmBuffer;
+  
+  /// Minimum seconds before destination to trigger alarm (default: 30)
+  final int minSecondsBeforeAlarm;
+  
+  /// Maximum seconds before destination to trigger alarm (default: 90)
+  final int maxSecondsBeforeAlarm;
+  
+  // * NEW: Multi-Stage Alarm settings
+  
+  /// Whether to use multi-stage alarm (progressive escalation)
+  final bool useMultiStageAlarm;
+  
+  // * NEW: Ultra-Low Power Mode settings
+  
+  /// Whether ultra-low power mode is enabled
+  final bool ultraLowPowerMode;
+  
+  /// GPS sampling interval in seconds for low power mode (default: 30)
+  final int lowPowerGpsIntervalSeconds;
+  
+  /// Whether to minimize alerts when phone is actively being used
+  final bool minimizeAlertsWhenActive;
+  
   const CommuteSettings({
     this.alarmDistanceMeters = 500,
     this.useTimeBackupAlarm = true,
@@ -133,6 +248,13 @@ class CommuteSettings {
     this.vibrateOnAlarm = true,
     this.playSoundOnAlarm = true,
     this.safetySettings = const SafetySettings(),
+    this.useSmartAlarmBuffer = true,
+    this.minSecondsBeforeAlarm = 30,
+    this.maxSecondsBeforeAlarm = 90,
+    this.useMultiStageAlarm = true,
+    this.ultraLowPowerMode = false,
+    this.lowPowerGpsIntervalSeconds = 30,
+    this.minimizeAlertsWhenActive = true,
   });
   
   CommuteSettings copyWith({
@@ -142,6 +264,13 @@ class CommuteSettings {
     bool? vibrateOnAlarm,
     bool? playSoundOnAlarm,
     SafetySettings? safetySettings,
+    bool? useSmartAlarmBuffer,
+    int? minSecondsBeforeAlarm,
+    int? maxSecondsBeforeAlarm,
+    bool? useMultiStageAlarm,
+    bool? ultraLowPowerMode,
+    int? lowPowerGpsIntervalSeconds,
+    bool? minimizeAlertsWhenActive,
   }) {
     return CommuteSettings(
       alarmDistanceMeters: alarmDistanceMeters ?? this.alarmDistanceMeters,
@@ -150,6 +279,13 @@ class CommuteSettings {
       vibrateOnAlarm: vibrateOnAlarm ?? this.vibrateOnAlarm,
       playSoundOnAlarm: playSoundOnAlarm ?? this.playSoundOnAlarm,
       safetySettings: safetySettings ?? this.safetySettings,
+      useSmartAlarmBuffer: useSmartAlarmBuffer ?? this.useSmartAlarmBuffer,
+      minSecondsBeforeAlarm: minSecondsBeforeAlarm ?? this.minSecondsBeforeAlarm,
+      maxSecondsBeforeAlarm: maxSecondsBeforeAlarm ?? this.maxSecondsBeforeAlarm,
+      useMultiStageAlarm: useMultiStageAlarm ?? this.useMultiStageAlarm,
+      ultraLowPowerMode: ultraLowPowerMode ?? this.ultraLowPowerMode,
+      lowPowerGpsIntervalSeconds: lowPowerGpsIntervalSeconds ?? this.lowPowerGpsIntervalSeconds,
+      minimizeAlertsWhenActive: minimizeAlertsWhenActive ?? this.minimizeAlertsWhenActive,
     );
   }
   
@@ -161,6 +297,13 @@ class CommuteSettings {
       "vibrateOnAlarm": vibrateOnAlarm,
       "playSoundOnAlarm": playSoundOnAlarm,
       "safetySettings": safetySettings.toJson(),
+      "useSmartAlarmBuffer": useSmartAlarmBuffer,
+      "minSecondsBeforeAlarm": minSecondsBeforeAlarm,
+      "maxSecondsBeforeAlarm": maxSecondsBeforeAlarm,
+      "useMultiStageAlarm": useMultiStageAlarm,
+      "ultraLowPowerMode": ultraLowPowerMode,
+      "lowPowerGpsIntervalSeconds": lowPowerGpsIntervalSeconds,
+      "minimizeAlertsWhenActive": minimizeAlertsWhenActive,
     };
   }
   
@@ -174,6 +317,13 @@ class CommuteSettings {
       safetySettings: json["safetySettings"] != null
           ? SafetySettings.fromJson(json["safetySettings"] as Map<String, dynamic>)
           : const SafetySettings(),
+      useSmartAlarmBuffer: json["useSmartAlarmBuffer"] as bool? ?? true,
+      minSecondsBeforeAlarm: json["minSecondsBeforeAlarm"] as int? ?? 30,
+      maxSecondsBeforeAlarm: json["maxSecondsBeforeAlarm"] as int? ?? 90,
+      useMultiStageAlarm: json["useMultiStageAlarm"] as bool? ?? true,
+      ultraLowPowerMode: json["ultraLowPowerMode"] as bool? ?? false,
+      lowPowerGpsIntervalSeconds: json["lowPowerGpsIntervalSeconds"] as int? ?? 30,
+      minimizeAlertsWhenActive: json["minimizeAlertsWhenActive"] as bool? ?? true,
     );
   }
 }
@@ -231,6 +381,46 @@ class CommuteState {
   /// Last time safety SMS was sent
   final DateTime? lastSafetySmsAt;
   
+  // * NEW: Smart Alarm Buffer fields
+  
+  /// Current speed in meters per second
+  final double? currentSpeedMs;
+  
+  // * NEW: Multi-Stage Alarm fields
+  
+  /// Current alarm stage
+  final AlarmStage alarmStage;
+  
+  /// Whether alarm sound is currently playing
+  final bool alarmSoundPlaying;
+  
+  // * NEW: Overshoot Recovery fields
+  
+  /// Recovery hint for overshoot (lagpas-baba)
+  final String? overshootRecoveryHint;
+  
+  /// Distance overshot past destination in meters
+  final double? overshootDistanceMeters;
+  
+  // * NEW: Ultra-Low Power Mode fields
+  
+  /// Whether currently in low power mode
+  final bool isLowPowerActive;
+  
+  // * NEW: Safety Alert Improvement fields
+  
+  /// When off-route was first detected (for sustained detection)
+  final DateTime? offRouteStartedAt;
+  
+  /// Direction deviation from expected route (degrees)
+  final double? deviationAngleDegrees;
+  
+  /// When the last safety alert was triggered (for cooldown)
+  final DateTime? lastAlertTriggeredAt;
+  
+  /// Previous position (for direction calculation)
+  final LatLng? previousPosition;
+  
   const CommuteState({
     this.destination,
     this.destinationName,
@@ -249,6 +439,16 @@ class CommuteState {
     this.safetyAlertTriggered = false,
     this.offRouteDistanceKm,
     this.lastSafetySmsAt,
+    this.currentSpeedMs,
+    this.alarmStage = AlarmStage.none,
+    this.alarmSoundPlaying = false,
+    this.overshootRecoveryHint,
+    this.overshootDistanceMeters,
+    this.isLowPowerActive = false,
+    this.offRouteStartedAt,
+    this.deviationAngleDegrees,
+    this.lastAlertTriggeredAt,
+    this.previousPosition,
   });
   
   /// Check if commute is currently active
@@ -346,6 +546,83 @@ class CommuteState {
     }
   }
   
+  // * NEW: Smart Alarm Buffer computed properties
+  
+  /// Get smart alarm distance based on current speed
+  double get smartAlarmDistanceMeters {
+    if (!settings.useSmartAlarmBuffer || currentSpeedMs == null || currentSpeedMs! <= 0) {
+      return settings.alarmDistanceMeters.toDouble();
+    }
+    // Calculate distance = speed × time (target average of min/max seconds)
+    final targetSeconds = (settings.minSecondsBeforeAlarm + settings.maxSecondsBeforeAlarm) / 2;
+    final distance = currentSpeedMs! * targetSeconds;
+    // Clamp between 100m and 2km
+    return distance.clamp(100.0, 2000.0);
+  }
+  
+  /// Get formatted ETA in seconds (for alarm preview)
+  String get formattedEtaSeconds {
+    if (currentSpeedMs == null || currentSpeedMs! <= 0) {
+      return "~${settings.minSecondsBeforeAlarm}-${settings.maxSecondsBeforeAlarm} sec";
+    }
+    final seconds = (smartAlarmDistanceMeters / currentSpeedMs!).round();
+    return "~$seconds sec";
+  }
+  
+  /// Get current speed in km/h for display
+  String get formattedSpeedKmh {
+    if (currentSpeedMs == null || currentSpeedMs! <= 0) return "0 km/h";
+    final kmh = currentSpeedMs! * 3.6;
+    return "${kmh.toStringAsFixed(0)} km/h";
+  }
+  
+  // * NEW: Safety Alert computed properties
+  
+  /// Whether currently in night mode (stricter safety)
+  bool get isNightMode {
+    final hour = DateTime.now().hour;
+    final start = settings.safetySettings.nightModeStartHour;
+    final end = settings.safetySettings.nightModeEndHour;
+    if (start > end) {
+      // Spans midnight (e.g., 21:00 to 05:00)
+      return hour >= start || hour < end;
+    }
+    return hour >= start && hour < end;
+  }
+  
+  /// Effective off-route threshold (adjusted for time of day)
+  double get effectiveOffRouteThresholdKm {
+    final base = settings.safetySettings.offRouteThresholdKm;
+    if (!settings.safetySettings.useTimeOfDaySensitivity) return base;
+    if (isNightMode) {
+      return base * settings.safetySettings.nightModeThresholdMultiplier;
+    }
+    return base;
+  }
+  
+  /// Whether deviation is sustained (meets time threshold)
+  bool get isSustainedOffRoute {
+    if (offRouteStartedAt == null) return false;
+    final duration = DateTime.now().difference(offRouteStartedAt!);
+    return duration.inSeconds >= settings.safetySettings.sustainedOffRouteSeconds;
+  }
+  
+  /// Whether in alert cooldown period
+  bool get isInAlertCooldown {
+    if (lastAlertTriggeredAt == null) return false;
+    final cooldownDuration = Duration(minutes: settings.safetySettings.alertCooldownMinutes);
+    return DateTime.now().difference(lastAlertTriggeredAt!) < cooldownDuration;
+  }
+  
+  /// Get formatted overshoot distance
+  String get formattedOvershootDistance {
+    if (overshootDistanceMeters == null) return "-- m";
+    final meters = overshootDistanceMeters!;
+    if (meters < 1000) {
+      return "${meters.round()} m";
+    }
+    return "${(meters / 1000).toStringAsFixed(1)} km";
+  }
 
   
   CommuteState copyWith({
@@ -366,6 +643,16 @@ class CommuteState {
     bool? safetyAlertTriggered,
     double? offRouteDistanceKm,
     DateTime? lastSafetySmsAt,
+    double? currentSpeedMs,
+    AlarmStage? alarmStage,
+    bool? alarmSoundPlaying,
+    String? overshootRecoveryHint,
+    double? overshootDistanceMeters,
+    bool? isLowPowerActive,
+    DateTime? offRouteStartedAt,
+    double? deviationAngleDegrees,
+    DateTime? lastAlertTriggeredAt,
+    LatLng? previousPosition,
     bool clearDestination = false,
     bool clearEta = false,
     bool clearDistance = false,
@@ -374,6 +661,12 @@ class CommuteState {
     bool clearCurrentPosition = false,
     bool clearOffRouteDistance = false,
     bool clearLastSafetySms = false,
+    bool clearOvershootHint = false,
+    bool clearOvershootDistance = false,
+    bool clearOffRouteStartedAt = false,
+    bool clearDeviationAngle = false,
+    bool clearLastAlertTriggered = false,
+    bool clearPreviousPosition = false,
   }) {
     return CommuteState(
       destination: clearDestination ? null : (destination ?? this.destination),
@@ -393,6 +686,16 @@ class CommuteState {
       safetyAlertTriggered: safetyAlertTriggered ?? this.safetyAlertTriggered,
       offRouteDistanceKm: clearOffRouteDistance ? null : (offRouteDistanceKm ?? this.offRouteDistanceKm),
       lastSafetySmsAt: clearLastSafetySms ? null : (lastSafetySmsAt ?? this.lastSafetySmsAt),
+      currentSpeedMs: currentSpeedMs ?? this.currentSpeedMs,
+      alarmStage: alarmStage ?? this.alarmStage,
+      alarmSoundPlaying: alarmSoundPlaying ?? this.alarmSoundPlaying,
+      overshootRecoveryHint: clearOvershootHint ? null : (overshootRecoveryHint ?? this.overshootRecoveryHint),
+      overshootDistanceMeters: clearOvershootDistance ? null : (overshootDistanceMeters ?? this.overshootDistanceMeters),
+      isLowPowerActive: isLowPowerActive ?? this.isLowPowerActive,
+      offRouteStartedAt: clearOffRouteStartedAt ? null : (offRouteStartedAt ?? this.offRouteStartedAt),
+      deviationAngleDegrees: clearDeviationAngle ? null : (deviationAngleDegrees ?? this.deviationAngleDegrees),
+      lastAlertTriggeredAt: clearLastAlertTriggered ? null : (lastAlertTriggeredAt ?? this.lastAlertTriggeredAt),
+      previousPosition: clearPreviousPosition ? null : (previousPosition ?? this.previousPosition),
     );
   }
   

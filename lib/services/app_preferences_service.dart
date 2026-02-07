@@ -8,7 +8,7 @@ import "../models/recent_location.dart";
 
 /// * Lightweight app preferences stored locally using Hive.
 /// *
-/// * This is used for user-customizable UX (Waze-style avatar, speed alerts, etc.)
+/// * This is used for user-customizable UX (navigation avatar, speed alerts, etc.)
 /// * without requiring Supabase to be configured.
 class AppPreferencesService {
   static const String _boxName = "app_preferences";
@@ -241,6 +241,50 @@ class AppPreferencesService {
     final encoded = jsonEncode(merged);
     await box.put(_keyRecentCommuteDestinations, encoded);
     return merged;
+  }
+
+  // ============================================================
+  // * MUSIC CONTROL SETTINGS
+  // ============================================================
+
+  static const String _keyMusicControlEnabled = "music_control_enabled";
+  static const String _keyDefaultMusicAppId = "default_music_app_id_v1";
+
+  /// * Get music control enabled preference
+  Future<bool> getMusicControlEnabled() async {
+    final box = await _ensureBox();
+    final value = box.get(_keyMusicControlEnabled);
+    return value == true;
+  }
+
+  /// * Set music control enabled preference
+  Future<void> setMusicControlEnabled(bool enabled) async {
+    final box = await _ensureBox();
+    await box.put(_keyMusicControlEnabled, enabled);
+  }
+
+  /// * Get the user's default music app id (e.g., "spotify")
+  Future<String?> getDefaultMusicAppId() async {
+    final box = await _ensureBox();
+    final value = box.get(_keyDefaultMusicAppId);
+    if (value is! String) return null;
+
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+    return normalized;
+  }
+
+  /// * Set the user's default music app id (set to `null` to clear)
+  Future<void> setDefaultMusicAppId(String? appId) async {
+    final box = await _ensureBox();
+    final normalized = appId?.trim().toLowerCase();
+
+    if (normalized == null || normalized.isEmpty) {
+      await box.delete(_keyDefaultMusicAppId);
+      return;
+    }
+
+    await box.put(_keyDefaultMusicAppId, normalized);
   }
 }
 

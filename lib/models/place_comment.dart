@@ -1,4 +1,4 @@
-/// * Comment model for places (Waze-style comments on known locations)
+/// * Comment model for places (comments on known locations)
 class PlaceComment {
   final String id;
   final String placeId;

@@ -3,7 +3,7 @@ import "package:flutter/material.dart";
 import "../core/theme/app_theme.dart";
 import "../services/speed_limit_service.dart";
 
-/// * Compact speed HUD (Waze/Google Maps-like): current speed + speed limit sign.
+/// * Compact speed HUD: current speed + speed limit sign.
 class NavigationSpeedHud extends StatelessWidget {
   final double? speedKph;
   final SpeedLimitResult speedLimit;

@@ -48,6 +48,14 @@
 - **Realtime Test**: Open app on second device, report hazard, see it appear on first device
 - **Result**: Profile shows user info, realtime updates work
 
+#### 6. Music Control (optional, ~15 seconds)
+- From Map tab, find the **music chip** (floating pill)
+- If no music is playing: **tap** chip → music app picker (or opens default app if set)
+- **Long-press** chip → always opens picker to choose from installed apps (Spotify, YouTube Music, etc.)
+- In picker: select an app, optionally enable "Remember as default"
+- In **Profile → Music Controls**: use "Default music app" → **Change** to set/switch default, **Clear** to remove
+- **Result**: One-tap open of preferred music app from the map; other apps can open SmartRoad via deep links (smartroad://map, smartroad://music)
+
 ### Key Features to Highlight
 
 ✅ **Real-time Updates**: Hazards appear instantly across all devices

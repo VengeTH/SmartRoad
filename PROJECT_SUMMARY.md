@@ -133,6 +133,15 @@
 - ✅ Platform-specific location handling
 - ✅ Responsive design for all screen sizes
 
+### 16. Music Control
+- ✅ Floating music widget (compact, driver-focused)
+- ✅ Universal media integration (Spotify/System)
+- ✅ Play/Pause/Skip controls
+- ✅ Rich media display (Art/Artist/Track via thumbnailUrl)
+- ✅ Music app picker: tap chip when no music opens default app or picker; long-press always opens picker
+- ✅ Default music app: set/change/clear in Profile → Music Controls; chip shows "Open {AppName}" when set
+- ✅ Deep links: smartroad://map, smartroad://music, smartroad://music/open (Android + iOS)
+
 ## 📁 Project Structure
 
 ```text

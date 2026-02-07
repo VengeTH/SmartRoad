@@ -54,6 +54,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              // * App logo (temporary until final design)
+              Image.asset(
+                "assets/app_icon.png",
+                width: 120,
+                height: 120,
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: AppTheme.spacingLG),
               // * App Name
               Text(
                 "SmartRoad",

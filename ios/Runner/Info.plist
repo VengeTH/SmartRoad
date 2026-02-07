@@ -45,8 +45,6 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-<<<<<<< Current (Your changes)
-=======
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>We need your location to show nearby hazards and allow you to report hazards.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
@@ -55,6 +53,16 @@
 	<string>We need access to your photo library to upload hazard images.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>We need access to your camera to take photos of hazards.</string>
->>>>>>> Incoming (Background Agent changes)
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>smartroad</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>smartroad</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

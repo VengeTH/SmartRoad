@@ -1,15 +1,19 @@
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "core/theme/app_theme.dart";
+import "providers/navigation_provider.dart";
 import "services/supabase_service.dart";
+import "services/deep_link_service.dart";
 import "services/offline_cache_service.dart";
 import "services/notification_service.dart";
 import "services/route_service.dart";
+import "services/music_app_launcher_service.dart";
 import "providers/auth_provider.dart";
 import "screens/auth/login_screen.dart";
 import "screens/auth/signup_screen.dart";
 import "screens/main_navigation_screen.dart";
 import "screens/splash/splash_screen.dart";
+import "widgets/music_app_picker_sheet.dart";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +44,8 @@ class SmartRoadApp extends ConsumerStatefulWidget {
 
 class _SmartRoadAppState extends ConsumerState<SmartRoadApp> {
   bool _showSplash = true;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  Uri? _pendingDeepLink;
   
   @override
   void initState() {
@@ -50,6 +56,71 @@ class _SmartRoadAppState extends ConsumerState<SmartRoadApp> {
         setState(() {
           _showSplash = false;
         });
+        _processPendingDeepLink();
+      }
+    });
+
+    // * Start listening for app links (e.g., smartroad://map)
+    DeepLinkService().start(onLink: _onDeepLink);
+  }
+
+  @override
+  void dispose() {
+    DeepLinkService().stop();
+    super.dispose();
+  }
+
+  void _onDeepLink(Uri uri) {
+    if (uri.scheme.trim().toLowerCase() != "smartroad") return;
+
+    // * Avoid showing UI on top of the splash screen.
+    if (_showSplash) {
+      _pendingDeepLink = uri;
+      return;
+    }
+
+    _pendingDeepLink = uri;
+    _processPendingDeepLink();
+  }
+
+  void _processPendingDeepLink() {
+    final uri = _pendingDeepLink;
+    if (uri == null) return;
+    _pendingDeepLink = null;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // * Normalize host/path so both `smartroad://music` and `smartroad:///music` work.
+      final host = uri.host.trim().toLowerCase();
+      final segments =
+          uri.pathSegments.map((s) => s.trim().toLowerCase()).toList();
+
+      final primary = host.isNotEmpty ? host : (segments.isNotEmpty ? segments[0] : "");
+      final secondary = host.isNotEmpty
+          ? (segments.isNotEmpty ? segments[0] : "")
+          : (segments.length > 1 ? segments[1] : "");
+
+      if (primary == "map") {
+        ref.read(navigationTabProvider.notifier).switchToMap();
+        return;
+      }
+
+      if (primary == "music") {
+        // * Ensure the map tab is visible (music chip lives there).
+        ref.read(navigationTabProvider.notifier).switchToMap();
+
+        if (secondary == "open") {
+          final launcher = MusicAppLauncherService();
+          final defaultApp = await launcher.getDefaultInstalledMusicApp();
+          if (defaultApp != null) {
+            await launcher.openMusicApp(defaultApp);
+          }
+          return;
+        }
+
+        final context = _navigatorKey.currentContext;
+        if (context != null && context.mounted) {
+          await MusicAppPickerSheet.show(context);
+        }
       }
     });
   }
@@ -64,6 +135,7 @@ class _SmartRoadAppState extends ConsumerState<SmartRoadApp> {
         title: "SmartRoad",
         theme: AppTheme.darkTheme,
         debugShowCheckedModeBanner: false,
+        navigatorKey: _navigatorKey,
         home: const SplashScreen(),
       );
     }
@@ -72,6 +144,7 @@ class _SmartRoadAppState extends ConsumerState<SmartRoadApp> {
       title: "SmartRoad",
       theme: AppTheme.darkTheme,
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navigatorKey,
       home: authState.when(
         data: (user) {
           if (user != null) {

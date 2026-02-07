@@ -7,9 +7,12 @@ import "../../core/theme/app_theme.dart";
 
 /// * Safety Alert Overlay
 /// * Full-screen alert when user is detected off-route
+/// * V2: Configurable grace period, improved UI
 class SafetyAlertOverlay extends StatefulWidget {
   final String destinationName;
   final double offRouteDistance;
+  final int gracePeriodSeconds;
+  final bool isNightMode;
   final VoidCallback onImSafe;
   final VoidCallback onSendAlert;
 
@@ -17,6 +20,8 @@ class SafetyAlertOverlay extends StatefulWidget {
     super.key,
     required this.destinationName,
     required this.offRouteDistance,
+    this.gracePeriodSeconds = 30,
+    this.isNightMode = false,
     required this.onImSafe,
     required this.onSendAlert,
   });
@@ -33,14 +38,14 @@ class _SafetyAlertOverlayState extends State<SafetyAlertOverlay>
   
   Timer? _vibrationTimer;
   
-  // * Auto-send countdown (30 seconds)
-  static const int _autoSendSeconds = 30;
-  int _remainingSeconds = _autoSendSeconds;
+  late int _remainingSeconds;
   Timer? _countdownTimer;
 
   @override
   void initState() {
     super.initState();
+    
+    _remainingSeconds = widget.gracePeriodSeconds;
     
     _pulseController = AnimationController(
       vsync: this,
@@ -53,14 +58,19 @@ class _SafetyAlertOverlayState extends State<SafetyAlertOverlay>
     
     _countdownController = AnimationController(
       vsync: this,
-      duration: Duration(seconds: _autoSendSeconds),
+      duration: Duration(seconds: widget.gracePeriodSeconds),
     )..forward();
     
     // * Start countdown timer
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_remainingSeconds > 0) {
         setState(() => _remainingSeconds--);
+        // * Intensify haptic as countdown gets lower
         if (_remainingSeconds <= 10) {
+          HapticFeedback.heavyImpact();
+        } else if (_remainingSeconds <= 20) {
+          HapticFeedback.mediumImpact();
+        } else {
           HapticFeedback.lightImpact();
         }
       } else {
@@ -89,8 +99,16 @@ class _SafetyAlertOverlayState extends State<SafetyAlertOverlay>
     super.dispose();
   }
 
+  Color _getCountdownColor() {
+    if (_remainingSeconds <= 10) return Colors.red;
+    if (_remainingSeconds <= 20) return Colors.orange;
+    return Colors.white;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isUrgent = _remainingSeconds <= 10;
+    
     return Material(
       color: Colors.transparent,
       child: Container(
@@ -113,6 +131,36 @@ class _SafetyAlertOverlayState extends State<SafetyAlertOverlay>
             padding: const EdgeInsets.all(AppTheme.spacingXL),
             child: Column(
               children: [
+                // * Night mode indicator
+                if (widget.isNightMode)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.spacingMD,
+                      vertical: AppTheme.spacingXS,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.nightlight_round,
+                          color: Colors.amber,
+                          size: 16,
+                        ),
+                        const SizedBox(width: AppTheme.spacingXS),
+                        Text(
+                          "Night Mode Active (stricter detection)",
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withOpacity(0.8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                
                 const Spacer(),
                 
                 // * Animated warning icon
@@ -172,32 +220,88 @@ class _SafetyAlertOverlayState extends State<SafetyAlertOverlay>
                 const SizedBox(height: AppTheme.spacingXXL),
                 
                 // * Countdown
-                Container(
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppTheme.spacingLG,
                     vertical: AppTheme.spacingMD,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
+                    color: isUrgent 
+                        ? Colors.red.withOpacity(0.3) 
+                        : Colors.black.withOpacity(0.3),
                     borderRadius: BorderRadius.circular(AppTheme.radiusMD),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.2),
+                      color: isUrgent 
+                          ? Colors.red.withOpacity(0.5) 
+                          : Colors.white.withOpacity(0.2),
+                      width: isUrgent ? 2 : 1,
                     ),
                   ),
                   child: Column(
                     children: [
                       Text(
-                        "Auto-sending alert in",
+                        isUrgent ? "URGENT: Sending alert in" : "Auto-sending alert in",
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Colors.white.withOpacity(0.7),
                         ),
                       ),
                       const SizedBox(height: AppTheme.spacingXS),
-                      Text(
-                        "$_remainingSeconds seconds",
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 200),
+                        style: Theme.of(context).textTheme.headlineSmall!.copyWith(
+                          color: _getCountdownColor(),
                           fontWeight: FontWeight.bold,
+                          fontSize: isUrgent ? 32 : 24,
+                        ),
+                        child: Text("$_remainingSeconds seconds"),
+                      ),
+                      
+                      // * Progress bar
+                      const SizedBox(height: AppTheme.spacingSM),
+                      AnimatedBuilder(
+                        animation: _countdownController,
+                        builder: (context, _) {
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: _countdownController.value,
+                              backgroundColor: Colors.white.withOpacity(0.2),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                _getCountdownColor(),
+                              ),
+                              minHeight: 4,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: AppTheme.spacingMD),
+                
+                // * GPS disclaimer
+                Container(
+                  padding: const EdgeInsets.all(AppTheme.spacingMD),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusSM),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: Colors.white.withOpacity(0.6),
+                        size: 18,
+                      ),
+                      const SizedBox(width: AppTheme.spacingSM),
+                      Expanded(
+                        child: Text(
+                          "This could be a GPS error, U-turn, or traffic detour.",
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withOpacity(0.6),
+                          ),
                         ),
                       ),
                     ],
@@ -206,64 +310,53 @@ class _SafetyAlertOverlayState extends State<SafetyAlertOverlay>
                 
                 const Spacer(),
                 
-                // * Buttons
-                Row(
-                  children: [
-                    // * I'm safe button
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          HapticFeedback.mediumImpact();
-                          _countdownTimer?.cancel();
-                          widget.onImSafe();
-                        },
-                        icon: const Icon(Icons.check_circle_outline),
-                        label: const Text("I'm Safe"),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: Colors.white, width: 2),
-                          padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingLG),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                          ),
-                        ),
+                // * Big "I'm okay" button
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      HapticFeedback.mediumImpact();
+                      _countdownTimer?.cancel();
+                      widget.onImSafe();
+                    },
+                    icon: const Icon(Icons.check_circle, size: 28),
+                    label: const Text(
+                      "I'm Okay",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.green.shade700,
+                      padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingXL),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
                       ),
                     ),
-                    
-                    const SizedBox(width: AppTheme.spacingMD),
-                    
-                    // * Send alert button
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () {
-                          HapticFeedback.heavyImpact();
-                          _countdownTimer?.cancel();
-                          widget.onSendAlert();
-                        },
-                        icon: const Icon(Icons.send_rounded),
-                        label: const Text("Send Alert"),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.deepOrange.shade800,
-                          padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingLG),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
                 
                 const SizedBox(height: AppTheme.spacingMD),
                 
-                // * Info text
-                Text(
-                  "If you're in danger, the alert will be sent automatically.",
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withOpacity(0.5),
+                // * Send alert now button
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      HapticFeedback.heavyImpact();
+                      _countdownTimer?.cancel();
+                      widget.onSendAlert();
+                    },
+                    icon: const Icon(Icons.send_rounded),
+                    label: const Text("Send Alert Now"),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white, width: 2),
+                      padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingLG),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                      ),
+                    ),
                   ),
-                  textAlign: TextAlign.center,
                 ),
                 
                 const SizedBox(height: AppTheme.spacingLG),
@@ -273,6 +366,45 @@ class _SafetyAlertOverlayState extends State<SafetyAlertOverlay>
         ),
       ),
     );
+  }
+}
+
+/// * Helper widget to animate based on animation controller
+class AnimatedBuilder extends StatelessWidget {
+  final Animation<double> animation;
+  final Widget Function(BuildContext context, Widget? child) builder;
+  final Widget? child;
+
+  const AnimatedBuilder({
+    super.key,
+    required this.animation,
+    required this.builder,
+    this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _AnimatedBuilderWidget(
+      listenable: animation,
+      builder: builder,
+      child: child,
+    );
+  }
+}
+
+class _AnimatedBuilderWidget extends AnimatedWidget {
+  final Widget Function(BuildContext context, Widget? child) builder;
+  final Widget? child;
+
+  const _AnimatedBuilderWidget({
+    required super.listenable,
+    required this.builder,
+    this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return builder(context, child);
   }
 }
 

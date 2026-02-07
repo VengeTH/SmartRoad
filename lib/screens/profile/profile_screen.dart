@@ -13,6 +13,7 @@ import "../stickers/manage_stickers_screen.dart";
 import "../admin/place_photo_review_screen.dart";
 import "../about/about_screen.dart";
 import "navigation_settings_screen.dart";
+import "../../widgets/music_control_settings_card.dart";
 
 /// * Profile screen
 class ProfileScreen extends ConsumerWidget {
@@ -786,6 +787,9 @@ class _ProfileContentState extends State<_ProfileContent> {
               ),
             ),
           ),
+          const SizedBox(height: AppTheme.spacingMD),
+          // * Music Control Settings Card (Android only)
+          const MusicControlSettingsCard(),
           const SizedBox(height: AppTheme.spacingMD),
           // * Admin Tools - Place Photo Review
           if (widget.profile.reporterLevel == ReporterLevel.admin) ...[

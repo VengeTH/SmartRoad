@@ -7,7 +7,7 @@ import "../../models/navigation_avatar_style.dart";
 import "../../models/navigation_settings.dart";
 import "../../providers/navigation_settings_provider.dart";
 
-/// * Navigation settings screen (Waze/Google Maps-like preferences).
+/// * Navigation settings screen (driver-focused map and navigation preferences).
 class NavigationSettingsScreen extends ConsumerWidget {
   const NavigationSettingsScreen({super.key});
 
@@ -90,7 +90,7 @@ class NavigationSettingsScreen extends ConsumerWidget {
                   await notifier.setShowSpeedHud(value);
                 },
                 title: const Text("Show speed during navigation"),
-                subtitle: const Text("Displays your current speed like Waze/Google Maps."),
+                subtitle: const Text("Displays your current speed during navigation."),
               ),
               SwitchListTile(
                 value: settings.overspeedWarningsEnabled,

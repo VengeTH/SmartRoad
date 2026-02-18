@@ -34,6 +34,7 @@ import "../../services/route_distance_tracker.dart";
 import "../../services/location_search_service.dart";
 import "../../services/known_places_service.dart";
 import "../../services/poi_search_service.dart";
+import "../../services/overpass_poi_service.dart";
 import "../../services/speed_limit_service.dart";
 import "../../services/supabase_service.dart";
 import "../../services/app_preferences_service.dart";
@@ -1141,22 +1142,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
-  List<String> _poiQueriesForZoom(double zoom) {
-    // * Show more POI types at higher zoom levels
-    if (zoom >= 14.0) {
-      return const [
-        "mall",
-        "terminal",
-        "bus station",
-        "hospital",
-        "gas station",
-        "school",
-      ];
-    }
-
-    // * Basic POI types for lower zoom levels
-    return const ["mall", "terminal", "bus station", "hospital"];
-  }
 
   String _buildPoiRequestKey({required double zoom, required LatLng center}) {
     final zoomBucket = zoom.floor(); // * Reduce refresh spam while zooming.
@@ -1210,54 +1195,44 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     try {
       final bounds = _mapVisibleBounds;
       if (bounds == null) return;
-      final queries = _poiQueriesForZoom(zoom);
 
-      final service = PoiSearchService();
-      final futures = <Future<List<MapPoi>>>[];
-      for (final query in queries) {
-        futures.add(
-          service.searchInBounds(bounds: bounds, query: query, limit: 10),
-        );
-      }
-
-      final lists = await Future.wait(futures);
+      // * Use Overpass API for ambient landmark display (tag-based, zoom-tiered).
+      // * This is far more reliable than Nominatim keyword search for POI browsing.
+      final rawPois = await OverpassPoiService().fetchInBounds(
+        bounds: bounds,
+        zoom: zoom,
+        limit: 60,
+      );
       if (!mounted) return;
 
       final knownNameIndex = _buildKnownPlaceNameIndex();
 
-      // * Pass 1: filter + dedupe by Nominatim place_id (poi.id)
+      // * Dedupe by Overpass element id, filtering out known places.
       final byId = <String, MapPoi>{};
-      for (final list in lists) {
-        for (final poi in list) {
-          final normalizedName = _normalizePoiName(poi.name);
-          if (normalizedName.isEmpty) continue;
+      for (final poi in rawPois) {
+        final normalizedName = _normalizePoiName(poi.name);
+        if (normalizedName.isEmpty) continue;
 
-          // * Remove POIs that are clearly the same as our curated known places.
-          if (knownNameIndex.contains(normalizedName)) {
-            continue;
-          }
+        // * Remove POIs that are clearly the same as our curated known places.
+        if (knownNameIndex.contains(normalizedName)) continue;
 
-          // * Also remove POIs too close to known places (keeps the map clean).
-          final tooCloseToKnown = _knownPlaces.any((p) {
-            return _calculateHaversineDistance(p.location, poi.location) < 250;
-          });
-          if (tooCloseToKnown) continue;
+        // * Also remove POIs too close to known places (keeps the map clean).
+        final tooCloseToKnown = _knownPlaces.any(
+          (p) => _calculateHaversineDistance(p.location, poi.location) < 250,
+        );
+        if (tooCloseToKnown) continue;
 
-          final existing = byId[poi.id];
-          if (existing == null) {
-            byId[poi.id] = poi;
-            continue;
-          }
-
+        final existing = byId[poi.id];
+        if (existing == null) {
+          byId[poi.id] = poi;
+        } else {
           final existingImportance = existing.importance ?? 0;
           final nextImportance = poi.importance ?? 0;
-          if (nextImportance > existingImportance) {
-            byId[poi.id] = poi;
-          }
+          if (nextImportance > existingImportance) byId[poi.id] = poi;
         }
       }
 
-      // * Pass 2: secondary dedupe by (name + ~55m coordinate bucket)
+      // * Secondary dedupe by (name + ~55m coordinate bucket)
       final byNameBucket = <String, MapPoi>{};
       for (final poi in byId.values) {
         final normalizedName = _normalizePoiName(poi.name);
@@ -1268,13 +1243,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         final existing = byNameBucket[dedupeKey];
         if (existing == null) {
           byNameBucket[dedupeKey] = poi;
-          continue;
-        }
-
-        final existingImportance = existing.importance ?? 0;
-        final nextImportance = poi.importance ?? 0;
-        if (nextImportance > existingImportance) {
-          byNameBucket[dedupeKey] = poi;
+        } else {
+          final existingImportance = existing.importance ?? 0;
+          final nextImportance = poi.importance ?? 0;
+          if (nextImportance > existingImportance) byNameBucket[dedupeKey] = poi;
         }
       }
 
@@ -1282,11 +1254,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           byNameBucket.values.toList()
             ..sort((a, b) => (b.importance ?? 0).compareTo(a.importance ?? 0));
 
-      // * Keep POIs limited to avoid clutter (Google Maps shows only a handful).
-      final maxCount =
-          zoom >= 15.0
-              ? 25
-              : 18; // * Show more POIs at higher zoom (was 18.0 -> 22, else 14)
+      // * Limit POI count to avoid clutter — Overpass already tiers by zoom.
+      final maxCount = zoom >= 15.0 ? 40 : zoom >= 12.0 ? 30 : 20;
       final limited = merged.take(maxCount).toList();
 
       setState(() {
@@ -7190,64 +7159,56 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           final originalIndex = _dynamicPois.indexOf(
                             poi,
                           ); // * Get original index for label logic
-                          final type = (poi.type ?? "").toLowerCase();
-                          final icon = () {
-                            if (type.contains("mall") || type == "retail") {
-                              return Icons.storefront_outlined;
-                            }
-                            if (type.contains("bus") ||
-                                type.contains("station") ||
-                                type.contains("terminal")) {
-                              return Icons.directions_bus_filled;
-                            }
-                            if (type.contains("hospital") ||
-                                type.contains("clinic")) {
-                              return Icons.local_hospital_outlined;
-                            }
-                            if (type.contains("school") ||
-                                type.contains("university") ||
-                                type.contains("college")) {
-                              return Icons.school_outlined;
-                            }
-                            if (type.contains("fuel") ||
-                                type.contains("gas") ||
-                                type.contains("petrol")) {
-                              return Icons.local_gas_station_outlined;
-                            }
-                            return Icons.place_outlined;
-                          }();
+                          // * Category is now a clean string from OverpassPoiService
+                          // * (e.g. 'hospital', 'school', 'fuel', 'restaurant', etc.)
+                          final category = (poi.category ?? poi.type ?? '').toLowerCase();
+                          final icon = switch (category) {
+                            'mall' || 'supermarket' || 'shop' => Icons.storefront_outlined,
+                            'terminal' => Icons.directions_bus_filled,
+                            'hospital' => Icons.local_hospital_outlined,
+                            'school' => Icons.school_outlined,
+                            'fuel' => Icons.local_gas_station_outlined,
+                            'bank' => Icons.account_balance_outlined,
+                            'atm' => Icons.atm_outlined,
+                            'pharmacy' => Icons.local_pharmacy_outlined,
+                            'restaurant' => Icons.restaurant_outlined,
+                            'hotel' => Icons.hotel_outlined,
+                            'museum' => Icons.museum_outlined,
+                            'attraction' => Icons.attractions_outlined,
+                            'park' => Icons.park_outlined,
+                            'sports' => Icons.sports_soccer_outlined,
+                            'airport' => Icons.local_airport_outlined,
+                            'police' => Icons.local_police_outlined,
+                            'fire_station' => Icons.local_fire_department_outlined,
+                            'library' => Icons.local_library_outlined,
+                            'entertainment' => Icons.theaters_outlined,
+                            'worship' => Icons.church_outlined,
+                            'parking' => Icons.local_parking_outlined,
+                            'post_office' => Icons.local_post_office_outlined,
+                            'market' => Icons.storefront_outlined,
+                            _ => Icons.place_outlined,
+                          };
 
-                          final accentColor = () {
-                            if (type.contains("mall") || type == "retail") {
-                              return AppTheme.primaryColor;
-                            }
-                            if (type.contains("bus") ||
-                                type.contains("station") ||
-                                type.contains("terminal")) {
-                              return AppTheme.infoColor;
-                            }
-                            if (type.contains("hospital") ||
-                                type.contains("clinic")) {
-                              return AppTheme.errorColor;
-                            }
-                            if (type.contains("school") ||
-                                type.contains("university") ||
-                                type.contains("college")) {
-                              return AppTheme.secondaryColor;
-                            }
-                            if (type.contains("fuel") ||
-                                type.contains("gas") ||
-                                type.contains("petrol")) {
-                              return AppTheme.warningColor;
-                            }
-                            return AppTheme.textSecondary;
-                          }();
+                          final accentColor = switch (category) {
+                            'mall' || 'supermarket' || 'shop' || 'market' => AppTheme.primaryColor,
+                            'terminal' || 'airport' => AppTheme.infoColor,
+                            'hospital' || 'pharmacy' => AppTheme.errorColor,
+                            'school' => AppTheme.secondaryColor,
+                            'fuel' => AppTheme.warningColor,
+                            'bank' || 'atm' => const Color(0xFF1565C0),
+                            'restaurant' => const Color(0xFF2E7D32),
+                            'hotel' => const Color(0xFF6A1B9A),
+                            'museum' || 'attraction' => const Color(0xFF00695C),
+                            'park' || 'sports' => const Color(0xFF388E3C),
+                            'police' || 'fire_station' => AppTheme.errorColor,
+                            'worship' => const Color(0xFF5D4037),
+                            _ => AppTheme.textSecondary,
+                          };
 
-                          // * Show labels only when very zoomed in (and only for the most prominent POIs).
+                          // * Show labels based on zoom tier and POI prominence.
                           final showLabel =
-                              mapZoom >= 15.0 &&
-                              originalIndex <
-                                  15; // * Use original index for label logic
+                              (mapZoom >= 13.0 && originalIndex < 20) ||
+                              (mapZoom >= 15.0 && originalIndex < 35);
                           final markerWidth = showLabel ? 200.0 : 40.0;
                           final markerAlignment = Marker.computePixelAlignment(
                             width: markerWidth,

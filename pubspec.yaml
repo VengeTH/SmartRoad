@@ -131,12 +131,15 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 # Temporary app icon (replace with final design from designer)
+# Icon is opaque on all platforms (no transparency) for store compliance.
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/app_icon.png"
   adaptive_icon_background: "#0F172A"
   adaptive_icon_foreground: "assets/app_icon.png"
+  remove_alpha_ios: true
+  background_color_ios: "#0F172A"
   web:
     generate: true
     image_path: "assets/app_icon.png"

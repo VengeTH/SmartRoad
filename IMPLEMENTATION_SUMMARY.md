@@ -3,7 +3,7 @@
 **Project:** SmartRoad - Road Hazard Reporting & Navigation App  
 **Company:** The Heedful  
 **Motto:** "Be Heedful on the Road"  
-**Version:** 2.7.0  
+**Version:** 2.8.0  
 **Platform:** Flutter (Android, iOS, Web)  
 **Backend:** Supabase + Self-hosted GraphHopper
 
@@ -31,7 +31,8 @@
 18. [Security Features](#security-features)
 19. [Technical Stack](#technical-stack)
 20. [Music Control System](#music-control-system)
-21. [Known Limitations](#known-limitations)
+21. [Commute Mode Smart ETA](#commute-mode-smart-eta)
+22. [Known Limitations](#known-limitations)
 
 ---
 
@@ -545,6 +546,53 @@ lib/
 - ✅ **All Platforms**: Works on mobile, desktop, and web
 - ✅ **Web Support**: Direct API access (no proxy required)
 - ✅ **API Key**: Required for all platforms (set via `--dart-define` or `.env` file)
+
+---
+
+## 🚗 COMMUTE MODE SMART ETA (v2.8.0)
+
+### Vehicle Type Selection
+- ✅ `VehicleType` enum: Jeepney, Bus, Car, Motorcycle, Tricycle, Walking
+- ✅ Each type has a realistic base speed (fallback when no GPS) and max speed (GPS noise clamp)
+- ✅ Selector in Commute Mode idle screen and Settings sheet
+- ✅ Persisted via `CommuteSettings` JSON serialization
+
+| Vehicle | Base Speed | Max Speed |
+|---------|-----------|-----------|
+| 🚌 Jeepney | 20 km/h | 50 km/h |
+| 🚍 Bus | 25 km/h | 60 km/h |
+| 🚗 Car | 40 km/h | 100 km/h |
+| 🏍️ Motorcycle | 45 km/h | 110 km/h |
+| 🛺 Tricycle | 15 km/h | 35 km/h |
+| 🚶 Walking | 5 km/h | 8 km/h |
+
+### Weather-Aware ETA (Rain Only)
+- ✅ `WeatherService` integrated into `CommuteService`
+- ✅ Weather fetched on commute start (non-blocking), refreshed every 10 minutes
+- ✅ **Only rain affects ETA** — sunny, cloudy, and intense heat have no impact:
+  - 🌧️ Light Rain → ×0.85 (15% slower)
+  - ⛈️ Heavy Rain → ×0.70 (30% slower)
+  - ☀️ Sunny / 🌥️ Cloudy / 🔥 Intense Heat → ×1.0 (no change)
+
+### Traffic Light ETA Estimation
+- ✅ On commute start, queries **OSM Overpass API** for `highway=traffic_signals` nodes in route bounding box
+- ✅ Each traffic light adds **~30 seconds** to ETA
+- ✅ Remaining lights scaled proportionally as commute progresses
+- ✅ `trafficLightCount` stored in `CommuteState`
+- ✅ Active commute chip shows 🚦 count when signals detected
+- ✅ Non-blocking and non-fatal (ETA proceeds without penalty if API unavailable)
+
+### Active Commute Info Chip
+- ✅ Shows vehicle type icon + label
+- ✅ Shows weather icon + name (when available)
+- ✅ Shows 🚦 traffic light count (when detected)
+
+### Technical Files
+- `lib/models/commute_state.dart` — `VehicleType` enum, `vehicleType` in `CommuteSettings`, `currentWeather` + `trafficLightCount` in `CommuteState`
+- `lib/services/commute_service.dart` — `_fetchTrafficLightCount()` (Overpass API), `_estimateEta()` (vehicle + weather + lights), `_getWeatherMultiplier()` (rain only)
+- `lib/providers/commute_provider.dart` — `setVehicleType()` method
+- `lib/screens/commute/commute_mode_screen.dart` — Vehicle selector, active commute chip
+- `lib/widgets/commute/commute_settings_sheet.dart` — Vehicle type section
 
 ---
 

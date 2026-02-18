@@ -1,4 +1,6 @@
+import "package:flutter/material.dart";
 import "package:latlong2/latlong.dart";
+import "weather_state.dart";
 
 /// * Commute mode status enum
 enum CommuteStatus {
@@ -34,6 +36,89 @@ enum AlarmStage {
   
   /// Final stage: loud continuous alarm (<30 seconds)
   stage3Loud,
+}
+
+/// * Vehicle type for realistic ETA calculation
+enum VehicleType {
+  /// Jeepney / FX / UV Express (typical PH public transport)
+  jeepney,
+  
+  /// Bus / P2P / Shuttle
+  bus,
+  
+  /// Private car
+  car,
+  
+  /// Motorcycle / Habal-habal
+  motorcycle,
+  
+  /// Tricycle / E-bike
+  tricycle,
+  
+  /// Walking / on foot
+  walking,
+}
+
+/// * Extension for VehicleType display and speed properties
+extension VehicleTypeExtension on VehicleType {
+  /// Display label
+  String get label {
+    switch (this) {
+      case VehicleType.jeepney:   return "Jeepney";
+      case VehicleType.bus:       return "Bus";
+      case VehicleType.car:       return "Car";
+      case VehicleType.motorcycle: return "Motorcycle";
+      case VehicleType.tricycle:  return "Tricycle";
+      case VehicleType.walking:   return "Walking";
+    }
+  }
+  
+  /// Icon data
+  IconData get iconData {
+    switch (this) {
+      case VehicleType.jeepney:   return Icons.directions_bus_filled_outlined; // Closest to Jeepney
+      case VehicleType.bus:       return Icons.directions_bus;
+      case VehicleType.car:       return Icons.directions_car;
+      case VehicleType.motorcycle: return Icons.two_wheeler;
+      case VehicleType.tricycle:  return Icons.electric_rickshaw; // Closest to Tricycle
+      case VehicleType.walking:   return Icons.directions_walk;
+    }
+  }
+  
+  /// Typical base speed in km/h (used when no live GPS speed is available)
+  double get baseSpeedKmh {
+    switch (this) {
+      case VehicleType.jeepney:   return 20.0;
+      case VehicleType.bus:       return 25.0;
+      case VehicleType.car:       return 40.0;
+      case VehicleType.motorcycle: return 45.0;
+      case VehicleType.tricycle:  return 15.0;
+      case VehicleType.walking:   return 5.0;
+    }
+  }
+  
+  /// Maximum realistic speed in km/h (clamp for live GPS speed)
+  double get maxSpeedKmh {
+    switch (this) {
+      case VehicleType.jeepney:   return 50.0;
+      case VehicleType.bus:       return 60.0;
+      case VehicleType.car:       return 100.0;
+      case VehicleType.motorcycle: return 110.0;
+      case VehicleType.tricycle:  return 35.0;
+      case VehicleType.walking:   return 8.0;
+    }
+  }
+  
+  /// JSON key
+  String get jsonKey => name;
+  
+  /// From JSON key
+  static VehicleType fromJson(String? key) {
+    return VehicleType.values.firstWhere(
+      (v) => v.name == key,
+      orElse: () => VehicleType.jeepney,
+    );
+  }
 }
 
 /// * Saved stop categories for quick access
@@ -241,6 +326,11 @@ class CommuteSettings {
   /// Whether to minimize alerts when phone is actively being used
   final bool minimizeAlertsWhenActive;
   
+  // * NEW: Vehicle Type for realistic ETA
+  
+  /// The type of vehicle being used for this commute
+  final VehicleType vehicleType;
+  
   const CommuteSettings({
     this.alarmDistanceMeters = 500,
     this.useTimeBackupAlarm = true,
@@ -255,6 +345,7 @@ class CommuteSettings {
     this.ultraLowPowerMode = false,
     this.lowPowerGpsIntervalSeconds = 30,
     this.minimizeAlertsWhenActive = true,
+    this.vehicleType = VehicleType.jeepney,
   });
   
   CommuteSettings copyWith({
@@ -271,6 +362,7 @@ class CommuteSettings {
     bool? ultraLowPowerMode,
     int? lowPowerGpsIntervalSeconds,
     bool? minimizeAlertsWhenActive,
+    VehicleType? vehicleType,
   }) {
     return CommuteSettings(
       alarmDistanceMeters: alarmDistanceMeters ?? this.alarmDistanceMeters,
@@ -286,6 +378,7 @@ class CommuteSettings {
       ultraLowPowerMode: ultraLowPowerMode ?? this.ultraLowPowerMode,
       lowPowerGpsIntervalSeconds: lowPowerGpsIntervalSeconds ?? this.lowPowerGpsIntervalSeconds,
       minimizeAlertsWhenActive: minimizeAlertsWhenActive ?? this.minimizeAlertsWhenActive,
+      vehicleType: vehicleType ?? this.vehicleType,
     );
   }
   
@@ -304,6 +397,7 @@ class CommuteSettings {
       "ultraLowPowerMode": ultraLowPowerMode,
       "lowPowerGpsIntervalSeconds": lowPowerGpsIntervalSeconds,
       "minimizeAlertsWhenActive": minimizeAlertsWhenActive,
+      "vehicleType": vehicleType.jsonKey,
     };
   }
   
@@ -324,6 +418,7 @@ class CommuteSettings {
       ultraLowPowerMode: json["ultraLowPowerMode"] as bool? ?? false,
       lowPowerGpsIntervalSeconds: json["lowPowerGpsIntervalSeconds"] as int? ?? 30,
       minimizeAlertsWhenActive: json["minimizeAlertsWhenActive"] as bool? ?? true,
+      vehicleType: VehicleTypeExtension.fromJson(json["vehicleType"] as String?),
     );
   }
 }
@@ -421,6 +516,16 @@ class CommuteState {
   /// Previous position (for direction calculation)
   final LatLng? previousPosition;
   
+  // * NEW: Weather-aware ETA fields
+  
+  /// Current weather data (fetched from WeatherService on commute start)
+  final WeatherData? currentWeather;
+  
+  // * NEW: Traffic light ETA fields
+  
+  /// Estimated number of traffic lights along the route (from OSM Overpass)
+  final int? trafficLightCount;
+  
   const CommuteState({
     this.destination,
     this.destinationName,
@@ -449,6 +554,8 @@ class CommuteState {
     this.deviationAngleDegrees,
     this.lastAlertTriggeredAt,
     this.previousPosition,
+    this.currentWeather,
+    this.trafficLightCount,
   });
   
   /// Check if commute is currently active
@@ -653,6 +760,8 @@ class CommuteState {
     double? deviationAngleDegrees,
     DateTime? lastAlertTriggeredAt,
     LatLng? previousPosition,
+    WeatherData? currentWeather,
+    int? trafficLightCount,
     bool clearDestination = false,
     bool clearEta = false,
     bool clearDistance = false,
@@ -667,6 +776,8 @@ class CommuteState {
     bool clearDeviationAngle = false,
     bool clearLastAlertTriggered = false,
     bool clearPreviousPosition = false,
+    bool clearWeather = false,
+    bool clearTrafficLights = false,
   }) {
     return CommuteState(
       destination: clearDestination ? null : (destination ?? this.destination),
@@ -696,6 +807,8 @@ class CommuteState {
       deviationAngleDegrees: clearDeviationAngle ? null : (deviationAngleDegrees ?? this.deviationAngleDegrees),
       lastAlertTriggeredAt: clearLastAlertTriggered ? null : (lastAlertTriggeredAt ?? this.lastAlertTriggeredAt),
       previousPosition: clearPreviousPosition ? null : (previousPosition ?? this.previousPosition),
+      currentWeather: clearWeather ? null : (currentWeather ?? this.currentWeather),
+      trafficLightCount: clearTrafficLights ? null : (trafficLightCount ?? this.trafficLightCount),
     );
   }
   

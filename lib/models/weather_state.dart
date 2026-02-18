@@ -28,19 +28,19 @@ class WeatherData {
     required this.timestamp,
   });
   
-  /// * Get icon for weather state
-  String get icon {
+  /// * Get icon data for weather state
+  IconData get iconData {
     switch (state) {
       case WeatherState.sunny:
-        return "☀️";
+        return Icons.wb_sunny;
       case WeatherState.intenseHeat:
-        return "🔥";
+        return Icons.local_fire_department;
       case WeatherState.cloudy:
-        return "🌥️";
+        return Icons.cloud;
       case WeatherState.lightRain:
-        return "🌧️";
+        return Icons.umbrella; // Or water_drop
       case WeatherState.heavyRain:
-        return "⛈️";
+        return Icons.thunderstorm;
     }
   }
   

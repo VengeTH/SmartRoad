@@ -44,6 +44,9 @@ class _CommuteSettingsSheetState extends State<CommuteSettingsSheet> {
   late int _lowPowerGpsIntervalSeconds;
   late bool _minimizeAlertsWhenActive;
   
+  // * Vehicle type
+  late VehicleType _vehicleType;
+  
   bool _showAdvanced = false;
 
   @override
@@ -61,6 +64,7 @@ class _CommuteSettingsSheetState extends State<CommuteSettingsSheet> {
     _ultraLowPowerMode = widget.settings.ultraLowPowerMode;
     _lowPowerGpsIntervalSeconds = widget.settings.lowPowerGpsIntervalSeconds;
     _minimizeAlertsWhenActive = widget.settings.minimizeAlertsWhenActive;
+    _vehicleType = widget.settings.vehicleType;
   }
 
   void _saveAndClose() {
@@ -77,6 +81,7 @@ class _CommuteSettingsSheetState extends State<CommuteSettingsSheet> {
       ultraLowPowerMode: _ultraLowPowerMode,
       lowPowerGpsIntervalSeconds: _lowPowerGpsIntervalSeconds,
       minimizeAlertsWhenActive: _minimizeAlertsWhenActive,
+      vehicleType: _vehicleType,
     );
     widget.onSave(newSettings);
     Navigator.of(context).pop();
@@ -147,6 +152,97 @@ class _CommuteSettingsSheetState extends State<CommuteSettingsSheet> {
                     ),
                   ),
                 ],
+              ),
+              
+              const SizedBox(height: AppTheme.spacingXL),
+              
+              // * SECTION: Vehicle Type
+              _buildSectionHeader("Vehicle Type", Icons.directions_rounded),
+              const SizedBox(height: AppTheme.spacingMD),
+              
+              Container(
+                padding: const EdgeInsets.all(AppTheme.spacingMD),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceColor,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                  border: Border.all(color: AppTheme.borderColor.withOpacity(0.5)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Select your mode of transport for accurate ETA",
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacingMD),
+                    Wrap(
+                      spacing: AppTheme.spacingSM,
+                      runSpacing: AppTheme.spacingSM,
+                      children: VehicleType.values.map((type) {
+                        final isSelected = type == _vehicleType;
+                        return GestureDetector(
+                          onTap: () {
+                            HapticFeedback.selectionClick();
+                            setState(() => _vehicleType = type);
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppTheme.spacingMD,
+                              vertical: AppTheme.spacingSM,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppTheme.primaryColor
+                                  : AppTheme.backgroundColor,
+                              borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppTheme.primaryColor
+                                    : AppTheme.borderColor,
+                                width: isSelected ? 1.5 : 1.0,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  type.iconData,
+                                  size: 16,
+                                  color: isSelected ? Colors.white : AppTheme.textPrimary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  type.label,
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: isSelected ? Colors.white : AppTheme.textPrimary,
+                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: AppTheme.spacingSM),
+                    Row(
+                      children: [
+                        Icon(_vehicleType.iconData, size: 16, color: AppTheme.primaryColor),
+                        const SizedBox(width: AppTheme.spacingXS),
+                        Text(
+                          "${_vehicleType.label}: ~${_vehicleType.baseSpeedKmh.toStringAsFixed(0)} km/h base speed",
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.primaryColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
               
               const SizedBox(height: AppTheme.spacingXL),

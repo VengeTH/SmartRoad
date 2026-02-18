@@ -4,6 +4,7 @@ import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
 import "package:flutter_map/flutter_map.dart";
 import "../config/traffic_config.dart";
+import "../utils/transparent_image.dart";
 
 /// * Traffic Layer using TomTom traffic tiles
 /// * 
@@ -21,7 +22,8 @@ class TrafficLayer extends TileLayer {
     required this.enabled,
     this.opacity = 0.7,
   }) : super(
-    urlTemplate: TrafficConfig.getTrafficTileUrl(0, 0, 0), // * Will be replaced by tileProvider
+    // * Use a safe URL template; the actual URL is resolved by the custom tile provider.
+    urlTemplate: "https://api.tomtom.com/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key={key}",
     userAgentPackageName: "com.smartroad.app",
     maxZoom: 18,
     minZoom: 2,
@@ -51,8 +53,7 @@ class TrafficTileProvider extends TileProvider {
     try {
       final apiKey = TrafficConfig.tomtomApiKey;
       if (apiKey.isEmpty) {
-        // * Return transparent placeholder if no API key
-        return const NetworkImage("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        return TransparentImage.provider;
       }
       
       // * CRITICAL: Convert coordinates to integers (z, x, y in that order)
@@ -72,9 +73,9 @@ class TrafficTileProvider extends TileProvider {
       if (kDebugMode) {
         debugPrint("❌ [TrafficTileProvider] Error generating URL: $e");
       }
-      // * Return transparent placeholder on error
-      return const NetworkImage("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+      return TransparentImage.provider;
     }
   }
 }
+
 

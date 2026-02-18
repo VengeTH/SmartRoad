@@ -240,5 +240,13 @@ class CommuteNotifier extends StateNotifier<CommuteState> {
     );
     updateSafetySettings(newSafetySettings);
   }
+  
+  // * NEW: Vehicle Type
+  
+  /// * Set vehicle type for ETA calculation
+  void setVehicleType(VehicleType type) {
+    final newSettings = state.settings.copyWith(vehicleType: type);
+    updateSettings(newSettings);
+  }
 }
 

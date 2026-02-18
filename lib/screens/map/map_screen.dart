@@ -27,6 +27,7 @@ import "../../widgets/weather_tile_layers.dart";
 import "../../widgets/weather_layer_controls.dart";
 import "../../services/weather_layer_manager.dart";
 import "../../config/weather_config.dart";
+import "../../services/weather_service.dart";
 import "../../services/location_service.dart";
 import "../../services/routing_service.dart";
 import "../../services/route_distance_tracker.dart";
@@ -44,6 +45,7 @@ import "../../models/sticker.dart";
 import "../../models/recent_location.dart";
 import "../../widgets/distance_indicator_widget.dart";
 import "../../widgets/traffic_layer.dart";
+import "../../config/traffic_config.dart";
 import "../../widgets/map_filter_panel.dart";
 import "../../widgets/save_route_dialog.dart";
 import "../../widgets/route_creation_dialog.dart";
@@ -55,8 +57,8 @@ import "../../widgets/user_location_marker.dart";
 import "../../widgets/navigation_hazard_warning_banner.dart";
 import "../../widgets/navigation_speed_hud.dart";
 import "../../widgets/music_control_widget.dart";
-import "../../providers/music_control_provider.dart";
 import "../../utils/polyline_smoothing.dart";
+import "../../models/weather_state.dart";
 // * Route utilities removed - using inline functions
 
 /// * Navigation overlay widget
@@ -766,6 +768,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   final WeatherLayerManager _weatherLayerManager = WeatherLayerManager();
   final LocationSearchService _locationSearchService = LocationSearchService();
   final SpeedLimitService _speedLimitService = SpeedLimitService();
+  final WeatherService _weatherService = WeatherService();
   StreamSubscription<Position>? _positionSubscription;
   Timer? _zoomLimitTimer; // * Timer to enforce zoom limits
   bool _hasPreciseLocation = false;
@@ -778,6 +781,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _avoidTollsToggle = false;
   double _routeDistance = 0.0;
   Duration _routeDuration = Duration.zero;
+
+  // * Route weather alerts (ahead-of-route warnings)
+  bool _isRouteWeatherCheckInProgress = false;
+  DateTime? _lastRouteWeatherCheckAt;
+  double? _lastRouteWeatherCheckAlongMeters;
+  DateTime? _routeWeatherAlertCooldownUntil;
+  DateTime? _routeWeatherAlertsMutedUntil;
+  bool _isShowingRouteWeatherAlert = false;
 
   @override
   void initState() {
@@ -2283,6 +2294,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _isRerouting = false;
   DateTime? _lastRerouteTime;
 
+  // * Reroute confirmation controls (safety-first: avoid surprising reroutes).
+  bool _isShowingReroutePrompt = false;
+  DateTime? _reroutePromptsMutedUntil;
+  DateTime? _lastRerouteConfirmationAt;
+  DateTime? _lastPostRerouteWeatherAdvisoryAt;
+
   // * Route progress state
   double _remainingDistance = 0.0;
   Duration _remainingDuration = Duration.zero;
@@ -2985,6 +3002,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           ),
         );
       }
+
+      // * After reroute, check if the weather ahead is still risky.
+      _maybeShowPostRerouteWeatherAdvisory();
     } catch (e) {
       debugPrint("❌ [MapScreen] Error recalculating route: $e");
       if (mounted) {
@@ -3001,6 +3021,264 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _isRerouting = false;
       });
     }
+  }
+
+  bool _areReroutePromptsMuted() {
+    final until = _reroutePromptsMutedUntil;
+    if (until == null) return false;
+    return DateTime.now().isBefore(until);
+  }
+
+  Future<bool> _confirmRerouteIfNeeded({
+    required String title,
+    required String message,
+    bool forcePrompt = false,
+  }) async {
+    if (!mounted || !context.mounted) return false;
+    if (_isShowingReroutePrompt) return false;
+
+    // * If the user explicitly tapped "Recalculate" (weather sheet), we treat that as confirmation.
+    if (!forcePrompt) {
+      // * Avoid spamming: allow a short quiet period after a confirmation.
+      final lastConfirmed = _lastRerouteConfirmationAt;
+      if (lastConfirmed != null &&
+          DateTime.now().difference(lastConfirmed).inSeconds < 15) {
+        return true;
+      }
+
+      if (_areReroutePromptsMuted()) {
+        return false;
+      }
+    }
+
+    _isShowingReroutePrompt = true;
+    try {
+      final result = await showModalBottomSheet<bool>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (sheetContext) {
+          return Container(
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceColor,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(AppTheme.radiusXL),
+              ),
+              boxShadow: AppTheme.shadowLarge,
+              border: Border.all(color: AppTheme.borderColor, width: 1),
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(AppTheme.spacingLG),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      alignment: Alignment.center,
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppTheme.borderColor,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacingLG),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: AppTheme.infoColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusMD,
+                            ),
+                            border: Border.all(
+                              color: AppTheme.infoColor.withOpacity(0.25),
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.alt_route_rounded,
+                            color: AppTheme.infoColor,
+                          ),
+                        ),
+                        const SizedBox(width: AppTheme.spacingMD),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: AppTheme.spacingXS),
+                              Text(
+                                message,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(color: AppTheme.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppTheme.spacingLG),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.of(sheetContext).pop(false);
+                              // * Mute prompts briefly so the user can keep driving without spam.
+                              _reroutePromptsMutedUntil = DateTime.now().add(
+                                const Duration(minutes: 3),
+                              );
+                            },
+                            child: const Text("Not now"),
+                          ),
+                        ),
+                        const SizedBox(width: AppTheme.spacingMD),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.of(sheetContext).pop(true);
+                            },
+                            icon: const Icon(Icons.alt_route_rounded),
+                            label: const Text("Reroute"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: AppTheme.spacingMD,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppTheme.spacingSM),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(sheetContext).pop(false);
+                      },
+                      child: const Text("Continue on current route"),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+
+      final confirmed = result == true;
+      if (confirmed) {
+        _lastRerouteConfirmationAt = DateTime.now();
+      }
+      return confirmed;
+    } finally {
+      _isShowingReroutePrompt = false;
+    }
+  }
+
+  Future<void> _maybeTriggerRerouteWithConfirmation({
+    required String title,
+    required String message,
+  }) async {
+    if (_isRerouting) return;
+    if (_navigationDestination == null || _navigationMode == null) return;
+
+    final shouldReroute = await _confirmRerouteIfNeeded(
+      title: title,
+      message: message,
+    );
+    if (!shouldReroute) return;
+
+    await _recalculateRouteFromCurrentPosition();
+  }
+
+  Future<void> _maybeShowPostRerouteWeatherAdvisory() async {
+    if (!_isNavigating) return;
+    if (_navigationRoute == null || _navigationRoute!.length < 2) return;
+    if (!_hasPreciseLocation) return;
+    if (_isRouteWeatherAlertsMuted()) return;
+
+    final now = DateTime.now();
+    final last = _lastPostRerouteWeatherAdvisoryAt;
+    if (last != null && now.difference(last).inMinutes < 5) {
+      return;
+    }
+
+    // * Quick summary: sample weather a few km ahead; if still risky, inform user.
+    _ensureNavigationRouteCache();
+    final route = _navigationRoute;
+    final cumulativeMeters = _navigationRouteCumulativeMeters;
+    if (route == null || cumulativeMeters == null) return;
+    if (cumulativeMeters.length != route.length) return;
+
+    final projection = _projectPointOntoRouteMeters(
+      point: _currentLocation,
+      route: route,
+      cumulativeMeters: cumulativeMeters,
+    );
+    final currentAlong = projection?["along"];
+    if (currentAlong == null) return;
+
+    WeatherData? worst;
+    double? worstOffsetMeters;
+    for (final offset in const [2000.0, 6000.0, 12000.0]) {
+      final samplePoint = _pointAlongRouteMeters(
+        route: route,
+        cumulativeMeters: cumulativeMeters,
+        targetAlongMeters: currentAlong + offset,
+      );
+      if (samplePoint == null) continue;
+
+      final data = await _weatherService.fetchWeatherData(center: samplePoint);
+      if (data == null) continue;
+      if (_isDangerousRouteWeather(data)) {
+        worst = worst == null ? data : _pickMoreSevereWeather(worst, data);
+        worstOffsetMeters ??= offset;
+      }
+    }
+
+    if (worst == null || worstOffsetMeters == null) {
+      return;
+    }
+
+    _lastPostRerouteWeatherAdvisoryAt = now;
+    if (!mounted) return;
+
+    final kmAhead = worstOffsetMeters / 1000.0;
+    final distanceText = kmAhead < 1.0
+        ? "~${worstOffsetMeters.round()} m"
+        : "~${kmAhead.toStringAsFixed(1)} km";
+
+    final weatherLabel = _routeWeatherTitle(worst);
+    final suggestion =
+        "$weatherLabel still detected $distanceText ahead. Consider leaving later, or proceed cautiously.";
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(suggestion),
+        backgroundColor: AppTheme.warningColor,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: "Proceed",
+          textColor: Colors.white,
+          onPressed: () {},
+        ),
+      ),
+    );
   }
 
   /// * Show route selection bottom sheet
@@ -5283,9 +5561,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           // * Check if user is off-route
           final isOffRoute = _checkOffRoute(updated);
 
+          // * Route weather alerting: sample weather ahead on-route (includes light rain).
+          _checkWeatherAheadOnRouteIfNeeded(updated);
+
           // * Trigger rerouting if off-route
           if (isOffRoute && !_isRerouting) {
-            _recalculateRouteFromCurrentPosition();
+            _maybeTriggerRerouteWithConfirmation(
+              title: "Off route",
+              message:
+                  "You seem to be off the planned route. Want to recalculate from your current location?",
+            );
           }
 
           // * During navigation, keep the camera following unless the user manually panned/zoomed.
@@ -5311,6 +5596,390 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
 
     // * Removed verbose logging to prevent console overflow
+  }
+
+  bool _isRouteWeatherAlertsMuted() {
+    final until = _routeWeatherAlertsMutedUntil;
+    if (until == null) return false;
+    return DateTime.now().isBefore(until);
+  }
+
+  bool _isInRouteWeatherCooldown() {
+    final until = _routeWeatherAlertCooldownUntil;
+    if (until == null) return false;
+    return DateTime.now().isBefore(until);
+  }
+
+  WeatherData? _pickMoreSevereWeather(WeatherData? a, WeatherData? b) {
+    if (a == null) return b;
+    if (b == null) return a;
+
+    int rank(WeatherState state) {
+      switch (state) {
+        case WeatherState.heavyRain:
+          return 3;
+        case WeatherState.lightRain:
+          return 2;
+        case WeatherState.intenseHeat:
+          return 2;
+        case WeatherState.cloudy:
+          return 1;
+        case WeatherState.sunny:
+          return 0;
+      }
+    }
+
+    final ra = rank(a.state);
+    final rb = rank(b.state);
+    if (ra != rb) return ra > rb ? a : b;
+
+    // * Tie-breaker: prefer higher precipitation/temperature.
+    final ap = a.precipitation ?? 0.0;
+    final bp = b.precipitation ?? 0.0;
+    if (ap != bp) return ap > bp ? a : b;
+    return a.temperature >= b.temperature ? a : b;
+  }
+
+  bool _isDangerousRouteWeather(WeatherData data) {
+    // * Per requirement: notify even at light rain.
+    return data.state == WeatherState.lightRain ||
+        data.state == WeatherState.heavyRain ||
+        data.state == WeatherState.intenseHeat;
+  }
+
+  LatLng? _pointAlongRouteMeters({
+    required List<LatLng> route,
+    required List<double> cumulativeMeters,
+    required double targetAlongMeters,
+  }) {
+    if (route.length < 2) return null;
+    if (cumulativeMeters.length != route.length) return null;
+    if (targetAlongMeters <= 0) return route.first;
+
+    final total = cumulativeMeters.last;
+    if (total <= 0) return route.last;
+    final clampedTarget = targetAlongMeters.clamp(0.0, total);
+
+    int idx = cumulativeMeters.indexWhere((m) => m >= clampedTarget);
+    if (idx <= 0) {
+      // * idx == 0 means target is at start; idx == -1 means beyond end.
+      return idx == -1 ? route.last : route.first;
+    }
+
+    final prevMeters = cumulativeMeters[idx - 1];
+    final nextMeters = cumulativeMeters[idx];
+    final segmentMeters = (nextMeters - prevMeters).abs();
+    if (segmentMeters <= 0.0) {
+      return route[idx];
+    }
+
+    final t = ((clampedTarget - prevMeters) / segmentMeters).clamp(0.0, 1.0);
+    final a = route[idx - 1];
+    final b = route[idx];
+    return LatLng(
+      a.latitude + (b.latitude - a.latitude) * t,
+      a.longitude + (b.longitude - a.longitude) * t,
+    );
+  }
+
+  List<double> _routeWeatherSampleOffsetsMeters() {
+    // * Keep calls low; WeatherService has caching (bucketed by ~0.02 degrees).
+    return const [1000, 3000, 7000, 15000, 25000];
+  }
+
+  void _checkWeatherAheadOnRouteIfNeeded(LatLng currentLocation) {
+    // * Fire-and-forget; guarded internally.
+    _checkWeatherAheadOnRoute(currentLocation);
+  }
+
+  Future<void> _checkWeatherAheadOnRoute(LatLng currentLocation) async {
+    if (!_isNavigating) return;
+    if (_navigationRoute == null || _navigationRoute!.length < 2) return;
+    if (_isRouteWeatherAlertsMuted()) return;
+    if (_isInRouteWeatherCooldown()) return;
+    if (_isRouteWeatherCheckInProgress) return;
+    if (_isShowingRouteWeatherAlert) return;
+    if (!_hasPreciseLocation) return;
+
+    _ensureNavigationRouteCache();
+    final route = _navigationRoute;
+    final cumulativeMeters = _navigationRouteCumulativeMeters;
+    if (route == null || cumulativeMeters == null) return;
+    if (cumulativeMeters.length != route.length) return;
+
+    final projection = _projectPointOntoRouteMeters(
+      point: currentLocation,
+      route: route,
+      cumulativeMeters: cumulativeMeters,
+    );
+    if (projection == null) return;
+    final currentAlong = projection["along"];
+    if (currentAlong == null) return;
+
+    // * Throttle checks by time and by route progress.
+    final now = DateTime.now();
+    final lastAt = _lastRouteWeatherCheckAt;
+    final lastAlong = _lastRouteWeatherCheckAlongMeters;
+    if (lastAt != null && now.difference(lastAt).inSeconds < 35) {
+      return;
+    }
+    if (lastAlong != null && (currentAlong - lastAlong).abs() < 250) {
+      return;
+    }
+
+    _isRouteWeatherCheckInProgress = true;
+    _lastRouteWeatherCheckAt = now;
+    _lastRouteWeatherCheckAlongMeters = currentAlong;
+
+    try {
+      WeatherData? earliestHit;
+      double? earliestHitOffset;
+
+      final offsets = _routeWeatherSampleOffsetsMeters();
+      for (final offset in offsets) {
+        // * If state changed while iterating, stop.
+        if (!_isNavigating || !mounted) return;
+
+        final samplePoint = _pointAlongRouteMeters(
+          route: route,
+          cumulativeMeters: cumulativeMeters,
+          targetAlongMeters: currentAlong + offset,
+        );
+        if (samplePoint == null) continue;
+
+        final data = await _weatherService.fetchWeatherData(center: samplePoint);
+        if (data == null) continue;
+
+        if (_isDangerousRouteWeather(data)) {
+          earliestHit = earliestHit == null
+              ? data
+              : _pickMoreSevereWeather(earliestHit, data);
+          earliestHitOffset ??= offset.toDouble();
+
+          // * Prefer earliest (closest) hazard; stop early for rain.
+          if (data.state == WeatherState.lightRain ||
+              data.state == WeatherState.heavyRain) {
+            break;
+          }
+        }
+      }
+
+      if (earliestHit == null || earliestHitOffset == null) {
+        return;
+      }
+
+      // * Don’t spam: if we’ve just shown a sheet, wait a bit.
+      if (_isInRouteWeatherCooldown() || _isRouteWeatherAlertsMuted()) {
+        return;
+      }
+
+      if (!mounted || !context.mounted) return;
+      _isShowingRouteWeatherAlert = true;
+      HapticFeedback.mediumImpact();
+      await _showRouteWeatherAlertSheet(
+        data: earliestHit,
+        approxDistanceMetersAhead: earliestHitOffset,
+      );
+    } finally {
+      _isRouteWeatherCheckInProgress = false;
+      _isShowingRouteWeatherAlert = false;
+    }
+  }
+
+  String _routeWeatherTitle(WeatherData data) {
+    switch (data.state) {
+      case WeatherState.lightRain:
+        return "Light rain ahead";
+      case WeatherState.heavyRain:
+        return "Heavy rain ahead";
+      case WeatherState.intenseHeat:
+        return "Intense heat ahead";
+      case WeatherState.cloudy:
+        return "Weather change ahead";
+      case WeatherState.sunny:
+        return "Weather change ahead";
+    }
+  }
+
+  String _routeWeatherSubtitle(WeatherData data, double metersAhead) {
+    final kmAhead = metersAhead / 1000.0;
+    final distanceText = kmAhead < 1.0
+        ? "~${metersAhead.round()} m"
+        : "~${kmAhead.toStringAsFixed(1)} km";
+
+    final tempText = "${data.temperature.toStringAsFixed(0)}°C";
+    final rainText = data.precipitation != null
+        ? "${data.precipitation!.toStringAsFixed(1)} mm/h"
+        : null;
+
+    final details = <String>[tempText, if (rainText != null) rainText];
+    return "$distanceText ahead • ${details.join(' • ')}";
+  }
+
+  Future<void> _showRouteWeatherAlertSheet({
+    required WeatherData data,
+    required double approxDistanceMetersAhead,
+  }) async {
+    // * Cooldown starts immediately (even if user dismisses).
+    _routeWeatherAlertCooldownUntil = DateTime.now().add(
+      const Duration(minutes: 2),
+    );
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceColor,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppTheme.radiusXL),
+            ),
+            boxShadow: AppTheme.shadowLarge,
+            border: Border.all(color: AppTheme.borderColor, width: 1),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(AppTheme.spacingLG),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    alignment: Alignment.center,
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppTheme.borderColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spacingLG),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusMD,
+                          ),
+                          border: Border.all(
+                            color: AppTheme.primaryColor.withOpacity(0.25),
+                          ),
+                        ),
+                        child: Icon(
+                          data.state == WeatherState.intenseHeat
+                              ? Icons.thermostat
+                              : Icons.cloudy_snowing,
+                          color: AppTheme.primaryColor,
+                        ),
+                      ),
+                      const SizedBox(width: AppTheme.spacingMD),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _routeWeatherTitle(data),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: AppTheme.spacingXS),
+                            Text(
+                              _routeWeatherSubtitle(
+                                data,
+                                approxDistanceMetersAhead,
+                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: AppTheme.textSecondary),
+                            ),
+                            const SizedBox(height: AppTheme.spacingSM),
+                            Text(
+                              "Weather can affect traction and visibility. Want to recalculate the route?",
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(color: AppTheme.textPrimary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppTheme.spacingLG),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            Navigator.of(sheetContext).pop();
+                            _routeWeatherAlertsMutedUntil = DateTime.now().add(
+                              const Duration(minutes: 15),
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  "Route weather alerts muted for 15 minutes",
+                                ),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          child: const Text("Mute 15 min"),
+                        ),
+                      ),
+                      const SizedBox(width: AppTheme.spacingMD),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.of(sheetContext).pop();
+                            _maybeTriggerRerouteWithConfirmation(
+                              title: "Weather ahead",
+                              message:
+                                  "Conditions ahead may affect safety. Want to recalculate the route from your current location?",
+                            );
+                          },
+                          icon: const Icon(Icons.alt_route_rounded),
+                          label: const Text("Recalculate"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: AppTheme.spacingMD,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppTheme.spacingSM),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(sheetContext).pop();
+                      // * Extend cooldown a bit so “continue” isn’t immediately re-prompted.
+                      _routeWeatherAlertCooldownUntil = DateTime.now().add(
+                        const Duration(minutes: 5),
+                      );
+                    },
+                    child: const Text("Continue"),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _loadCurrentLocation() async {
@@ -6135,8 +6804,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 Consumer(
                   builder: (context, ref, child) {
                     final filterState = ref.watch(mapFilterProvider);
+                    if (!filterState.showTraffic) {
+                      return const SizedBox.shrink();
+                    }
+
+                    if (!TrafficConfig.isAvailable) {
+                      // * Do not mount the layer when no key is configured.
+                      return const SizedBox.shrink();
+                    }
+
                     return TrafficLayer(
-                      enabled: filterState.showTraffic,
+                      enabled: true,
                       opacity: 0.7,
                     );
                   },
@@ -6349,6 +7027,42 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         child: Stack(
                           alignment: Alignment.topCenter,
                           children: [
+                            if ((_pinnedLocationLabel?.trim().isNotEmpty ?? false))
+                              Positioned(
+                                top: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppTheme.spacingSM,
+                                    vertical: AppTheme.spacingXS,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.surfaceColor,
+                                    borderRadius: BorderRadius.circular(
+                                      AppTheme.radiusFull,
+                                    ),
+                                    border: Border.all(
+                                      color: AppTheme.borderColor,
+                                      width: 1,
+                                    ),
+                                    boxShadow: AppTheme.shadowSmall,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 220,
+                                  ),
+                                  child: Text(
+                                    _pinnedLocationLabel!,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium
+                                        ?.copyWith(
+                                          color: AppTheme.textPrimary,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
                             Icon(
                               Icons.location_on,
                               size: 54,

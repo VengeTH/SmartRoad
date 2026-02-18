@@ -94,6 +94,11 @@ smartroad/
 - **Manual SOS**: Immediate emergency alert button
 - **Low Power**: Battery saver mode for long commutes
 - **Overshoot Recovery**: Bilingual guidance when passing destination
+- **Smart ETA (v2.8.0)**:
+  - Vehicle type selection (Jeepney, Bus, Car, Motorcycle, Tricycle, Walking) with realistic base/max speeds
+  - Rain-aware ETA: light rain ×0.85, heavy rain ×0.70; sunny/cloudy/heat have no impact
+  - Traffic light estimation via OSM Overpass API (~30s per signal added to ETA)
+  - Active commute chip shows vehicle type, weather, and 🚦 traffic light count
 
 ### Map Features
 - **Hazard Filtering**: Filter by type, severity, and expiry status
@@ -617,12 +622,13 @@ lib/
 
 The following features are planned but not yet implemented:
 - **Payment Integration**: GCash, PayMaya, Stripe for sticker purchases
-- **Weather-Aware Rerouting**: Automatic route adjustments based on weather conditions
+- **Weather-Aware Rerouting**: Automatic route adjustments based on weather (ETA adjustment ✅ done; rerouting planned)
 - **HOA Admin Dashboard**: Management interface for HOA administrators
 - **Multi-Country Expansion**: Support for multiple countries beyond Philippines
 - **PostGIS Route Intersection**: Full PostGIS-based route intersection checks for restricted areas
 - **Push Notifications (FCM)**: Cloud-based push notifications
 - **AI Incident Prediction**: Predictive analytics for road incidents
+- **Traffic-Aware Rerouting**: Use TomTom traffic data to suggest alternate routes (visual layer ✅ done; rerouting planned)
 
 ## License
 

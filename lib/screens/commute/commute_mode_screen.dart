@@ -190,6 +190,11 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
           
           const SizedBox(height: AppTheme.spacingXL),
           
+          // * Vehicle type selector
+          _buildVehicleTypeSelector(state),
+          
+          const SizedBox(height: AppTheme.spacingXL),
+          
           // * Settings section
           _buildSettingsSection(state),
           
@@ -816,6 +821,67 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
           
           const SizedBox(height: AppTheme.spacingXXL),
           
+          // * Weather + vehicle info chip
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppTheme.spacingMD,
+              vertical: AppTheme.spacingSM,
+            ),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceColor,
+              borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+              border: Border.all(color: AppTheme.borderColor.withOpacity(0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(state.settings.vehicleType.iconData, size: 16, color: AppTheme.textSecondary),
+                const SizedBox(width: AppTheme.spacingXS),
+                Text(
+                  state.settings.vehicleType.label,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (state.currentWeather != null) ...[
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: AppTheme.spacingSM),
+                    width: 1,
+                    height: 12,
+                    color: AppTheme.borderColor,
+                  ),
+                  Icon(state.currentWeather!.iconData, size: 16, color: AppTheme.textSecondary),
+                  const SizedBox(width: AppTheme.spacingXS),
+                  Text(
+                    state.currentWeather!.displayName,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+                if (state.trafficLightCount != null && state.trafficLightCount! > 0) ...[
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: AppTheme.spacingSM),
+                    width: 1,
+                    height: 12,
+                    color: AppTheme.borderColor,
+                  ),
+                  const Icon(Icons.traffic, size: 16, color: AppTheme.textSecondary),
+                  const SizedBox(width: AppTheme.spacingXS),
+                  Text(
+                    "${state.trafficLightCount} lights",
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: AppTheme.spacingMD),
+          
           // * Bottom buttons
           Row(
             children: [
@@ -862,6 +928,102 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
           ),
           
           const SizedBox(height: AppTheme.spacingLG),
+        ],
+      ),
+    );
+  }
+  
+  /// * Build vehicle type selector
+  Widget _buildVehicleTypeSelector(CommuteState state) {
+    final selectedType = state.settings.vehicleType;
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.spacingLG),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+        border: Border.all(color: AppTheme.borderColor.withOpacity(0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.directions_rounded, color: AppTheme.primaryColor, size: 18),
+              const SizedBox(width: AppTheme.spacingSM),
+              Text(
+                "Vehicle Type",
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                "Affects ETA accuracy",
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppTheme.spacingMD),
+          Wrap(
+            spacing: AppTheme.spacingSM,
+            runSpacing: AppTheme.spacingSM,
+            children: VehicleType.values.map((type) {
+              final isSelected = type == selectedType;
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  ref.read(commuteProvider.notifier).setVehicleType(type);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppTheme.spacingMD,
+                    vertical: AppTheme.spacingSM,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppTheme.primaryColor
+                        : AppTheme.backgroundColor,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppTheme.primaryColor
+                          : AppTheme.borderColor,
+                      width: isSelected ? 1.5 : 1.0,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        type.iconData,
+                        size: 16,
+                        color: isSelected ? Colors.white : AppTheme.textPrimary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        type.label,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: isSelected ? Colors.white : AppTheme.textPrimary,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: AppTheme.spacingSM),
+          Text(
+            "Base speed: ${selectedType.baseSpeedKmh.toStringAsFixed(0)} km/h · Max: ${selectedType.maxSpeedKmh.toStringAsFixed(0)} km/h",
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTheme.textSecondary,
+            ),
+          ),
         ],
       ),
     );

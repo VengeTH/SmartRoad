@@ -1,15 +1,19 @@
 import "dart:async";
+import "dart:convert";
 import "dart:math" as math;
 
 import "package:flutter/foundation.dart";
 import "package:flutter/services.dart";
 import "package:geolocator/geolocator.dart";
+import "package:http/http.dart" as http;
 import "package:latlong2/latlong.dart";
 
 import "../models/commute_state.dart";
+import "../models/weather_state.dart";
 import "location_service.dart";
 import "notification_service.dart";
 import "emergency_sms_service.dart";
+import "weather_service.dart";
 
 /// * Commute Mode Service
 /// * Handles background location tracking, distance calculations,
@@ -23,6 +27,7 @@ class CommuteService {
   final LocationService _locationService = LocationService();
   final NotificationService _notificationService = NotificationService();
   final EmergencySmsService _emergencySmsService = EmergencySmsService();
+  final WeatherService _weatherService = WeatherService();
   
   // * Location stream subscription
   StreamSubscription<Position>? _positionSubscription;
@@ -42,10 +47,13 @@ class CommuteService {
   Timer? _stage2Timer;
   Timer? _stage3Timer;
   
+  // * Weather refresh timer
+  Timer? _weatherRefreshTimer;
+  
   // * Average speed tracking for ETA calculation
   final List<double> _recentSpeeds = [];
   static const int _maxSpeedSamples = 10;
-  static const double _defaultSpeedKmh = 20.0; // * Typical jeepney/bus speed
+  // * _defaultSpeedKmh is now derived from vehicle type, see _estimateEta()
   
   /// * Initialize the commute service
   Future<void> initialize() async {
@@ -111,6 +119,25 @@ class CommuteService {
       
       _notifyStateChanged();
       
+      // * Fetch initial weather data (non-blocking)
+      _fetchAndUpdateWeather(currentLocation);
+      
+      // * Fetch traffic light count along route (non-blocking)
+      if (_state.destination != null) {
+        _fetchTrafficLightCount(currentLocation, _state.destination!);
+      }
+      
+      // * Start periodic weather refresh every 10 minutes
+      _weatherRefreshTimer?.cancel();
+      _weatherRefreshTimer = Timer.periodic(
+        const Duration(minutes: 10),
+        (_) {
+          if (_state.currentPosition != null) {
+            _fetchAndUpdateWeather(_state.currentPosition!);
+          }
+        },
+      );
+      
       // * Show foreground notification for background tracking
       await _notificationService.showCommuteTrackingNotification(
         destinationName: destinationName,
@@ -137,6 +164,10 @@ class CommuteService {
     // * Cancel location subscription
     await _positionSubscription?.cancel();
     _positionSubscription = null;
+    
+    // * Cancel weather refresh timer
+    _weatherRefreshTimer?.cancel();
+    _weatherRefreshTimer = null;
     
     // * Cancel all alarm timers
     _cancelAllAlarmTimers();
@@ -300,7 +331,9 @@ class CommuteService {
     if (position.speed > 0) {
       currentSpeed = position.speed;
       final speedKmh = position.speed * 3.6; // * m/s to km/h
-      _recentSpeeds.add(speedKmh);
+      // * Clamp to vehicle type max speed to filter GPS noise
+      final maxKmh = _state.settings.vehicleType.maxSpeedKmh;
+      _recentSpeeds.add(speedKmh.clamp(0.0, maxKmh));
       if (_recentSpeeds.length > _maxSpeedSamples) {
         _recentSpeeds.removeAt(0);
       }
@@ -815,21 +848,131 @@ class CommuteService {
   
   double _toRadians(double degrees) => degrees * (math.pi / 180.0);
   
-  /// * Estimate ETA based on distance and average speed
+  /// * Fetch weather and update state
+  Future<void> _fetchAndUpdateWeather(LatLng position) async {
+    try {
+      final weather = await _weatherService.fetchWeatherData(center: position);
+      if (weather != null && _state.isActive) {
+        _state = _state.copyWith(currentWeather: weather);
+        _notifyStateChanged();
+        debugPrint("[CommuteService] Weather updated: ${weather.displayName} (${weather.temperature.toStringAsFixed(1)}°C)");
+      }
+    } catch (e) {
+      debugPrint("[CommuteService] WARNING: Could not fetch weather: $e");
+    }
+  }
+  
+  /// * Get weather speed multiplier — only rain affects travel speed
+  /// * Sunny, cloudy, and intense heat do NOT slow travel
+  double _getWeatherMultiplier(WeatherData? weather) {
+    if (weather == null) return 1.0;
+    switch (weather.state) {
+      case WeatherState.heavyRain:
+        return 0.70; // * 30% slower in heavy rain (reduced visibility, wet roads)
+      case WeatherState.lightRain:
+        return 0.85; // * 15% slower in light rain (cautious driving)
+      case WeatherState.sunny:
+      case WeatherState.cloudy:
+      case WeatherState.intenseHeat:
+        return 1.0; // * No impact on travel speed
+    }
+  }
+  
+  /// * Estimate ETA based on distance, vehicle type, live speed, weather, and traffic lights
   Duration _estimateEta(double distanceMeters) {
-    double avgSpeedKmh = _defaultSpeedKmh;
+    final vehicleType = _state.settings.vehicleType;
+    final weather = _state.currentWeather;
+    final weatherMultiplier = _getWeatherMultiplier(weather);
+    final trafficLights = _state.trafficLightCount ?? 0;
+    
+    double avgSpeedKmh;
     
     if (_recentSpeeds.isNotEmpty) {
+      // * Use live GPS average speed, clamped to vehicle type max
       avgSpeedKmh = _recentSpeeds.reduce((a, b) => a + b) / _recentSpeeds.length;
-      // * Clamp to reasonable values
-      avgSpeedKmh = avgSpeedKmh.clamp(5.0, 60.0);
+      // * Clamp: minimum 2 km/h (nearly stopped), max = vehicle type max
+      avgSpeedKmh = avgSpeedKmh.clamp(2.0, vehicleType.maxSpeedKmh);
+    } else {
+      // * No live speed yet — use vehicle type base speed
+      avgSpeedKmh = vehicleType.baseSpeedKmh;
+    }
+    
+    // * Apply weather multiplier (only rain affects speed)
+    final effectiveSpeedKmh = avgSpeedKmh * weatherMultiplier;
+    
+    // * Guard against zero speed
+    if (effectiveSpeedKmh <= 0) {
+      return const Duration(hours: 24); // * Fallback: 24h (should never happen)
     }
     
     final distanceKm = distanceMeters / 1000.0;
-    final hours = distanceKm / avgSpeedKmh;
-    final minutes = (hours * 60).round();
+    final hours = distanceKm / effectiveSpeedKmh;
+    int seconds = (hours * 3600).round();
     
-    return Duration(minutes: minutes);
+    // * Add traffic light penalty: ~30 seconds per signal
+    // * Only count remaining lights proportional to remaining distance
+    if (trafficLights > 0 && _state.distanceToDestinationMeters != null && _state.distanceToDestinationMeters! > 0) {
+      final totalDistance = _state.distanceToDestinationMeters! + distanceMeters; // * approx total
+      final remainingFraction = distanceMeters / totalDistance.clamp(distanceMeters, double.infinity);
+      final remainingLights = (trafficLights * remainingFraction).round();
+      seconds += remainingLights * 30; // * 30s per traffic light
+      debugPrint("[CommuteService] Traffic lights: $remainingLights remaining (of $trafficLights total) → +${remainingLights * 30}s");
+    } else if (trafficLights > 0) {
+      seconds += trafficLights * 30;
+      debugPrint("[CommuteService] Traffic lights: $trafficLights → +${trafficLights * 30}s");
+    }
+    
+    debugPrint(
+      "[CommuteService] ETA calc: ${distanceKm.toStringAsFixed(2)}km "
+      "@ ${effectiveSpeedKmh.toStringAsFixed(1)}km/h "
+      "(vehicle: ${vehicleType.label}, weather: ×${weatherMultiplier.toStringAsFixed(2)}, "
+      "lights: $trafficLights) = ${seconds}s"
+    );
+    
+    return Duration(seconds: seconds);
+  }
+  
+  /// * Fetch traffic light count from OSM Overpass API
+  /// * Counts traffic signals within the bounding box of the route
+  Future<void> _fetchTrafficLightCount(LatLng from, LatLng to) async {
+    try {
+      // * Build bounding box with 0.005° padding (~500m)
+      const double pad = 0.005;
+      final minLat = math.min(from.latitude, to.latitude) - pad;
+      final maxLat = math.max(from.latitude, to.latitude) + pad;
+      final minLon = math.min(from.longitude, to.longitude) - pad;
+      final maxLon = math.max(from.longitude, to.longitude) + pad;
+      
+      // * OSM Overpass QL query: count traffic signals in bounding box
+      final query = '[out:json][timeout:10];'
+          'node["highway"="traffic_signals"]'
+          '($minLat,$minLon,$maxLat,$maxLon);'
+          'out count;';
+      
+      final url = Uri.parse('https://overpass-api.de/api/interpreter');
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'data=${Uri.encodeComponent(query)}',
+      ).timeout(const Duration(seconds: 15));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final elements = data['elements'] as List?;
+        if (elements != null && elements.isNotEmpty) {
+          final countTag = (elements.first as Map<String, dynamic>)['tags'] as Map<String, dynamic>?;
+          final count = int.tryParse(countTag?['total']?.toString() ?? '0') ?? 0;
+          if (_state.isActive) {
+            _state = _state.copyWith(trafficLightCount: count);
+            _notifyStateChanged();
+            debugPrint('[CommuteService] Traffic lights found: $count in route bounding box');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[CommuteService] WARNING: Could not fetch traffic lights: $e');
+      // * Non-fatal: ETA will just not include traffic light penalty
+    }
   }
   
   /// * Notify listeners of state change
@@ -837,4 +980,3 @@ class CommuteService {
     onStateChanged?.call(_state);
   }
 }
-

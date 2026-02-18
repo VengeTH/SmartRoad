@@ -4,7 +4,56 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
-## Version 2.7.0 - Comprehensive Experience Upgrade: Music & Commute V2 (Latest)
+## Version 2.8.0 - Smart ETA: Vehicle Type, Weather & Traffic Light Awareness
+
+**Release Date:** February 2026
+**Focus:** Realistic, context-aware ETA calculation for Commute Mode
+**Status:** Production Ready (Demo Mode Only)
+
+### Commute Mode: Smart ETA
+
+- **Vehicle Type Selection**
+  - New `VehicleType` enum: Jeepney, Bus, Car, Motorcycle, Tricycle, Walking
+  - Each type has a realistic base speed (used when GPS speed is unavailable) and a max speed clamp (to filter GPS noise)
+  - Selector available in both the **Commute Mode idle screen** and the **Settings sheet**
+  - Persisted via `CommuteSettings` (JSON serialized)
+
+- **Weather-Aware ETA (Rain Only)**
+  - `WeatherService` is now integrated into `CommuteService`
+  - Weather is fetched automatically on commute start (non-blocking) and refreshed every 10 minutes
+  - **Only rain conditions affect ETA** — sunny, cloudy, and intense heat have no impact:
+    - 🌧️ Light Rain → 15% slower (×0.85)
+    - ⛈️ Heavy Rain → 30% slower (×0.70)
+    - ☀️ Sunny / 🌥️ Cloudy / 🔥 Intense Heat → no change (×1.0)
+
+- **Traffic Light ETA Estimation**
+  - On commute start, queries **OSM Overpass API** for `highway=traffic_signals` nodes within the route bounding box
+  - Each traffic light adds **~30 seconds** to the ETA
+  - Remaining lights are scaled proportionally as the commute progresses
+  - Active commute chip now shows 🚦 count when traffic lights are detected
+  - Non-blocking and non-fatal: if Overpass API is unavailable, ETA proceeds without the penalty
+
+- **Smarter Live Speed Handling**
+  - GPS speed is now clamped to the vehicle type's max speed (prevents GPS noise inflating ETA)
+  - ETA uses seconds precision (not just minutes) for more accurate countdowns
+
+- **Active Commute Info Chip**
+  - Shows current vehicle type icon + label during active commute (Material Icons)
+  - Shows current weather icon + name when weather data is available (Material Icons)
+  - Shows 🚦 traffic light count when signals are detected along the route (Material Icon)
+
+### Technical Changes
+
+- **Modified Files:**
+  - `lib/models/commute_state.dart` — Added `VehicleType` enum + extension, `vehicleType` in `CommuteSettings`, `currentWeather` + `trafficLightCount` in `CommuteState`
+  - `lib/services/commute_service.dart` — Integrated `WeatherService`, added `_fetchTrafficLightCount()` via OSM Overpass API, rewrote `_estimateEta()` with vehicle speeds + weather multipliers + traffic light penalty; fixed weather multipliers (only rain slows travel)
+  - `lib/providers/commute_provider.dart` — Added `setVehicleType()` method
+  - `lib/screens/commute/commute_mode_screen.dart` — Vehicle type selector in idle view, weather+vehicle+traffic light chip in active view
+  - `lib/widgets/commute/commute_settings_sheet.dart` — Vehicle type selector section in settings
+
+---
+
+## Version 2.7.0 - Comprehensive Experience Upgrade: Music & Commute V2 (Previous Latest)
 
 **Release Date:** February 2026
 **Focus:** Music Integration, Smart Commute Safety, System-wide Polish

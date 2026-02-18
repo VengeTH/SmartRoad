@@ -10,6 +10,7 @@ import "package:latlong2/latlong.dart";
 import "../services/weather_layer_manager.dart";
 import "../services/weather_tile_generator.dart";
 import "../config/weather_config.dart";
+import "../utils/transparent_image.dart";
 
 /// * Rain Layer using OpenWeatherMap precipitation tiles
 /// * 
@@ -24,7 +25,8 @@ class RainLayer extends TileLayer {
   RainLayer({
     required this.manager,
   }) : super(
-    urlTemplate: WeatherConfig.getOpenWeatherMapRainTileUrl(0, 0, 0), // * Will be replaced by tileProvider
+    // * Use a safe URL template; the actual URL is resolved by the custom tile provider.
+    urlTemplate: "https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid={key}",
     userAgentPackageName: "com.smartroad.app",
     maxZoom: 18, // * Match map maxZoom to keep layer visible at all zoom levels
     minZoom: 2,
@@ -81,6 +83,11 @@ class OpenWeatherMapTileProvider extends TileProvider {
   ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
     String url;
     try {
+      // * If no key/proxy configured, return transparent tiles instead of throwing.
+      if (!WeatherConfig.useProxy && !WeatherConfig.hasOpenWeatherMapKey) {
+        return TransparentImage.provider;
+      }
+
       // * OpenWeatherMap only provides tiles up to zoom 10
       // * For higher zoom levels, use zoom 10 tiles and let flutter_map scale them
       final nativeZoom = coordinates.z.clamp(0, 10);
@@ -126,8 +133,7 @@ class OpenWeatherMapTileProvider extends TileProvider {
       }
     } catch (e) {
       debugPrint("❌ [OpenWeatherMapTileProvider] Error generating URL: $e");
-      // * Return transparent placeholder on error
-      return const NetworkImage("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+      return TransparentImage.provider;
     }
     return NetworkImage(url);
   }
@@ -146,7 +152,7 @@ class HeatLayer extends TileLayer {
   HeatLayer({
     required this.manager,
   }) : super(
-    urlTemplate: WeatherConfig.getOpenWeatherMapTempTileUrl(0, 0, 0), // * Will be replaced by tileProvider
+    urlTemplate: "https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid={key}",
     userAgentPackageName: "com.smartroad.app",
     maxZoom: 18, // * Match map maxZoom to keep layer visible at all zoom levels
     minZoom: 2,
@@ -193,7 +199,7 @@ class CloudLayer extends TileLayer {
   CloudLayer({
     required this.manager,
   }) : super(
-    urlTemplate: WeatherConfig.getOpenWeatherMapCloudsTileUrl(0, 0, 0), // * Will be replaced by tileProvider
+    urlTemplate: "https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid={key}",
     userAgentPackageName: "com.smartroad.app",
     maxZoom: 18, // * Match map maxZoom to keep layer visible at all zoom levels
     minZoom: 2,
@@ -253,7 +259,7 @@ class WeatherTileProvider extends TileProvider {
         return _generateCloudTileImage(nw, se, coordinates.z);
       case WeatherLayerType.rain:
         // * Rain uses OpenWeatherMap directly, shouldn't reach here
-        return const NetworkImage("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        return TransparentImage.provider;
     }
   }
   

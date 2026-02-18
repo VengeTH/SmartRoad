@@ -39,15 +39,12 @@ class TrafficConfig {
   /// * Format: /traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key={apiKey}
   static String getTrafficTileUrl(int z, int x, int y) {
     final apiKey = tomtomApiKey;
-    if (apiKey.isEmpty) {
-      // * Return transparent placeholder if no API key
-      return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-    }
     // * Ensure coordinates are integers (z, x, y in that order)
     // * Format: /traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key={apiKey}
     final zInt = z.toInt();
     final xInt = x.toInt();
     final yInt = y.toInt();
+    // * Return a valid URL even if key is empty; callers should gate requests via [isAvailable].
     return "$_baseUrl/$zInt/$xInt/$yInt.png?key=$apiKey";
   }
   
@@ -56,4 +53,5 @@ class TrafficConfig {
   /// * Traffic tiles are available if API key is set
   static bool get isAvailable => tomtomApiKey.isNotEmpty;
 }
+
 

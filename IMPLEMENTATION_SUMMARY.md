@@ -183,6 +183,12 @@ lib/
   - Loading spinner appears next to distance during calculation
   - Graceful error handling with fallback distance on route calculation failure
 
+### Ambient Landmarks (v2.8.1)
+- ✅ **Dynamic POI Display**: Replaced unreliable keyword search with **OpenStreetMap Overpass API**
+- ✅ **Zoom-Tiered Loading**: Optimized POI fetching based on zoom level (Major peaks at low zoom, fine detail at high zoom)
+- ✅ **Rich Icon System**: Dedicated icons and color coding for 20+ categories (Hospital, Bank, Mall, Fuel, etc.)
+- ✅ **Smart Labels**: Text labels appear dynamically based on zoom level and POI importance.
+
 ---
 
 ## 🧭 NAVIGATION & ROUTING
@@ -737,6 +743,12 @@ lib/
 #### DemoService
 - Demo data generation
 - Demo mode utilities
+
+#### OverpassPoiService
+- OpenStreetMap Overpass API integration
+- Tag-based POI querying (Amenity, Shop, Tourism, etc.)
+- Zoom-tiered query generation for optimal performance
+- Raw OSM tag parsing and category mapping
 
 ### Providers (Riverpod)
 

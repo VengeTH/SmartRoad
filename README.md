@@ -112,6 +112,11 @@ smartroad/
   - **Distance Indicators**: Each search result displays route distance on the right side
   - **Loading State**: Small spinner appears next to distance while route is being calculated
   - **Fallback Distance**: Straight-line distance shown immediately, replaced by route distance when available
+- **Ambient Landmarks**: 
+  - Dynamically shows POIs (restaurants, schools, fuel, etc.) based on zoom level
+  - Powered by **OpenStreetMap Overpass API** for reliable landmark data
+  - Rich icons and color-coding for 20+ categories (Hospital, Bank, Mall, etc.)
+  - Optimized for performance with zoom-tiered loading (major landmarks at low zoom, fine detail at high zoom)
 - **Current Location**: Real-time location tracking with platform-specific optimizations
 - **Map Controls**: Zoom in/out, center on location, filter panel
   - **Zoom Limits**: Restricted to Philippines area (minZoom: 6.8, maxZoom: 18.0)

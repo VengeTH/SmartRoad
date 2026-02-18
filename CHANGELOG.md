@@ -4,6 +4,30 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
+## Version 2.8.1 - Ambient Landmarks & Map Polish
+
+**Release Date:** February 2026
+**Focus:** Visual Map Enhancements & POI Reliability
+**Status:** Production Ready (Demo Mode Only)
+
+### Ambient Landmarks
+- **Dynamic POI Display**: Replaced unreliable keyword search with **OpenStreetMap Overpass API**
+- **Zoom-Tiered Loading**:
+  - **Zoom 10-11**: Major landmarks (Hospitals, Malls, Terminals, Airports)
+  - **Zoom 12-13**: + Schools, Banks, Fuel Stations, Hotels
+  - **Zoom 14+**: + Restaurants, ATMs, Pharmacies, Parks, and more
+- **Rich Icon System**:
+  - Dedicated icons and color coding for **20+ categories**
+  - Examples: 🏥 Hospital (Red), ⛽ Fuel (Amber), 🎓 School (Orange), 🍽️ Restaurant (Green)
+- **Smart Labels**: Text labels appear dynamically based on zoom level and POI importance (e.g. major malls show labels earlier than small shops)
+
+### Technical Improvements
+- **OverpassPoiService**: New service for efficient, tag-based OSM queries
+- **Performance**: Reduced API calls by fetching POIs for the entire viewport in a single optimized query
+- **Code Cleanup**: Removed legacy Nominatim keyword search logic
+
+---
+
 ## Version 2.8.0 - Smart ETA: Vehicle Type, Weather & Traffic Light Awareness
 
 **Release Date:** February 2026

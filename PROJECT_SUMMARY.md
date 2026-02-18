@@ -25,6 +25,10 @@
 - ✅ Hazard filtering (type, severity, expiry)
 - ✅ Filter panel with slide-out animation
 - ✅ Map controls (zoom, center on location)
+- ✅ Ambient Landmarks (v2.8.1)
+  - ✅ Dynamically loaded POIs via Overpass API
+  - ✅ Zoom-tiered display (Major landmarks → Fine detail)
+  - ✅ Rich icons & colors for 20+ categories
 
 ### 3. Navigation & Routing
 - ✅ Multi-vehicle routing (Big Bike, Motorcycle, Car, Truck, Pedestrian)

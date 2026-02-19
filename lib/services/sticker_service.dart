@@ -1,7 +1,9 @@
 /// * Sticker Service
 /// * Handles all sticker and HOA-related database operations
-import "../models/sticker.dart";
-import "../services/supabase_service.dart";
+import '../models/sticker.dart';
+import '../models/gate_access_log.dart';
+import '../models/hoa_day_pass.dart';
+import '../services/supabase_service.dart';
 
 class StickerService {
   final SupabaseService _supabaseService = SupabaseService();
@@ -286,6 +288,227 @@ class StickerService {
     }
   }
   
+  /// * Log a gate access event (called by guard after scanning QR)
+  /// * Returns the created log entry, or null on failure
+  Future<GateAccessLog?> logGateAccess({
+    required String hoaId,
+    required String userId,
+    required bool accessGranted,
+    String? stickerId,
+    String? scannedBy,
+    GatePassMode passMode = GatePassMode.locationBound,
+    String? notes,
+  }) async {
+    // * Always attempt to get the HOA name for the log
+    final hoa = await getHOAById(hoaId);
+    final hoaName = hoa?.name ?? 'Unknown HOA';
+    final now = DateTime.now();
+
+    if (_supabaseService.isDemoMode) {
+      // * Demo mode: return an in-memory log entry without persisting
+      return GateAccessLog(
+        id: 'demo-log-${now.millisecondsSinceEpoch}',
+        stickerId: stickerId,
+        hoaId: hoaId,
+        hoaName: hoaName,
+        userId: userId,
+        scannedBy: scannedBy,
+        scanTime: now,
+        accessGranted: accessGranted,
+        passMode: passMode,
+        notes: notes,
+        createdAt: now,
+      );
+    }
+
+    final client = _supabaseService.client;
+    if (client == null) return null;
+
+    try {
+      final response = await client
+          .from('gate_access_logs')
+          .insert({
+            'hoa_id': hoaId,
+            'user_id': userId,
+            'access_granted': accessGranted,
+            if (stickerId != null) 'sticker_id': stickerId,
+            if (scannedBy != null) 'scanned_by': scannedBy,
+            'pass_mode': passMode.value,
+            if (notes != null) 'notes': notes,
+          })
+          .select('''
+            *,
+            hoas:hoa_id (id, name)
+          ''')
+          .single();
+
+      final data = Map<String, dynamic>.from(response);
+      final hoaData = data['hoas'] as Map<String, dynamic>?;
+      if (hoaData != null) data['hoa_name'] = hoaData['name'];
+      return GateAccessLog.fromJson(data);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// * Get gate access history for a user (transaction history)
+  Future<List<GateAccessLog>> getUserAccessHistory(
+    String userId, {
+    int limit = 50,
+  }) async {
+    if (_supabaseService.isDemoMode) {
+      return _getDemoAccessLogs(userId);
+    }
+
+    final client = _supabaseService.client;
+    if (client == null) return [];
+
+    try {
+      final response = await client
+          .from('gate_access_logs')
+          .select('''
+            *,
+            hoas:hoa_id (id, name)
+          ''')
+          .eq('user_id', userId)
+          .order('scan_time', ascending: false)
+          .limit(limit);
+
+      return (response as List).map((item) {
+        final data = Map<String, dynamic>.from(item);
+        final hoaData = data['hoas'] as Map<String, dynamic>?;
+        if (hoaData != null) data['hoa_name'] = hoaData['name'];
+        return GateAccessLog.fromJson(data);
+      }).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// * Get access history for a specific HOA (guard/admin view)
+  Future<List<GateAccessLog>> getHoaAccessHistory(
+    String hoaId, {
+    int limit = 100,
+  }) async {
+    if (_supabaseService.isDemoMode) {
+      return _getDemoAccessLogs(null, hoaId: hoaId);
+    }
+
+    final client = _supabaseService.client;
+    if (client == null) return [];
+
+    try {
+      final response = await client
+          .from('gate_access_logs')
+          .select('''
+            *,
+            hoas:hoa_id (id, name)
+          ''')
+          .eq('hoa_id', hoaId)
+          .order('scan_time', ascending: false)
+          .limit(limit);
+
+      return (response as List).map((item) {
+        final data = Map<String, dynamic>.from(item);
+        final hoaData = data['hoas'] as Map<String, dynamic>?;
+        if (hoaData != null) data['hoa_name'] = hoaData['name'];
+        return GateAccessLog.fromJson(data);
+      }).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// * Purchase a day pass for an HOA
+  Future<HoaDayPass?> purchaseDayPass({
+    required String userId,
+    required String hoaId,
+    GatePassMode passMode = GatePassMode.fullDay,
+  }) async {
+    final hoa = await getHOAById(hoaId);
+    final hoaName = hoa?.name ?? 'Unknown HOA';
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    if (_supabaseService.isDemoMode) {
+      return HoaDayPass(
+        id: 'demo-daypass-${now.millisecondsSinceEpoch}',
+        userId: userId,
+        hoaId: hoaId,
+        hoaName: hoaName,
+        validDate: today,
+        passMode: passMode,
+        isActive: true,
+        purchasedAt: now,
+        createdAt: now,
+      );
+    }
+
+    final client = _supabaseService.client;
+    if (client == null) return null;
+
+    try {
+      final dateStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final response = await client
+          .from('hoa_day_passes')
+          .upsert({
+            'user_id': userId,
+            'hoa_id': hoaId,
+            'valid_date': dateStr,
+            'pass_mode': passMode.value,
+            'is_active': true,
+          })
+          .select('''
+            *,
+            hoas:hoa_id (id, name)
+          ''')
+          .single();
+
+      final data = Map<String, dynamic>.from(response);
+      final hoaData = data['hoas'] as Map<String, dynamic>?;
+      if (hoaData != null) data['hoa_name'] = hoaData['name'];
+      return HoaDayPass.fromJson(data);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// * Get active day passes for a user
+  Future<List<HoaDayPass>> getUserDayPasses(String userId) async {
+    if (_supabaseService.isDemoMode) {
+      return []; // * No demo day passes by default
+    }
+
+    final client = _supabaseService.client;
+    if (client == null) return [];
+
+    try {
+      final today = DateTime.now();
+      final dateStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final response = await client
+          .from('hoa_day_passes')
+          .select('''
+            *,
+            hoas:hoa_id (id, name)
+          ''')
+          .eq('user_id', userId)
+          .eq('is_active', true)
+          .gte('valid_date', dateStr)
+          .order('purchased_at', ascending: false);
+
+      return (response as List).map((item) {
+        final data = Map<String, dynamic>.from(item);
+        final hoaData = data['hoas'] as Map<String, dynamic>?;
+        if (hoaData != null) data['hoa_name'] = hoaData['name'];
+        return HoaDayPass.fromJson(data);
+      }).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
   // * Demo Mode Methods
   
   List<Sticker> _getDemoStickers(String userId) {
@@ -332,6 +555,8 @@ class StickerService {
         description: "BF Resort Village",
         latitude: 14.4244,
         longitude: 120.9883,
+        passMode: HOAPassMode.both,
+        radiusMeters: 500,
         isActive: true,
         createdAt: now,
         updatedAt: now,
@@ -342,11 +567,62 @@ class StickerService {
         description: "BF Homes Parañaque",
         latitude: 14.5000,
         longitude: 121.0000,
+        passMode: HOAPassMode.locationBound,
+        radiusMeters: 400,
         isActive: true,
         createdAt: now,
         updatedAt: now,
       ),
     ];
+  }
+
+  List<GateAccessLog> _getDemoAccessLogs(String? userId, {String? hoaId}) {
+    final now = DateTime.now();
+    final uid = userId ?? 'demo-user-1';
+    final logs = [
+      GateAccessLog(
+        id: 'demo-log-1',
+        stickerId: 'demo-sticker-1',
+        hoaId: 'demo-hoa-1',
+        hoaName: 'BF Resort',
+        userId: uid,
+        scannedBy: 'demo-guard-1',
+        scanTime: now.subtract(const Duration(hours: 2)),
+        accessGranted: true,
+        passMode: GatePassMode.locationBound,
+        createdAt: now.subtract(const Duration(hours: 2)),
+      ),
+      GateAccessLog(
+        id: 'demo-log-2',
+        stickerId: 'demo-sticker-2',
+        hoaId: 'demo-hoa-2',
+        hoaName: 'BF Homes',
+        userId: uid,
+        scannedBy: 'demo-guard-2',
+        scanTime: now.subtract(const Duration(days: 1, hours: 3)),
+        accessGranted: true,
+        passMode: GatePassMode.fullDay,
+        createdAt: now.subtract(const Duration(days: 1, hours: 3)),
+      ),
+      GateAccessLog(
+        id: 'demo-log-3',
+        stickerId: null,
+        hoaId: 'demo-hoa-1',
+        hoaName: 'BF Resort',
+        userId: uid,
+        scannedBy: 'demo-guard-1',
+        scanTime: now.subtract(const Duration(days: 3)),
+        accessGranted: false,
+        passMode: GatePassMode.locationBound,
+        notes: 'Expired QR code',
+        createdAt: now.subtract(const Duration(days: 3)),
+      ),
+    ];
+
+    if (hoaId != null) {
+      return logs.where((l) => l.hoaId == hoaId).toList();
+    }
+    return logs;
   }
 }
 

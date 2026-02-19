@@ -85,6 +85,40 @@ enum HOAAccessType {
   residentsOnly,   // * Outsiders CANNOT buy a pass
 }
 
+/// * HOA Pass Mode Enum
+enum HOAPassMode {
+  locationBound, // * Pass is valid only inside HOA geofence
+  fullDay,       // * Pass is valid all day after entry scan
+  both,          // * Guard can choose per scan
+}
+
+extension HOAPassModeExtension on HOAPassMode {
+  String get value {
+    switch (this) {
+      case HOAPassMode.locationBound: return 'location_bound';
+      case HOAPassMode.fullDay:       return 'full_day';
+      case HOAPassMode.both:          return 'both';
+    }
+  }
+
+  String get displayName {
+    switch (this) {
+      case HOAPassMode.locationBound: return 'Location-Bound';
+      case HOAPassMode.fullDay:       return 'Day Pass';
+      case HOAPassMode.both:          return 'Location-Bound / Day Pass';
+    }
+  }
+
+  static HOAPassMode fromString(String? value) {
+    switch (value) {
+      case 'full_day':       return HOAPassMode.fullDay;
+      case 'both':           return HOAPassMode.both;
+      case 'location_bound':
+      default:               return HOAPassMode.locationBound;
+    }
+  }
+}
+
 /// * HOA (Homeowners Association) Model
 /// * Represents a gate/community that requires stickers
 class HOA {
@@ -94,6 +128,8 @@ class HOA {
   final double? latitude; // * Gate location
   final double? longitude;
   final HOAAccessType accessType; // * Access type: public_shortcut or residents_only
+  final HOAPassMode passMode;    // * Pass mode: location_bound | full_day | both
+  final int radiusMeters;         // * Geofence radius in meters for location_bound mode
   final bool isActive;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -105,6 +141,8 @@ class HOA {
     this.latitude,
     this.longitude,
     this.accessType = HOAAccessType.publicShortcut,
+    this.passMode = HOAPassMode.locationBound,
+    this.radiusMeters = 500,
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
@@ -126,7 +164,7 @@ class HOA {
           accessType = HOAAccessType.publicShortcut;
       }
     }
-    
+
     return HOA(
       id: json['id'] as String,
       name: json['name'] as String,
@@ -134,6 +172,8 @@ class HOA {
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       accessType: accessType,
+      passMode: HOAPassModeExtension.fromString(json['pass_mode'] as String?),
+      radiusMeters: (json['radius_meters'] as int?) ?? 500,
       isActive: (json['is_active'] as bool?) ?? true,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
@@ -147,9 +187,11 @@ class HOA {
       if (description != null) 'description': description,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
-      'access_type': accessType == HOAAccessType.publicShortcut 
-          ? 'public_shortcut' 
+      'access_type': accessType == HOAAccessType.publicShortcut
+          ? 'public_shortcut'
           : 'residents_only',
+      'pass_mode': passMode.value,
+      'radius_meters': radiusMeters,
       'is_active': isActive,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),

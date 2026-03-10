@@ -4,6 +4,39 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
+## Version 2.8.2 - Community Fuel Pricing Beta
+
+**Release Date:** March 2026
+**Focus:** Fuel station contributions, pricing workflows, and moderation tools
+**Status:** Production Ready (Demo Mode Only)
+
+### Fuel Domain Foundation
+- Added dedicated fuel models and payloads (`fuel_station`, `fuel_price`, reports, submissions)
+- Added fuel utility helpers for relative time, stale detection, confidence labels, and distance validation
+- Added local preferences support for persistent anonymous `device_id` and submission throttling metadata
+
+### Map + UX Integration
+- Fuel POIs now open a dedicated fuel detail sheet instead of generic place preview
+- Added persisted fuel station marker layer on map
+- Added multi-fuel update dialog supporting `91/95/97/diesel` in one submission
+- Added map long-press action: **Add Fuel Station**
+- Added stale-price and confidence indicator rendering in fuel detail UI
+
+### Backend + Admin Tooling
+- Added `supabase_fuel_schema.sql` with tables, indexes, RLS policies, and fuel RPCs
+- Added rate-limit and cooldown business rules (`5 submissions / 10 mins`, `15-minute station/fuel cooldown`)
+- Added admin screens:
+  - Fuel Station Review (approve/reject pending stations)
+  - Fuel Price Reports Review (review/dismiss incorrect-price reports)
+- Added admin entry points from Profile tools
+
+### Validation
+- Added targeted tests for fuel utilities: `test/utils/fuel_utils_test.dart`
+- Latest run: targeted fuel tests passing
+- Latest run: no fuel-related analyzer errors in modified fuel/map/admin files
+
+---
+
 ## Version 2.8.1 - Ambient Landmarks & Map Polish
 
 **Release Date:** February 2026

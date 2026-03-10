@@ -14,8 +14,10 @@ This guide explains how to access and test the newly added features in SmartRoad
    ```
 
 2. **Database Setup** (Optional - Demo Mode Available):
-   - If you have Supabase configured, run the updated `supabase_schema.sql` in your Supabase SQL Editor
-   - If not, the app will automatically use **Demo Mode** with sample data
+  - If you have Supabase configured, run `supabase_schema.sql` in Supabase SQL Editor
+  - Then run `supabase_places_schema.sql` (place comments/likes/photos/ratings)
+  - Then run `supabase_fuel_schema.sql` (fuel stations/prices/reports/admin RPCs)
+  - If not, the app will automatically use **Demo Mode** with sample data
 
 3. **Camera Permissions** (For Guard Scanner):
    - Android: Add to `android/app/src/main/AndroidManifest.xml`:
@@ -27,6 +29,51 @@ This guide explains how to access and test the newly added features in SmartRoad
      <key>NSCameraUsageDescription</key>
      <string>This app needs camera access to scan QR codes</string>
      ```
+
+4. **Run Validation Commands**:
+   ```bash
+   flutter analyze
+   flutter test
+   flutter test test/utils/fuel_utils_test.dart
+   ```
+
+---
+
+## ⛽ Fuel Feature Validation (March 2026)
+
+### Fuel Map Flow
+
+- [ ] Open map and zoom to a fuel POI area
+- [ ] Tap a fuel marker/POI and confirm the fuel station detail sheet appears
+- [ ] Confirm non-fuel POIs still open the place preview sheet
+
+### Fuel Price Submission Rules
+
+- [ ] Tap **Update Prices** and submit at `<= 50m` without photo (should pass)
+- [ ] Submit at `50m-200m` without photo (should block with photo-required message)
+- [ ] Submit at `50m-200m` with photo (should pass)
+- [ ] Attempt submit at `> 200m` (should reject)
+- [ ] Submit multiple fuel types in one action (`91/95/97/diesel` as selected)
+
+### Add Fuel Station Flow
+
+- [ ] Long-press map and open location options
+- [ ] Tap **Add Fuel Station**
+- [ ] Submit station with required metadata (`name`, `province`, `city`)
+- [ ] Confirm success toast appears and station enters pending admin queue
+
+### Fuel Admin Review Flow
+
+- [ ] Open **Profile → Fuel Station Review** (Admin)
+- [ ] Approve one pending station and verify it leaves pending list
+- [ ] Reject one pending station and verify it leaves pending list
+- [ ] Open **Profile → Fuel Price Reports** (Admin)
+- [ ] Mark one report as reviewed and one as dismissed
+
+### Automated Tests
+
+- [ ] `flutter test test/utils/fuel_utils_test.dart` passes
+- [ ] `flutter analyze` has no new fuel-related warnings/errors
 
 ---
 

@@ -14,6 +14,7 @@ import "../../providers/location_provider.dart";
 import "../../models/hazard.dart";
 import "../../models/place.dart";
 import "../../models/map_poi.dart";
+import "../../models/fuel_station.dart";
 import "../../models/navigation_avatar_style.dart";
 import "../../models/navigation_settings.dart";
 import "../../core/constants/app_constants.dart";
@@ -52,9 +53,13 @@ import "../../widgets/save_route_dialog.dart";
 import "../../widgets/route_creation_dialog.dart";
 import "../../providers/map_filter_provider.dart";
 import "../../providers/route_creation_provider.dart";
+import "../../providers/fuel_provider.dart";
 import "../../models/saved_route.dart";
 import "../../widgets/map_poi_marker.dart";
 import "../../widgets/user_location_marker.dart";
+import "../../widgets/fuel_station_detail_sheet.dart";
+import "../../widgets/multi_fuel_update_dialog.dart";
+import "../../widgets/add_fuel_station_dialog.dart";
 import "../../widgets/navigation_hazard_warning_banner.dart";
 import "../../widgets/navigation_speed_hud.dart";
 import "../../widgets/music_control_widget.dart";
@@ -377,6 +382,7 @@ class _LocationOptionsSheet extends StatelessWidget {
   final String? address;
   final VoidCallback onGetDirections;
   final VoidCallback onOpenCommunityPreview;
+  final VoidCallback onAddFuelStation;
   final VoidCallback onSaveLocation;
   final VoidCallback onViewOnMap;
   final VoidCallback onShare;
@@ -387,6 +393,7 @@ class _LocationOptionsSheet extends StatelessWidget {
     this.address,
     required this.onGetDirections,
     required this.onOpenCommunityPreview,
+    required this.onAddFuelStation,
     required this.onSaveLocation,
     required this.onViewOnMap,
     required this.onShare,
@@ -542,6 +549,28 @@ class _LocationOptionsSheet extends StatelessWidget {
                       },
                       icon: const Icon(Icons.photo_library_outlined),
                       label: const Text("Photos & Comments"),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppTheme.spacingMD,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusMD,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spacingMD),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        onAddFuelStation();
+                      },
+                      icon: const Icon(Icons.local_gas_station_outlined),
+                      label: const Text("Add Fuel Station"),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
                           vertical: AppTheme.spacingMD,
@@ -739,6 +768,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   double? _currentHeadingDegrees;
   Hazard? _selectedHazard;
   Place? _selectedPlace;
+  FuelStation? _selectedFuelStation;
   List<Place> _knownPlaces = [];
   List<MapPoi> _dynamicPois = [];
   bool _isLoadingDynamicPois = false;
@@ -2198,9 +2228,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               setState(() {
                 _selectedPlace = communityPlace;
                 _selectedHazard = null;
+                _selectedFuelStation = null;
                 _showSearchResults = false;
               });
               _searchFocusNode.unfocus();
+            },
+            onAddFuelStation: () {
+              Navigator.of(context).pop();
+              if (!mounted) return;
+              _showAddFuelStationDialog(location);
             },
             onSaveLocation: () {
               Navigator.of(context).pop();
@@ -5400,6 +5436,34 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
+  void _showMultiFuelUpdateDialog(FuelStation station) {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return MultiFuelUpdateDialog(
+          station: station,
+          onSuccess: () {
+            _onMapMoved();
+          },
+        );
+      },
+    );
+  }
+
+  void _showAddFuelStationDialog(LatLng location) {
+    showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AddFuelStationDialog(
+          location: location,
+          onSuccess: () {
+            _onMapMoved();
+          },
+        );
+      },
+    );
+  }
+
   /// * Share location
   void _shareLocation(Map<String, dynamic> result, LatLng location) {
     // * TODO: Implement share functionality
@@ -6234,6 +6298,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _currentLocation.latitude + offset,
         _currentLocation.longitude + offset,
       );
+      ref.read(mapFuelStationsProvider.notifier).loadStationsInBounds(
+        minLat: _currentLocation.latitude - offset,
+        maxLat: _currentLocation.latitude + offset,
+        minLon: _currentLocation.longitude - offset,
+        maxLon: _currentLocation.longitude + offset,
+      );
       // * Removed verbose logging to prevent console overflow
     } catch (e, stackTrace) {
       debugPrint("❌ [MapScreen] ERROR in _onMapReady: $e");
@@ -6268,6 +6338,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _currentLocation.longitude - offset,
         _currentLocation.latitude + offset,
         _currentLocation.longitude + offset,
+      );
+      ref.read(mapFuelStationsProvider.notifier).loadStationsInBounds(
+        minLat: _currentLocation.latitude - offset,
+        maxLat: _currentLocation.latitude + offset,
+        minLon: _currentLocation.longitude - offset,
+        maxLon: _currentLocation.longitude + offset,
       );
       _scheduleDynamicPoiRefresh();
       // * Removed verbose logging to prevent console overflow
@@ -6389,8 +6465,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final showRecents =
           _searchController.text.trim().isEmpty &&
           (_recentLocations.isNotEmpty || _isLoadingRecents);
+        final fuelStationsAsync = ref.watch(mapFuelStationsProvider);
+        final fuelStations = fuelStationsAsync.valueOrNull ?? const <FuelStation>[];
       final showKnownPlaces = !_isNavigating && mapZoom >= _knownPlacesMinZoom;
       final showDynamicPois = !_isNavigating && mapZoom >= _dynamicPoisMinZoom;
+        final showFuelStations = !_isNavigating && mapZoom >= 12.0;
       final showHazardMarkers = mapZoom >= _knownPlacesMinZoom;
       final showHoaMarkers = !_isNavigating && mapZoom >= 13.0;
 
@@ -6696,6 +6775,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       setState(() {
                         _selectedHazard = null;
                         _selectedPlace = null;
+                        _selectedFuelStation = null;
                         _showSearchResults = false;
                         _searchFocusNode.unfocus();
                       });
@@ -7238,9 +7318,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   aliases: const [],
                                 );
                                 setState(() {
-                                  // * Show the same place preview UI for dynamic POIs so users
-                                  // * can upload moderated photos / comment / like (community-style).
-                                  _selectedPlace = communityPlace;
+                                  if (category == 'fuel') {
+                                    _selectedFuelStation = FuelStation(
+                                      id: poi.id,
+                                      name: poi.name,
+                                      latitude: poi.latitude,
+                                      longitude: poi.longitude,
+                                      brand: null,
+                                      province: "",
+                                      city: "",
+                                      region: null,
+                                      verified: false,
+                                      source: "osm",
+                                      prices: const [],
+                                      createdAt: DateTime.now(),
+                                      updatedAt: DateTime.now(),
+                                    );
+                                    _selectedPlace = null;
+                                  } else {
+                                    // * Show the same place preview UI for non-fuel dynamic POIs.
+                                    _selectedPlace = communityPlace;
+                                    _selectedFuelStation = null;
+                                  }
                                   _selectedHazard = null;
                                   _showSearchResults = false;
                                 });
@@ -7249,6 +7348,42 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             ),
                           );
                         }).toList(),
+                  ),
+                if (showFuelStations && fuelStations.isNotEmpty)
+                  MarkerLayer(
+                    markers: fuelStations
+                        .map(
+                          (station) => Marker(
+                            point: station.location,
+                            width: 40,
+                            height: 40,
+                            child: GestureDetector(
+                              onTap: () {
+                                if (!mounted) return;
+                                setState(() {
+                                  _selectedFuelStation = station;
+                                  _selectedPlace = null;
+                                  _selectedHazard = null;
+                                  _showSearchResults = false;
+                                });
+                                _searchFocusNode.unfocus();
+                              },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: AppTheme.warningColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                ),
+                                child: const Icon(
+                                  Icons.local_gas_station,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
                 // * Hazard markers
                 if (showHazardMarkers)
@@ -7276,6 +7411,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                       setState(() {
                                         _selectedHazard = hazard;
                                         _selectedPlace = null;
+                                        _selectedFuelStation = null;
                                       });
                                     }
                                   },
@@ -8048,6 +8184,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       setState(() {
                         _selectedHazard = _navigationHazardWarning;
                         _selectedPlace = null;
+                        _selectedFuelStation = null;
                       });
                     },
                   ),
@@ -8070,6 +8207,30 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     if (mounted) {
                       setState(() => _selectedPlace = null);
                     }
+                  },
+                ),
+              ),
+            if (_selectedFuelStation != null && !_isNavigating)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: FuelStationDetailSheet(
+                  station: _selectedFuelStation!,
+                  onGetDirections: () {
+                    final destination = _selectedFuelStation!.location;
+                    if (mounted) {
+                      setState(() => _selectedFuelStation = null);
+                    }
+                    _openDirections(destination);
+                  },
+                  onClose: () {
+                    if (mounted) {
+                      setState(() => _selectedFuelStation = null);
+                    }
+                  },
+                  onUpdatePrices: () {
+                    final station = _selectedFuelStation;
+                    if (station == null) return;
+                    _showMultiFuelUpdateDialog(station);
                   },
                 ),
               ),

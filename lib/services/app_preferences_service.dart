@@ -286,5 +286,174 @@ class AppPreferencesService {
 
     await box.put(_keyDefaultMusicAppId, normalized);
   }
+
+  // ============================================================
+  // * FUEL COMMUNITY SETTINGS (ANONYMOUS DEVICE ID + RATE LIMITING)
+  // ============================================================
+
+  static const String _keyFuelDeviceId = "fuel_device_id_v1";
+  static const String _keyFuelSubmissionLog = "fuel_submission_log_v1";
+
+  /// * Get or create persistent anonymous device ID for fuel submissions.
+  Future<String> getFuelDeviceId() async {
+    final box = await _ensureBox();
+    final existing = box.get(_keyFuelDeviceId);
+    
+    if (existing is String && existing.trim().isNotEmpty) {
+      return existing.trim();
+    }
+
+    // * Generate new device ID (simple timestamp + random suffix)
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final random = (now % 100000).toString().padLeft(5, '0');
+    final deviceId = "device_$now$random";
+    
+    await box.put(_keyFuelDeviceId, deviceId);
+    return deviceId;
+  }
+
+  /// * Record a fuel submission locally for rate-limit UX feedback.
+  /// *
+  /// * This provides immediate feedback before server validation.
+  /// * Structure: { stationId: { fuelType: [timestamp1, timestamp2, ...] } }
+  Future<void> recordFuelSubmission({
+    required String stationId,
+    required String fuelType,
+  }) async {
+    final box = await _ensureBox();
+    final now = DateTime.now();
+    
+    // * Load existing log
+    final raw = box.get(_keyFuelSubmissionLog);
+    Map<String, dynamic> log = {};
+    
+    if (raw is String && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          log = decoded;
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint("❌ [AppPreferencesService] Failed to parse fuel log: $e");
+        }
+      }
+    }
+
+    // * Add new submission timestamp
+    final stationData = log[stationId] as Map<String, dynamic>? ?? {};
+    final timestamps = stationData[fuelType] as List? ?? [];
+    timestamps.add(now.toIso8601String());
+    stationData[fuelType] = timestamps;
+    log[stationId] = stationData;
+
+    // * Clean up old entries (keep last 20 per station)
+    for (final stKey in log.keys.toList()) {
+      final stData = log[stKey] as Map<String, dynamic>? ?? {};
+      for (final ftKey in stData.keys.toList()) {
+        final tsList = stData[ftKey] as List? ?? [];
+        if (tsList.length > 20) {
+          stData[ftKey] = tsList.sublist(tsList.length - 20);
+        }
+      }
+      log[stKey] = stData;
+    }
+
+    // * Save back
+    final encoded = jsonEncode(log);
+    await box.put(_keyFuelSubmissionLog, encoded);
+  }
+
+  /// * Check if local rate limit allows submission (client-side mirror).
+  /// *
+  /// * Returns true if submission is allowed, false if rate-limited.
+  /// * Rules: max 5 submissions per fuel type in 10 minutes.
+  Future<bool> checkFuelRateLimit({
+    required String stationId,
+    required String fuelType,
+  }) async {
+    final box = await _ensureBox();
+    final raw = box.get(_keyFuelSubmissionLog);
+    
+    if (raw == null || raw is! String || raw.trim().isEmpty) {
+      return true; // * No log yet, allow
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return true;
+
+      final stationData = decoded[stationId] as Map<String, dynamic>?;
+      if (stationData == null) return true;
+
+      final timestamps = stationData[fuelType] as List?;
+      if (timestamps == null || timestamps.isEmpty) return true;
+
+      // * Count submissions in last 10 minutes
+      final cutoff = DateTime.now().subtract(const Duration(minutes: 10));
+      final recentCount = timestamps.where((ts) {
+        if (ts is! String) return false;
+        final dt = DateTime.tryParse(ts);
+        if (dt == null) return false;
+        return dt.isAfter(cutoff);
+      }).length;
+
+      return recentCount < 5;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint("❌ [AppPreferencesService] Failed to check rate limit: $e");
+      }
+      return true; // * Allow on error
+    }
+  }
+
+  /// * Check if station/fuel cooldown allows submission (15 minute cooldown).
+  /// *
+  /// * Returns true if submission is allowed, false if still on cooldown.
+  Future<bool> checkFuelCooldown({
+    required String stationId,
+    required String fuelType,
+  }) async {
+    final box = await _ensureBox();
+    final raw = box.get(_keyFuelSubmissionLog);
+    
+    if (raw == null || raw is! String || raw.trim().isEmpty) {
+      return true; // * No log yet, allow
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return true;
+
+      final stationData = decoded[stationId] as Map<String, dynamic>?;
+      if (stationData == null) return true;
+
+      final timestamps = stationData[fuelType] as List?;
+      if (timestamps == null || timestamps.isEmpty) return true;
+
+      // * Get most recent timestamp
+      final lastTsStr = timestamps.last as String?;
+      if (lastTsStr == null) return true;
+
+      final lastTs = DateTime.tryParse(lastTsStr);
+      if (lastTs == null) return true;
+
+      // * Check if 15 minutes have passed
+      final now = DateTime.now();
+      final diff = now.difference(lastTs);
+      return diff.inMinutes >= 15;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint("❌ [AppPreferencesService] Failed to check cooldown: $e");
+      }
+      return true; // * Allow on error
+    }
+  }
+
+  /// * Clear fuel submission log (for testing or reset).
+  Future<void> clearFuelSubmissionLog() async {
+    final box = await _ensureBox();
+    await box.delete(_keyFuelSubmissionLog);
+  }
 }
 

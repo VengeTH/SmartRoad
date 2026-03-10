@@ -117,6 +117,15 @@ smartroad/
   - Powered by **OpenStreetMap Overpass API** for reliable landmark data
   - Rich icons and color-coding for 20+ categories (Hospital, Bank, Mall, etc.)
   - Optimized for performance with zoom-tiered loading (major landmarks at low zoom, fine detail at high zoom)
+- **Community Fuel Pricing (Beta)**:
+  - Fuel POIs open a dedicated fuel station sheet
+  - Multi-fuel submissions in one action (`91`, `95`, `97`, `diesel`)
+  - Distance/photo rules for submissions:
+    - `<= 50m`: no photo required
+    - `50m-200m`: photo required
+    - `> 200m`: submission rejected
+  - Long-press map supports `Add Fuel Station`
+  - Admin review tools for pending stations and incorrect price reports
 - **Current Location**: Real-time location tracking with platform-specific optimizations
 - **Map Controls**: Zoom in/out, center on location, filter panel
   - **Zoom Limits**: Restricted to Philippines area (minZoom: 6.8, maxZoom: 18.0)
@@ -261,6 +270,7 @@ flutter pub get
    - Copy and paste the contents of `supabase_schema.sql`
    - Execute the script
    - Then run `supabase_places_schema.sql` to enable place previews (comments/likes/photos/ratings)
+  - Then run `supabase_fuel_schema.sql` to enable fuel stations/prices/reports/admin RPCs
 4. Create Storage Buckets:
    - Go to Storage in Supabase dashboard
    - Create a bucket named `hazard-images` (for hazard photos)
@@ -269,6 +279,8 @@ flutter pub get
      - Set file size limit to 5MB
    - Create a bucket or folder for `stickers` (for physical sticker photos)
      - Same configuration as hazard-images
+   - Create `fuel-proofs` bucket (for fuel price proof photos)
+   - Create `fuel-stations` bucket (for station submission photos)
 
 **Current Status:** The app automatically uses **Demo Mode** with sample data. No database setup is required at this time.
 

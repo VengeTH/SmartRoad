@@ -11,6 +11,8 @@ import "../gate/gate_pass_screen.dart";
 import "../gate/guard_scanner_screen.dart";
 import "../stickers/manage_stickers_screen.dart";
 import "../admin/place_photo_review_screen.dart";
+import "../admin/fuel_station_review_screen.dart";
+import "../admin/fuel_price_report_review_screen.dart";
 import "../about/about_screen.dart";
 import "navigation_settings_screen.dart";
 import "../../widgets/music_control_settings_card.dart";
@@ -833,6 +835,122 @@ class _ProfileContentState extends State<_ProfileContent> {
                             const SizedBox(height: 4),
                             Text(
                               "Review pending place photos for safety & accuracy",
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: AppTheme.textTertiary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppTheme.spacingMD),
+            Card(
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const FuelStationReviewScreen(),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppTheme.spacingMD),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(AppTheme.spacingMD),
+                        decoration: BoxDecoration(
+                          color: AppTheme.infoColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                        ),
+                        child: Icon(
+                          Icons.local_gas_station,
+                          color: AppTheme.infoColor,
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(width: AppTheme.spacingMD),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Fuel Station Review",
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "Review pending community fuel stations",
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: AppTheme.textTertiary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppTheme.spacingMD),
+            Card(
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const FuelPriceReportReviewScreen(),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppTheme.spacingMD),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(AppTheme.spacingMD),
+                        decoration: BoxDecoration(
+                          color: AppTheme.warningColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                        ),
+                        child: Icon(
+                          Icons.flag,
+                          color: AppTheme.warningColor,
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(width: AppTheme.spacingMD),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Fuel Price Reports",
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "Review incorrect price reports from community",
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: AppTheme.textSecondary,
                               ),

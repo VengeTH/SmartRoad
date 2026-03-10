@@ -11,7 +11,7 @@ import "../main_navigation_screen.dart";
 /// * Premium login screen with animations and branding
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
-  
+
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
@@ -23,31 +23,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   final _passwordController = TextEditingController();
   final _emailFocusNode = FocusNode();
   final _passwordFocusNode = FocusNode();
-  
+
   bool _isLoading = false;
   bool _obscurePassword = true;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-  
+
   @override
   void initState() {
     super.initState();
     _emailController.text = AppConstants.demoEmail;
-    
+
     // * Setup animations
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     );
-    
+
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
         curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
       ),
     );
-    
+
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.3),
       end: Offset.zero,
@@ -57,15 +57,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         curve: const Interval(0.2, 1.0, curve: Curves.easeOutCubic),
       ),
     );
-    
+
     _animationController.forward();
-    
+
     // * Auto-focus email field
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _emailFocusNode.requestFocus();
     });
   }
-  
+
   @override
   void dispose() {
     _animationController.dispose();
@@ -75,35 +75,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     _passwordFocusNode.dispose();
     super.dispose();
   }
-  
+
   Future<void> _handleLogin() async {
     final formState = _formKey.currentState;
     if (formState == null || !formState.validate()) return;
-    
+
     // * Dismiss keyboard
     FocusScope.of(context).unfocus();
-    
+
     setState(() => _isLoading = true);
-    
+
     // * Add haptic feedback
     HapticFeedback.mediumImpact();
-    
+
     try {
       final email = _emailController.text.trim();
       final password = _passwordController.text;
-      
+
       await SupabaseService().signIn(email, password);
-      
+
       if (mounted) {
         HapticFeedback.lightImpact();
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const MainNavigationScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
-              );
+            pageBuilder:
+                (context, animation, secondaryAnimation) =>
+                    const MainNavigationScreen(),
+            transitionsBuilder: (
+              context,
+              animation,
+              secondaryAnimation,
+              child,
+            ) {
+              return FadeTransition(opacity: animation, child: child);
             },
             transitionDuration: const Duration(milliseconds: 300),
           ),
@@ -118,9 +122,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               children: [
                 const Icon(Icons.error_outline, color: Colors.white),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: Text("Login failed: ${e.toString()}"),
-                ),
+                Expanded(child: Text("Login failed: ${e.toString()}")),
               ],
             ),
             backgroundColor: AppTheme.errorColor,
@@ -137,17 +139,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       }
     }
   }
-  
+
   Future<void> _handleDemoLogin() async {
     // * Dismiss keyboard
     FocusScope.of(context).unfocus();
-    
+
     setState(() => _isLoading = true);
     HapticFeedback.mediumImpact();
-    
+
     try {
       final service = SupabaseService();
-      
+
       // * Check if in demo mode
       if (service.isDemoMode) {
         service.markDemoAuthenticated();
@@ -156,30 +158,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         final demoUser = User(
           id: SupabaseService.demoUserId,
           appMetadata: {},
-          userMetadata: {
-            'name': 'Demo User',
-            'email': AppConstants.demoEmail,
-          },
+          userMetadata: {'name': 'Demo User', 'email': AppConstants.demoEmail},
           aud: 'authenticated',
           createdAt: DateTime.now().toIso8601String(),
         );
 
         // * Set demo user in state
         ref.read(demoUserStateProvider.notifier).state = demoUser;
-        
+
         // * Small delay for better UX
         await Future.delayed(const Duration(milliseconds: 300));
-        
+
         if (mounted) {
           HapticFeedback.lightImpact();
           Navigator.of(context).pushReplacement(
             PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => const MainNavigationScreen(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: child,
-                );
+              pageBuilder:
+                  (context, animation, secondaryAnimation) =>
+                      const MainNavigationScreen(),
+              transitionsBuilder: (
+                context,
+                animation,
+                secondaryAnimation,
+                child,
+              ) {
+                return FadeTransition(opacity: animation, child: child);
               },
               transitionDuration: const Duration(milliseconds: 300),
             ),
@@ -187,25 +190,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         }
       } else {
         // * Regular login
-        await service.signIn(
-        AppConstants.demoEmail,
-        AppConstants.demoPassword,
-      );
-      
-      if (mounted) {
-        HapticFeedback.lightImpact();
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const MainNavigationScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: child,
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 300),
-          ),
-        );
+        await service.signIn(AppConstants.demoEmail, AppConstants.demoPassword);
+
+        if (mounted) {
+          HapticFeedback.lightImpact();
+          Navigator.of(context).pushReplacement(
+            PageRouteBuilder(
+              pageBuilder:
+                  (context, animation, secondaryAnimation) =>
+                      const MainNavigationScreen(),
+              transitionsBuilder: (
+                context,
+                animation,
+                secondaryAnimation,
+                child,
+              ) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+              transitionDuration: const Duration(milliseconds: 300),
+            ),
+          );
         }
       }
     } catch (e) {
@@ -216,20 +220,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         final demoUser = User(
           id: SupabaseService.demoUserId,
           appMetadata: {},
-          userMetadata: {
-            'name': 'Demo User',
-            'email': AppConstants.demoEmail,
-          },
+          userMetadata: {'name': 'Demo User', 'email': AppConstants.demoEmail},
           aud: 'authenticated',
           createdAt: DateTime.now().toIso8601String(),
         );
         ref.read(demoUserStateProvider.notifier).state = demoUser;
-        
+
         if (mounted) {
           Navigator.of(context).pushReplacement(
             PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => const MainNavigationScreen(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              pageBuilder:
+                  (context, animation, secondaryAnimation) =>
+                      const MainNavigationScreen(),
+              transitionsBuilder: (
+                context,
+                animation,
+                secondaryAnimation,
+                child,
+              ) {
                 return FadeTransition(opacity: animation, child: child);
               },
               transitionDuration: const Duration(milliseconds: 300),
@@ -237,26 +245,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           );
         }
       } else {
-      if (mounted) {
-        HapticFeedback.heavyImpact();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text("Demo login failed: ${e.toString()}"),
-                ),
-              ],
+        if (mounted) {
+          HapticFeedback.heavyImpact();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text("Demo login failed: ${e.toString()}")),
+                ],
+              ),
+              backgroundColor: AppTheme.errorColor,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+              ),
             ),
-            backgroundColor: AppTheme.errorColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-            ),
-          ),
-        );
+          );
         }
       }
     } finally {
@@ -281,8 +287,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            const MainNavigationScreen(),
+        pageBuilder:
+            (context, animation, secondaryAnimation) =>
+                const MainNavigationScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -304,10 +311,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         return AlertDialog(
           title: Row(
             children: [
-              const Icon(
-                Icons.info_outline_rounded,
-                color: AppTheme.infoColor,
-              ),
+              const Icon(Icons.info_outline_rounded, color: AppTheme.infoColor),
               const SizedBox(width: AppTheme.spacingSM),
               Text(
                 "Demo Account",
@@ -352,13 +356,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       },
     );
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
     final isWide = size.width >= 980;
-    
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
       body: Stack(
@@ -385,39 +389,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         opacity: _fadeAnimation,
                         child: SlideTransition(
                           position: _slideAnimation,
-                          child: isWide
-                              ? Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Expanded(
-                                      child: _buildStoryPanel(
-                                        theme,
-                                        compact: isCompactHeight,
+                          child:
+                              isWide
+                                  ? Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Expanded(
+                                        child: _buildStoryPanel(
+                                          theme,
+                                          compact: isCompactHeight,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(width: AppTheme.spacingXL),
-                                    ConstrainedBox(
-                                      constraints:
-                                          const BoxConstraints(maxWidth: 520),
-                                      child: _buildLoginCard(
-                                        theme,
-                                        isWide: true,
-                                        compact: isCompactHeight,
-                                        showHeader: false,
+                                      const SizedBox(width: AppTheme.spacingXL),
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 520,
+                                        ),
+                                        child: _buildLoginCard(
+                                          theme,
+                                          isWide: true,
+                                          compact: isCompactHeight,
+                                          showHeader: false,
+                                        ),
                                       ),
+                                    ],
+                                  )
+                                  : ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 520,
                                     ),
-                                  ],
-                                )
-                              : ConstrainedBox(
-                                  constraints:
-                                      const BoxConstraints(maxWidth: 520),
-                                  child: _buildLoginCard(
-                                    theme,
-                                    isWide: false,
-                                    compact: isCompactHeight,
-                                    showHeader: true,
+                                    child: _buildLoginCard(
+                                      theme,
+                                      isWide: false,
+                                      compact: isCompactHeight,
+                                      showHeader: true,
+                                    ),
                                   ),
-                                ),
                         ),
                       ),
                     ),
@@ -455,7 +463,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     ];
 
     return Container(
-      padding: EdgeInsets.all(compact ? AppTheme.spacingLG : AppTheme.spacingXL),
+      padding: EdgeInsets.all(
+        compact ? AppTheme.spacingLG : AppTheme.spacingXL,
+      ),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor.withOpacity(0.85),
         borderRadius: BorderRadius.circular(AppTheme.radiusXL),
@@ -525,15 +535,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             SizedBox(height: sectionSpacing),
             Row(
               children: [
-                _StoryStat(
-                  value: "14 cities",
-                  label: "Piloting across NCR",
-                ),
+                _StoryStat(value: "14 cities", label: "Piloting across NCR"),
                 const SizedBox(width: AppTheme.spacingXL),
-                _StoryStat(
-                  value: "1200+",
-                  label: "Hazards resolved",
-                ),
+                _StoryStat(value: "1200+", label: "Hazards resolved"),
               ],
             ),
           ],
@@ -559,13 +563,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }) {
     final buttonVerticalPadding =
         compact ? AppTheme.spacingSM : AppTheme.spacingMD;
-    final sectionSpacing =
-        compact ? AppTheme.spacingSM : AppTheme.spacingMD;
+    final sectionSpacing = compact ? AppTheme.spacingSM : AppTheme.spacingMD;
 
     return Form(
       key: _formKey,
       child: Container(
-        padding: EdgeInsets.all(compact ? AppTheme.spacingMD : AppTheme.spacingLG),
+        padding: EdgeInsets.all(
+          compact ? AppTheme.spacingMD : AppTheme.spacingLG,
+        ),
         decoration: BoxDecoration(
           color: AppTheme.surfaceColor,
           borderRadius: BorderRadius.circular(AppTheme.radiusXL),
@@ -586,8 +591,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     ),
                     decoration: BoxDecoration(
                       color: AppTheme.primaryColor.withOpacity(0.15),
-                      borderRadius:
-                          BorderRadius.circular(AppTheme.radiusFull),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusFull),
                     ),
                     child: Text(
                       "THE HEEDFUL",
@@ -629,10 +633,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               focusNode: _emailFocusNode,
               keyboardType: TextInputType.emailAddress,
               textInputAction: TextInputAction.next,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 16,
-              ),
+              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16),
               decoration: InputDecoration(
                 labelText: "Email",
                 prefixIcon: const Icon(
@@ -640,20 +641,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   color: AppTheme.textSecondary,
                   size: 22,
                 ),
-                suffixIcon: _emailController.text.isNotEmpty
-                    ? IconButton(
-                        tooltip: "Clear email",
-                        icon: const Icon(
-                          Icons.clear,
-                          size: 18,
-                          color: AppTheme.textSecondary,
-                        ),
-                        onPressed: () {
-                          _emailController.clear();
-                          setState(() {});
-                        },
-                      )
-                    : null,
+                suffixIcon:
+                    _emailController.text.isNotEmpty
+                        ? IconButton(
+                          tooltip: "Clear email",
+                          icon: const Icon(
+                            Icons.clear,
+                            size: 18,
+                            color: AppTheme.textSecondary,
+                          ),
+                          onPressed: () {
+                            _emailController.clear();
+                            setState(() {});
+                          },
+                        )
+                        : null,
               ),
               onFieldSubmitted: (_) {
                 _passwordFocusNode.requestFocus();
@@ -676,10 +678,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               focusNode: _passwordFocusNode,
               obscureText: _obscurePassword,
               textInputAction: TextInputAction.done,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 16,
-              ),
+              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16),
               onFieldSubmitted: (_) {
                 if (!_isLoading) {
                   _handleLogin();
@@ -729,23 +728,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 ),
                 elevation: 4,
               ),
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 22,
-                      width: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              child:
+                  _isLoading
+                      ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                        ),
+                      )
+                      : const Text(
+                        "Login",
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.4,
+                        ),
                       ),
-                    )
-                  : const Text(
-                      "Login",
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
             ),
             SizedBox(height: sectionSpacing),
             Row(
@@ -766,9 +768,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     label: const Text(
                       "Demo Mode",
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),
@@ -785,9 +785,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     label: const Text(
                       "Guest",
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),
@@ -878,16 +876,13 @@ class _StoryChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(AppTheme.radiusFull),
-        border: Border.all(
-          color: AppTheme.borderColor,
-          width: 1,
-        ),
+        border: Border.all(color: AppTheme.borderColor, width: 1),
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: AppTheme.textSecondary,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: AppTheme.textSecondary),
       ),
     );
   }
@@ -923,16 +918,9 @@ class _StoryFeature extends StatelessWidget {
             decoration: BoxDecoration(
               color: iconColor.withOpacity(0.14),
               borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-              border: Border.all(
-                color: iconColor.withOpacity(0.25),
-                width: 1,
-              ),
+              border: Border.all(color: iconColor.withOpacity(0.25), width: 1),
             ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: iconColor,
-            ),
+            child: Icon(icon, size: 20, color: iconColor),
           ),
           const SizedBox(width: AppTheme.spacingMD),
           Expanded(
@@ -968,10 +956,7 @@ class _StoryStat extends StatelessWidget {
   final String value;
   final String label;
 
-  const _StoryStat({
-    required this.value,
-    required this.label,
-  });
+  const _StoryStat({required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -1018,31 +1003,27 @@ class _DemoCredentialRow extends StatelessWidget {
   final String label;
   final String value;
   final bool isPassword;
-  
+
   const _DemoCredentialRow({
     required this.icon,
     required this.label,
     required this.value,
     this.isPassword = false,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     final displayValue = isPassword ? "•" * value.length : value;
 
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 16,
-          color: AppTheme.textTertiary,
-        ),
+        Icon(icon, size: 16, color: AppTheme.textTertiary),
         const SizedBox(width: 8),
         Text(
           "$label: ",
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppTheme.textTertiary,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AppTheme.textTertiary),
         ),
         Expanded(
           child: SelectableText(

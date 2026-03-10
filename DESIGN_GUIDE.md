@@ -270,7 +270,7 @@ SmartRoad supports **known-location previews** (e.g., malls, terminals) with com
   - Min: 24% (compact view)
   - Max: 95% (nearly full-screen for extended content)
   - Drag handle visible at top for discoverability
-- **Responsiveness**: 
+- **Responsiveness**:
   - Constrain max width on desktop (don't stretch full-width)
   - Drag handle shows pointer cursor on web/desktop for clarity
   - Touch-optimized sizing (48x5px handle) works on all devices
@@ -306,7 +306,7 @@ SmartRoad supports **known-location previews** (e.g., malls, terminals) with com
 
 - **Layout**: Similar expandable bottom sheet as place preview
   - Drag handle at top for discoverability
-- **Behavior**: 
+- **Behavior**:
   - Initial: 45% of screen height (80% when expanded via toggle)
   - Min: 24%
   - Max: 95%
@@ -320,7 +320,7 @@ All draggable bottom sheets should include a visible drag handle:
 - **Position**: Centered at top of sheet, 4px vertical margin
 - **Color**: Theme divider/border color with 80% opacity
 - **Shape**: Rounded pill (2.5px border radius)
-- **Interaction**: 
+- **Interaction**:
   - Mobile: Shows "Swipe to expand" tooltip
   - Desktop: Shows "Drag to expand or collapse" tooltip with grab cursor
   - Click and drag vertically to resize the sheet
@@ -336,7 +336,7 @@ All draggable bottom sheets should include a visible drag handle:
   - Same expand icons visible
   - Click + drag gesture for resizing
 - **Mobile-to-Mobile**: All mobile/tablet devices must have identical interaction patterns
-  - Same tooltips ("Swipe to expand")  
+  - Same tooltips ("Swipe to expand")
   - Touch-optimized drag handle sizing
   - Swipe gesture for resizing
 - **Desktop vs Mobile**: Different interaction patterns are acceptable when they improve platform-specific UX

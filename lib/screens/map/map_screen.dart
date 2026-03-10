@@ -739,8 +739,8 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen> {
   static const double _knownPlacesMinZoom =
-  9.0; // * Show curated places earlier as instant POI fallback
-    static const double _dynamicPoisMinZoom =
+      9.0; // * Show curated places earlier as instant POI fallback
+  static const double _dynamicPoisMinZoom =
       7.0; // * Show dynamic POIs earlier for better context
   static const double _navigationFollowZoom = 16.8;
   static const Duration _navigationCameraThrottle = Duration(milliseconds: 250);
@@ -1392,10 +1392,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         }
 
         final merged =
-            byNameBucket.values.toList()
-              ..sort(
-                (a, b) => (b.importance ?? 0).compareTo(a.importance ?? 0),
-              );
+            byNameBucket.values.toList()..sort(
+              (a, b) => (b.importance ?? 0).compareTo(a.importance ?? 0),
+            );
 
         final fuels =
             merged
@@ -1409,7 +1408,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 final cat = (p.category ?? p.type ?? "").toLowerCase();
                 if (cat == "fuel") return true;
                 for (final f in fuels) {
-                  if (_calculateHaversineDistance(p.location, f.location) < 80) {
+                  if (_calculateHaversineDistance(p.location, f.location) <
+                      80) {
                     return false;
                   }
                 }
@@ -1457,7 +1457,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         limit: 120,
       );
       if (!mounted) return;
-      final currentKey = _buildPoiRequestKey(zoom: _mapZoom, center: _mapCenter);
+      final currentKey = _buildPoiRequestKey(
+        zoom: _mapZoom,
+        center: _mapCenter,
+      );
       if (currentKey != requestKey) return;
 
       final fullLimited = buildLimited(
@@ -2096,7 +2099,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         "type": "fuel",
         "sr_kind": "fuel_station",
         "sr_station_id": s.id,
-        "sr_score": score + 30 + queryBoost(s.name), // * Prefer explicit fuel stations
+        "sr_score":
+            score + 30 + queryBoost(s.name), // * Prefer explicit fuel stations
       });
     }
 
@@ -6665,7 +6669,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // * Get position directly
       debugPrint("📍 [MapScreen] Getting current position...");
       final position = await locationService.getCurrentPosition(
-        desiredAccuracy: kIsWeb ? LocationAccuracy.medium : LocationAccuracy.high,
+        desiredAccuracy:
+            kIsWeb ? LocationAccuracy.medium : LocationAccuracy.high,
         timeLimit: const Duration(seconds: 4),
         preferCached: true,
       );
@@ -7044,7 +7049,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           _searchController.text.trim().isEmpty &&
           (_recentLocations.isNotEmpty || _isLoadingRecents);
       final selectedPlaceRecentMatch =
-          _selectedPlace == null ? null : _findRecentMatchForPlace(_selectedPlace!);
+          _selectedPlace == null
+              ? null
+              : _findRecentMatchForPlace(_selectedPlace!);
       final fuelStationsAsync = ref.watch(mapFuelStationsProvider);
       final fuelStations =
           fuelStationsAsync.valueOrNull ?? const <FuelStation>[];
@@ -7795,8 +7802,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   (mapZoom >= 15.0 && originalIndex < 15);
                               return showLabel ? 200.0 : 40.0;
                             },
-                            minPixelSpacing:
-                              20.0, // * Keep more POIs visible
+                            minPixelSpacing: 20.0, // * Keep more POIs visible
                             zoom: mapZoom,
                           );
                           return filtered;
@@ -8105,10 +8111,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceColor,
                     borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-                    border: Border.all(
-                      color: AppTheme.borderColor,
-                      width: 1.5,
-                    ),
+                    border: Border.all(color: AppTheme.borderColor, width: 1.5),
                     boxShadow: AppTheme.shadowLarge,
                   ),
                   child: Column(
@@ -8379,26 +8382,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                             ),
                                             Text(
                                               "Recent searches",
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .labelLarge
-                                                  ?.copyWith(
-                                                    color:
-                                                        AppTheme.textPrimary,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.labelLarge?.copyWith(
+                                                color: AppTheme.textPrimary,
+                                                fontWeight: FontWeight.w700,
+                                              ),
                                             ),
                                             const Spacer(),
                                             Text(
                                               _recentSummaryLabel(),
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .labelSmall
-                                                  ?.copyWith(
-                                                    color:
-                                                        AppTheme.textSecondary,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.labelSmall?.copyWith(
+                                                color: AppTheme.textSecondary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -8447,8 +8446,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                                     title: 'Gas stations',
                                                     query: 'gas station',
                                                     icon:
-                                                        Icons
-                                                            .local_gas_station,
+                                                        Icons.local_gas_station,
                                                   );
                                                 },
                                               ),
@@ -8579,7 +8577,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                                         .labelSmall
                                                         ?.copyWith(
                                                           color:
-                                                              AppTheme.textPrimary,
+                                                              AppTheme
+                                                                  .textPrimary,
                                                           fontWeight:
                                                               FontWeight.w700,
                                                         ),
@@ -8914,7 +8913,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   recentSearchMeta:
                       selectedPlaceRecentMatch == null
                           ? null
-                          : _formatRecentAge(selectedPlaceRecentMatch.updatedAt),
+                          : _formatRecentAge(
+                            selectedPlaceRecentMatch.updatedAt,
+                          ),
                   onGetDirections: () {
                     final destination = _selectedPlace!.location;
                     if (mounted) {

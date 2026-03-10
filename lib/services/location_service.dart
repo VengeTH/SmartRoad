@@ -9,29 +9,29 @@ class LocationService {
   static final LocationService _instance = LocationService._internal();
   factory LocationService() => _instance;
   LocationService._internal();
-  
+
   /// * Check and request location permissions
   Future<bool> requestPermission() async {
     try {
-    final status = await Permission.location.request();
-    return status.isGranted;
+      final status = await Permission.location.request();
+      return status.isGranted;
     } catch (e) {
       debugPrint("[LocationService] ERROR: Error requesting permission: $e");
       return false;
     }
   }
-  
+
   /// * Check if location permission is granted
   Future<bool> isPermissionGranted() async {
     try {
-    final status = await Permission.location.status;
-    return status.isGranted;
+      final status = await Permission.location.status;
+      return status.isGranted;
     } catch (e) {
       debugPrint("[LocationService] ERROR: Error checking permission: $e");
       return false;
     }
   }
-  
+
   /// * Get current position
   /// * Returns null if permission denied or location unavailable
   Future<Position?> getCurrentPosition({
@@ -41,7 +41,7 @@ class LocationService {
   }) async {
     try {
       // * Removed verbose logging to prevent console overflow
-      
+
       // * Check if permission is granted
       final hasPermission = await isPermissionGranted();
       if (!hasPermission) {
@@ -52,14 +52,14 @@ class LocationService {
           return null;
         }
       }
-      
+
       // * On web, skip location service check (not always available)
       if (!kIsWeb) {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) {
           debugPrint("[LocationService] ERROR: Location services disabled");
-        return null;
-      }
+          return null;
+        }
       }
 
       Position? cachedPosition;
@@ -67,14 +67,16 @@ class LocationService {
         try {
           cachedPosition = await Geolocator.getLastKnownPosition();
           if (cachedPosition != null) {
-            debugPrint("[LocationService] Using cached position for fast response");
+            debugPrint(
+              "[LocationService] Using cached position for fast response",
+            );
             return cachedPosition;
           }
         } catch (_) {
           // * Ignore cached lookup errors and continue to fresh fetch.
         }
       }
-      
+
       // * Use appropriate accuracy and timeout for platform
       // * Fast-first defaults to reduce location wait time.
       final accuracy =
@@ -83,15 +85,17 @@ class LocationService {
       final timeout =
           timeLimit ??
           (kIsWeb ? const Duration(seconds: 8) : const Duration(seconds: 6));
-      
+
       // * Removed verbose logging to prevent console overflow
-      
+
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: accuracy,
         timeLimit: timeout,
       );
-      
-      debugPrint("[LocationService] OK: Got position: ${position.latitude}, ${position.longitude}");
+
+      debugPrint(
+        "[LocationService] OK: Got position: ${position.latitude}, ${position.longitude}",
+      );
       return position;
     } on TimeoutException catch (_) {
       debugPrint("[LocationService] WARNING: Location request timed out");
@@ -110,7 +114,7 @@ class LocationService {
       return null;
     }
   }
-  
+
   /// * Get last known position (cached)
   Future<Position?> getLastKnownPosition() async {
     // ! Geolocator does not support getLastKnownPosition on web.
@@ -120,25 +124,23 @@ class LocationService {
     try {
       final position = await Geolocator.getLastKnownPosition();
       if (position != null) {
-        debugPrint("[LocationService] Got last known position: ${position.latitude}, ${position.longitude}");
+        debugPrint(
+          "[LocationService] Got last known position: ${position.latitude}, ${position.longitude}",
+        );
       } else {
         debugPrint("[LocationService] No last known position available");
       }
       return position;
     } catch (e) {
-      debugPrint("[LocationService] ERROR: Error getting last known position: $e");
+      debugPrint(
+        "[LocationService] ERROR: Error getting last known position: $e",
+      );
       return null;
     }
   }
-  
+
   /// * Calculate distance between two coordinates (in km)
-  double calculateDistance(
-    double lat1,
-    double lon1,
-    double lat2,
-    double lon2,
-  ) {
+  double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
     return Geolocator.distanceBetween(lat1, lon1, lat2, lon2) / 1000;
   }
 }
-

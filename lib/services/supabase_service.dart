@@ -28,7 +28,7 @@ class SupabaseService {
 
   /// * Check if running in demo mode (no database connection)
   bool get isDemoMode => !_isInitialized || !Env.validate();
-  
+
   /// * Get Supabase client (returns null in demo mode)
   SupabaseClient? get client {
     if (isDemoMode || !_isInitialized) {
@@ -41,12 +41,14 @@ class SupabaseService {
       return null;
     }
   }
-  
+
   /// * Initialize Supabase (optional - can skip in demo mode)
   Future<void> initialize() async {
     if (!Env.validate()) {
       // * Demo mode - skip initialization
-      debugPrint("⚠️ Demo mode: Supabase not initialized (missing environment variables)");
+      debugPrint(
+        "⚠️ Demo mode: Supabase not initialized (missing environment variables)",
+      );
       _isInitialized = false;
       return;
     }
@@ -76,9 +78,13 @@ class SupabaseService {
   }
 
   // * Authentication Methods
-  
+
   /// * Sign up with email and password
-  Future<AuthResponse> signUp(String email, String password, String name) async {
+  Future<AuthResponse> signUp(
+    String email,
+    String password,
+    String name,
+  ) async {
     if (isDemoMode) {
       throw Exception("Sign up not available in demo mode");
     }
@@ -93,31 +99,33 @@ class SupabaseService {
     );
     return response;
   }
-  
+
   /// * Sign in with email and password
   /// * In demo mode, validates demo credentials and marks the local demo session.
   Future<AuthResponse> signIn(String email, String password) async {
     if (isDemoMode) {
       // * Check if using demo credentials
-      if (email == AppConstants.demoEmail && password == AppConstants.demoPassword) {
+      if (email == AppConstants.demoEmail &&
+          password == AppConstants.demoPassword) {
         _isDemoAuthenticated = true;
         debugPrint("✅ Demo login successful");
         // * Return a mock AuthResponse - the app will handle demo mode separately
-        throw Exception("DEMO_MODE_LOGIN"); // * Special exception to indicate demo login
+        throw Exception(
+          "DEMO_MODE_LOGIN",
+        ); // * Special exception to indicate demo login
       } else {
-        throw Exception("Invalid credentials. Use demo credentials in demo mode.");
+        throw Exception(
+          "Invalid credentials. Use demo credentials in demo mode.",
+        );
       }
     }
     final c = client;
     if (c == null) {
       throw Exception("Supabase client not available");
     }
-    return await c.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
+    return await c.auth.signInWithPassword(email: email, password: password);
   }
-  
+
   /// * Sign out
   /// * In demo mode, clears the local demo auth state.
   Future<void> signOut() async {
@@ -131,7 +139,7 @@ class SupabaseService {
     }
     await c.auth.signOut();
   }
-  
+
   /// * Get current user (returns null when no authenticated session exists)
   User? get currentUser {
     if (isDemoMode) {
@@ -171,7 +179,7 @@ class SupabaseService {
   String? get _effectiveUserId => currentUserId;
 
   // * Profile Methods
-  
+
   /// * Get user profile
   Future<UserProfile?> getProfile(String userId) async {
     if (isDemoMode) {
@@ -191,18 +199,18 @@ class SupabaseService {
     if (c == null) {
       return null;
     }
-    final response = await c
-        .from('profiles')
-        .select()
-        .eq('id', userId)
-        .maybeSingle();
-    
+    final response =
+        await c.from('profiles').select().eq('id', userId).maybeSingle();
+
     if (response == null) return null;
     return UserProfile.fromJson(response);
   }
-  
+
   /// * Update user profile
-  Future<void> updateProfile(String userId, Map<String, dynamic> updates) async {
+  Future<void> updateProfile(
+    String userId,
+    Map<String, dynamic> updates,
+  ) async {
     if (isDemoMode) {
       return; // * No-op in demo mode
     }
@@ -210,14 +218,11 @@ class SupabaseService {
     if (c == null) {
       throw Exception("Supabase client not available");
     }
-    await c
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId);
+    await c.from('profiles').update(updates).eq('id', userId);
   }
-  
+
   // * Hazard Methods
-  
+
   /// * Get all hazards (with pagination)
   Future<List<Hazard>> getHazards({
     int limit = AppConstants.feedPageSize,
@@ -241,23 +246,23 @@ class SupabaseService {
         ''')
         .order('created_at', ascending: false)
         .range(offset, offset + limit - 1);
-    
+
     final List<Hazard> hazards = [];
     for (final item in response as List) {
       final hazardData = item as Map<String, dynamic>;
       final profileData = hazardData['profiles'] as Map<String, dynamic>?;
-      
+
       if (profileData != null) {
         hazardData['user_name'] = profileData['name'];
         hazardData['user_photo_url'] = profileData['photo_url'];
       }
-      
+
       hazards.add(Hazard.fromJson(hazardData));
     }
-    
+
     return hazards;
   }
-  
+
   /// * Get hazards within bounding box (for map)
   /// * Note: This requires a PostGIS function in Supabase
   /// * For now, we'll fetch all and filter client-side (not ideal for production)
@@ -273,7 +278,7 @@ class SupabaseService {
     // * Fetch all hazards (limited) and filter client-side
     // * In production, use PostGIS RPC function
     final allHazards = await getHazards(limit: AppConstants.maxMapMarkers);
-    
+
     return allHazards.where((hazard) {
       return hazard.latitude >= minLat &&
           hazard.latitude <= maxLat &&
@@ -281,7 +286,7 @@ class SupabaseService {
           hazard.longitude <= maxLon;
     }).toList();
   }
-  
+
   /// * Create a new hazard
   Future<Hazard> createHazard({
     required HazardType type,
@@ -302,7 +307,7 @@ class SupabaseService {
     if (c == null) {
       throw Exception("Supabase client not available");
     }
-    
+
     final hazardData = {
       'type': type.value,
       'description': description.trim(),
@@ -311,16 +316,13 @@ class SupabaseService {
       if (imageUrl != null) 'image_url': imageUrl,
       if (stickerFlag != null) 'sticker_flag': stickerFlag,
     };
-    
-    final response = await c
-        .from('hazards')
-        .insert(hazardData)
-        .select()
-        .single();
-    
+
+    final response =
+        await c.from('hazards').insert(hazardData).select().single();
+
     return Hazard.fromJson(response);
   }
-  
+
   /// * Subscribe to realtime hazards updates
   RealtimeChannel? subscribeToHazards({
     required Function(Map<String, dynamic>) onInsert,
@@ -335,7 +337,7 @@ class SupabaseService {
       return null;
     }
     final channel = c.channel('hazards_channel');
-    
+
     channel
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
@@ -356,12 +358,12 @@ class SupabaseService {
           callback: (payload) => onDelete(payload.oldRecord),
         )
         .subscribe();
-    
+
     return channel;
   }
-  
+
   // * Storage Methods
-  
+
   /// * Upload image to Supabase Storage
   Future<String> uploadImage(File file, String fileName) async {
     if (isDemoMode) {
@@ -376,15 +378,15 @@ class SupabaseService {
     await c.storage
         .from(AppConstants.storageBucketName)
         .uploadBinary(fileName, bytes);
-    
+
     // * Get public URL
     final url = c.storage
         .from(AppConstants.storageBucketName)
         .getPublicUrl(fileName);
-    
+
     return url;
   }
-  
+
   /// * Upload image file bytes
   Future<String> uploadImageBytes(List<int> bytes, String fileName) async {
     if (isDemoMode) {
@@ -399,16 +401,16 @@ class SupabaseService {
     await c.storage
         .from(AppConstants.storageBucketName)
         .uploadBinary(fileName, uint8Bytes);
-    
+
     final url = c.storage
         .from(AppConstants.storageBucketName)
         .getPublicUrl(fileName);
-    
+
     return url;
   }
-  
+
   // * Comment Methods
-  
+
   /// * Get comments for a hazard
   Future<List<HazardComment>> getHazardComments(String hazardId) async {
     if (isDemoMode) {
@@ -429,23 +431,23 @@ class SupabaseService {
         ''')
         .eq('hazard_id', hazardId)
         .order('created_at', ascending: false);
-    
+
     final List<HazardComment> comments = [];
     for (final item in response) {
       final Map<String, dynamic> commentData = item;
       final profileData = commentData['profiles'] as Map<String, dynamic>?;
-      
+
       if (profileData != null) {
         commentData['user_name'] = profileData['name'];
         commentData['user_photo_url'] = profileData['photo_url'];
       }
-      
+
       comments.add(HazardComment.fromJson(commentData));
     }
-    
+
     return comments;
   }
-  
+
   /// * Create a new comment on a hazard
   Future<HazardComment> createComment({
     required String hazardId,
@@ -461,35 +463,29 @@ class SupabaseService {
     if (c == null) {
       throw Exception("Supabase client not available");
     }
-    
-    final commentData = {
-      'hazard_id': hazardId,
-      'text': text.trim(),
-    };
-    
-    final response = await c
-        .from('hazard_comments')
-        .insert(commentData)
-        .select('''
+
+    final commentData = {'hazard_id': hazardId, 'text': text.trim()};
+
+    final response =
+        await c.from('hazard_comments').insert(commentData).select('''
           *,
           profiles:user_id (
             name,
             photo_url
           )
-        ''')
-        .single();
-    
+        ''').single();
+
     final Map<String, dynamic> commentJson = response;
     final profileData = commentJson['profiles'] as Map<String, dynamic>?;
-    
+
     if (profileData != null) {
       commentJson['user_name'] = profileData['name'];
       commentJson['user_photo_url'] = profileData['photo_url'];
     }
-    
+
     return HazardComment.fromJson(commentJson);
   }
-  
+
   /// * Update a comment
   Future<HazardComment> updateComment({
     required String commentId,
@@ -505,31 +501,32 @@ class SupabaseService {
     if (c == null) {
       throw Exception("Supabase client not available");
     }
-    
-    final response = await c
-        .from('hazard_comments')
-        .update({'text': text.trim()})
-        .eq('id', commentId)
-        .select('''
+
+    final response =
+        await c
+            .from('hazard_comments')
+            .update({'text': text.trim()})
+            .eq('id', commentId)
+            .select('''
           *,
           profiles:user_id (
             name,
             photo_url
           )
         ''')
-        .single();
-    
+            .single();
+
     final commentJson = response;
     final profileData = commentJson['profiles'] as Map<String, dynamic>?;
-    
+
     if (profileData != null) {
       commentJson['user_name'] = profileData['name'];
       commentJson['user_photo_url'] = profileData['photo_url'];
     }
-    
+
     return HazardComment.fromJson(commentJson);
   }
-  
+
   /// * Delete a comment
   Future<void> deleteComment(String commentId) async {
     if (isDemoMode) {
@@ -542,13 +539,10 @@ class SupabaseService {
     if (c == null) {
       throw Exception("Supabase client not available");
     }
-    
-    await c
-        .from('hazard_comments')
-        .delete()
-        .eq('id', commentId);
+
+    await c.from('hazard_comments').delete().eq('id', commentId);
   }
-  
+
   /// * Subscribe to realtime comments updates for a hazard
   RealtimeChannel? subscribeToComments({
     required String hazardId,
@@ -564,7 +558,7 @@ class SupabaseService {
       return null;
     }
     final channel = c.channel('comments_channel_$hazardId');
-    
+
     channel
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
@@ -600,7 +594,7 @@ class SupabaseService {
           callback: (payload) => onDelete(payload.oldRecord),
         )
         .subscribe();
-    
+
     return channel;
   }
 
@@ -616,7 +610,9 @@ class SupabaseService {
   /// * Get comments for a place
   Future<List<PlaceComment>> getPlaceComments(String placeId) async {
     if (isDemoMode) {
-      final comments = List<PlaceComment>.from(_demoPlaceComments[placeId] ?? const []);
+      final comments = List<PlaceComment>.from(
+        _demoPlaceComments[placeId] ?? const [],
+      );
       comments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return comments;
     }
@@ -673,7 +669,10 @@ class SupabaseService {
         updatedAt: now,
         userName: "Demo User",
       );
-      final comments = _demoPlaceComments.putIfAbsent(placeId, () => <PlaceComment>[]);
+      final comments = _demoPlaceComments.putIfAbsent(
+        placeId,
+        () => <PlaceComment>[],
+      );
       comments.insert(0, comment);
       return comment;
     }
@@ -683,22 +682,16 @@ class SupabaseService {
       throw Exception("Supabase client not available");
     }
 
-    final commentData = {
-      'place_id': placeId,
-      'text': text.trim(),
-    };
+    final commentData = {'place_id': placeId, 'text': text.trim()};
 
-    final response = await c
-        .from('place_comments')
-        .insert(commentData)
-        .select('''
+    final response =
+        await c.from('place_comments').insert(commentData).select('''
           *,
           profiles:user_id (
             name,
             photo_url
           )
-        ''')
-        .single();
+        ''').single();
 
     final Map<String, dynamic> commentJson = response;
     final profileData = commentJson['profiles'] as Map<String, dynamic>?;
@@ -727,18 +720,19 @@ class SupabaseService {
       throw Exception("Supabase client not available");
     }
 
-    final response = await c
-        .from('place_comments')
-        .update({'text': text.trim()})
-        .eq('id', commentId)
-        .select('''
+    final response =
+        await c
+            .from('place_comments')
+            .update({'text': text.trim()})
+            .eq('id', commentId)
+            .select('''
           *,
           profiles:user_id (
             name,
             photo_url
           )
         ''')
-        .single();
+            .single();
 
     final Map<String, dynamic> commentJson = response;
     final profileData = commentJson['profiles'] as Map<String, dynamic>?;
@@ -829,7 +823,9 @@ class SupabaseService {
     PlaceImageStatus? status,
   }) async {
     if (isDemoMode) {
-      final source = List<PlaceImage>.from(_demoPlaceImages[placeId] ?? const []);
+      final source = List<PlaceImage>.from(
+        _demoPlaceImages[placeId] ?? const [],
+      );
       if (status == null) {
         source.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         return source;
@@ -898,7 +894,10 @@ class SupabaseService {
         updatedAt: now,
         userName: "Demo User",
       );
-      final images = _demoPlaceImages.putIfAbsent(placeId, () => <PlaceImage>[]);
+      final images = _demoPlaceImages.putIfAbsent(
+        placeId,
+        () => <PlaceImage>[],
+      );
       images.insert(0, image);
       return image;
     }
@@ -914,17 +913,14 @@ class SupabaseService {
       'status': PlaceImageStatus.pending.value,
     };
 
-    final response = await c
-        .from('place_images')
-        .insert(record)
-        .select('''
+    final response =
+        await c.from('place_images').insert(record).select('''
           *,
           profiles:user_id (
             name,
             photo_url
           )
-        ''')
-        .single();
+        ''').single();
 
     final Map<String, dynamic> imageJson = response;
     final profileData = imageJson['profiles'] as Map<String, dynamic>?;
@@ -988,12 +984,15 @@ class SupabaseService {
       throw Exception("Supabase client not available");
     }
 
-    await c.from('place_images').update({
-      'status': PlaceImageStatus.approved.value,
-      'reviewed_by': currentUserId,
-      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
-      'review_reason': null,
-    }).eq('id', imageId);
+    await c
+        .from('place_images')
+        .update({
+          'status': PlaceImageStatus.approved.value,
+          'reviewed_by': currentUserId,
+          'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+          'review_reason': null,
+        })
+        .eq('id', imageId);
   }
 
   /// * Reject a place image (admin)
@@ -1009,12 +1008,15 @@ class SupabaseService {
       throw Exception("Supabase client not available");
     }
 
-    await c.from('place_images').update({
-      'status': PlaceImageStatus.rejected.value,
-      'reviewed_by': currentUserId,
-      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
-      'review_reason': reason?.trim(),
-    }).eq('id', imageId);
+    await c
+        .from('place_images')
+        .update({
+          'status': PlaceImageStatus.rejected.value,
+          'reviewed_by': currentUserId,
+          'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+          'review_reason': reason?.trim(),
+        })
+        .eq('id', imageId);
   }
 
   /// * Get likes count for a place
@@ -1057,12 +1059,13 @@ class SupabaseService {
       return false;
     }
 
-    final existing = await c
-        .from('place_likes')
-        .select('place_id')
-        .eq('place_id', placeId)
-        .eq('user_id', userId)
-        .maybeSingle();
+    final existing =
+        await c
+            .from('place_likes')
+            .select('place_id')
+            .eq('place_id', placeId)
+            .eq('user_id', userId)
+            .maybeSingle();
 
     return existing != null;
   }
@@ -1097,12 +1100,13 @@ class SupabaseService {
       throw Exception("User not available");
     }
 
-    final existing = await c
-        .from('place_likes')
-        .select('place_id')
-        .eq('place_id', placeId)
-        .eq('user_id', userId)
-        .maybeSingle();
+    final existing =
+        await c
+            .from('place_likes')
+            .select('place_id')
+            .eq('place_id', placeId)
+            .eq('user_id', userId)
+            .maybeSingle();
 
     if (existing != null) {
       await c
@@ -1140,12 +1144,13 @@ class SupabaseService {
       return null;
     }
 
-    final existing = await c
-        .from('place_ratings')
-        .select('rating')
-        .eq('place_id', placeId)
-        .eq('user_id', userId)
-        .maybeSingle();
+    final existing =
+        await c
+            .from('place_ratings')
+            .select('rating')
+            .eq('place_id', placeId)
+            .eq('user_id', userId)
+            .maybeSingle();
 
     if (existing == null) {
       return null;
@@ -1168,29 +1173,19 @@ class SupabaseService {
   /// * - ratingsCount: 0..n
   Future<Map<String, dynamic>> getPlaceRatingsSummary(String placeId) async {
     if (isDemoMode) {
-      final ratings = (_demoPlaceRatings[placeId] ?? const <String, int>{})
-          .values
-          .toList();
+      final ratings =
+          (_demoPlaceRatings[placeId] ?? const <String, int>{}).values.toList();
       if (ratings.isEmpty) {
-        return {
-          "avgRating": 0.0,
-          "ratingsCount": 0,
-        };
+        return {"avgRating": 0.0, "ratingsCount": 0};
       }
 
       final total = ratings.fold<int>(0, (sum, r) => sum + r);
       final avg = total / ratings.length;
-      return {
-        "avgRating": avg,
-        "ratingsCount": ratings.length,
-      };
+      return {"avgRating": avg, "ratingsCount": ratings.length};
     }
     final c = client;
     if (c == null) {
-      return {
-        "avgRating": 0.0,
-        "ratingsCount": 0,
-      };
+      return {"avgRating": 0.0, "ratingsCount": 0};
     }
 
     final rows = await c
@@ -1212,19 +1207,13 @@ class SupabaseService {
     }
 
     if (ratings.isEmpty) {
-      return {
-        "avgRating": 0.0,
-        "ratingsCount": 0,
-      };
+      return {"avgRating": 0.0, "ratingsCount": 0};
     }
 
     final total = ratings.fold<int>(0, (sum, r) => sum + r);
     final avg = total / ratings.length;
 
-    return {
-      "avgRating": avg,
-      "ratingsCount": ratings.length,
-    };
+    return {"avgRating": avg, "ratingsCount": ratings.length};
   }
 
   /// * Create or update the current user's rating for a place (1–5).
@@ -1262,12 +1251,13 @@ class SupabaseService {
       throw Exception("User not available");
     }
 
-    final existing = await c
-        .from('place_ratings')
-        .select('rating')
-        .eq('place_id', placeId)
-        .eq('user_id', userId)
-        .maybeSingle();
+    final existing =
+        await c
+            .from('place_ratings')
+            .select('rating')
+            .eq('place_id', placeId)
+            .eq('user_id', userId)
+            .maybeSingle();
 
     if (existing != null) {
       await c
@@ -1285,4 +1275,3 @@ class SupabaseService {
     });
   }
 }
-

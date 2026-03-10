@@ -38,6 +38,7 @@ class PlaceDetailSheet extends ConsumerStatefulWidget {
 
 class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
   final _commentController = TextEditingController();
+  final _sheetController = DraggableScrollableController();
   bool _isSubmittingComment = false;
 
   bool _isLoadingLikes = true;
@@ -65,6 +66,7 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
   @override
   void dispose() {
     _commentController.dispose();
+    _sheetController.dispose();
     super.dispose();
   }
 
@@ -476,6 +478,7 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
         minChildSize: 0.24,
         maxChildSize: 0.95,
         expand: false,
+        controller: _sheetController,
         builder: (context, scrollController) {
           return Center(
             child: ConstrainedBox(
@@ -489,10 +492,21 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
                 ),
                 clipBehavior: Clip.antiAlias,
                 elevation: 8,
-                child: Column(
-                  children: [
-                    // * Handle bar
-                    Container(
+                child: LayoutBuilder(
+                  builder: (context, constraints) => ClipRect(
+                    child: Column(
+                    children: [
+                // * Handle bar — GestureDetector enables drag-to-resize on desktop/web
+                    GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onVerticalDragUpdate: (details) {
+                        final screenH = MediaQuery.of(context).size.height;
+                        final delta = -details.delta.dy / screenH;
+                        final next = (_sheetController.size + delta)
+                            .clamp(0.24, 0.95);
+                        _sheetController.jumpTo(next);
+                      },
+                      child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
                       decoration: const BoxDecoration(
@@ -500,21 +514,16 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
                       ),
                       child: Column(
                         children: [
-                          // * Drag handle - visible indicator for expandability
-                          Tooltip(
-                            message: AppTheme.isDesktop(context)
-                                ? "Drag to expand or collapse"
-                                : "Swipe to expand",
-                            child: MouseRegion(
-                              cursor: SystemMouseCursors.grab,
-                              child: Container(
-                                width: 48,
-                                height: 5,
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.borderColor.withOpacity(0.8),
-                                  borderRadius: BorderRadius.circular(2.5),
-                                ),
+                          // * Drag handle pill
+                          MouseRegion(
+                            cursor: SystemMouseCursors.resizeUpDown,
+                            child: Container(
+                              width: 48,
+                              height: 5,
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppTheme.borderColor.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(2.5),
                               ),
                             ),
                           ),
@@ -546,18 +555,22 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              // * Desktop: show expand hint icon
+                              // * Desktop: expand/collapse button
                               if (AppTheme.isDesktop(context))
-                                Tooltip(
-                                  message: "Drag sheet to resize",
-                                  child: Icon(
-                                    Icons.unfold_more,
-                                    size: 20,
-                                    color: AppTheme.textSecondary.withOpacity(0.6),
-                                  ),
+                                IconButton(
+                                  icon: const Icon(Icons.unfold_more),
+                                  tooltip: "Drag here to resize",
+                                  iconSize: 20,
+                                  color: AppTheme.textSecondary,
+                                  onPressed: () {
+                                    final cur = _sheetController.size;
+                                    _sheetController.animateTo(
+                                      cur < 0.7 ? 0.95 : 0.45,
+                                      duration: const Duration(milliseconds: 300),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  },
                                 ),
-                              if (AppTheme.isDesktop(context))
-                                const SizedBox(width: 8),
                               IconButton(
                                 icon: const Icon(Icons.close),
                                 onPressed: widget.onClose,
@@ -611,6 +624,7 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
                         ],
                       ),
                     ),
+                    ), // end GestureDetector
                     Expanded(
                       child: SingleChildScrollView(
                         controller: scrollController,
@@ -1038,7 +1052,8 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
                       ),
                     ),
 
-                    // * Comment input
+                    // * Comment input — hidden when sheet is too small to prevent overflow
+                    if (constraints.maxHeight > 220)
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -1102,7 +1117,9 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
                       ),
                     ),
                   ],
-                ),
+                ), // end Column
+                ), // end ClipRect
+                ), // end LayoutBuilder
               ),
             ),
           );

@@ -39,6 +39,18 @@ class FuelStationDetailSheet extends ConsumerStatefulWidget {
 class _FuelStationDetailSheetState
     extends ConsumerState<FuelStationDetailSheet> {
   bool _isExpanded = false;
+  final _sheetController = DraggableScrollableController();
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _sheetController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +67,7 @@ class _FuelStationDetailSheetState
         minChildSize: 0.24,
         maxChildSize: 0.95,
         expand: false,
+        controller: _sheetController,
         builder: (context, scrollController) {
           return Center(
             child: ConstrainedBox(
@@ -67,31 +80,42 @@ class _FuelStationDetailSheetState
                   top: Radius.circular(20),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: Column(
-                  children: [
-                    Container(
+                child: LayoutBuilder(
+                  builder: (context, constraints) => ClipRect(
+                    child: Column(
+                    children: [
+                    // * Header — GestureDetector enables drag-to-resize on desktop/web
+                    GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onVerticalDragUpdate: (details) {
+                        final screenH = MediaQuery.of(context).size.height;
+                        final delta = -details.delta.dy / screenH;
+                        final next = (_sheetController.size + delta)
+                            .clamp(0.24, 0.95);
+                        _sheetController.jumpTo(next);
+                      },
+                      child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.fromLTRB(14, 10, 10, 12),
-                      decoration: BoxDecoration(color: theme.colorScheme.surface),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // * Drag handle - visible indicator for expandability
+                          // * Drag handle pill
                           Align(
-                            child: Tooltip(
-                              message: AppTheme.isDesktop(context)
-                                  ? "Drag to expand or collapse"
-                                  : "Swipe to expand",
-                              child: MouseRegion(
-                                cursor: SystemMouseCursors.grab,
-                                child: Container(
-                                  width: 48,
-                                  height: 5,
-                                  margin: const EdgeInsets.symmetric(vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: theme.dividerColor.withOpacity(0.8),
-                                    borderRadius: BorderRadius.circular(2.5),
-                                  ),
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.resizeUpDown,
+                              child: Container(
+                                width: 48,
+                                height: 5,
+                                margin: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.dividerColor.withOpacity(0.8),
+                                  borderRadius: BorderRadius.circular(2.5),
                                 ),
                               ),
                             ),
@@ -103,7 +127,9 @@ class _FuelStationDetailSheetState
                                 width: 32,
                                 height: 32,
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary.withOpacity(0.20),
+                                  color: theme.colorScheme.primary.withOpacity(
+                                    0.20,
+                                  ),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
@@ -129,27 +155,18 @@ class _FuelStationDetailSheetState
                                       ? Icons.unfold_less
                                       : Icons.unfold_more,
                                 ),
-                                tooltip:
-                                    _isExpanded
-                                        ? "Collapse"
-                                        : "Expand",
+                                tooltip: _isExpanded ? "Collapse" : "Expand",
                                 onPressed: () {
-                                  setState(() {
-                                    _isExpanded = !_isExpanded;
-                                  });
+                                  final target = _isExpanded ? 0.45 : 0.80;
+                                  _sheetController.animateTo(
+                                    target,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeInOut,
+                                  );
+                                  setState(() => _isExpanded = !_isExpanded);
                                 },
-                              ),                              // * Desktop: show expand hint icon
-                              if (AppTheme.isDesktop(context))
-                                Tooltip(
-                                  message: "Drag sheet to resize",
-                                  child: Icon(
-                                    Icons.unfold_more,
-                                    size: 20,
-                                    color: theme.colorScheme.onSurface.withOpacity(0.4),
-                                  ),
-                                ),
-                              if (AppTheme.isDesktop(context))
-                                const SizedBox(width: 8),                              IconButton(
+                              ),
+                              IconButton(
                                 icon: const Icon(Icons.close),
                                 onPressed: widget.onClose,
                               ),
@@ -196,7 +213,8 @@ class _FuelStationDetailSheetState
                           _buildVerificationBadge(theme),
                         ],
                       ),
-                    ),
+                    ), // end Container
+                    ), // end GestureDetector
                     const Divider(height: 1),
                     Expanded(
                       child: SingleChildScrollView(
@@ -216,6 +234,8 @@ class _FuelStationDetailSheetState
                                 ),
                       ),
                     ),
+                    // * Action buttons — hidden when sheet is too small to prevent overflow
+                    if (constraints.maxHeight > 220)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                       child: Column(
@@ -269,7 +289,9 @@ class _FuelStationDetailSheetState
                       ),
                     ),
                   ],
-                ),
+                ), // end Column
+                ), // end ClipRect
+                ), // end LayoutBuilder
               ),
             ),
           );

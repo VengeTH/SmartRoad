@@ -71,7 +71,8 @@ nwr["aeroway"="aerodrome"](BBOX);
   }) async {
     final cacheKey = _buildCacheKey(bounds: bounds, zoom: zoom, limit: limit);
     final cached = _responseCache[cacheKey];
-    if (cached != null && DateTime.now().difference(cached.fetchedAt) <= _cacheTtl) {
+    if (cached != null &&
+        DateTime.now().difference(cached.fetchedAt) <= _cacheTtl) {
       return cached.items;
     }
 
@@ -86,7 +87,8 @@ nwr["aeroway"="aerodrome"](BBOX);
     final bbox =
         '${bounds.south},${bounds.west},${bounds.north},${bounds.east}';
     final tagLines = tier.replaceAll('BBOX', bbox);
-    final query = '[out:json][timeout:10];\n(\n${tagLines});\nout center $limit;';
+    final query =
+        '[out:json][timeout:10];\n(\n${tagLines});\nout center $limit;';
 
     try {
       final response = await _firstSuccessfulResponse(query);
@@ -134,8 +136,14 @@ nwr["aeroway"="aerodrome"](BBOX);
 
         // * Assign importance proxy based on zoom tier (major = higher priority).
         // * Fuel POIs get a boost so gas stations win over nearby malls/shops.
-        final baseImportance = zoom >= 14.0 ? 0.4 : zoom >= 12.0 ? 0.6 : 0.8;
-        final importance = category == "fuel" ? (baseImportance + 0.25) : baseImportance;
+        final baseImportance =
+            zoom >= 14.0
+                ? 0.4
+                : zoom >= 12.0
+                ? 0.6
+                : 0.8;
+        final importance =
+            category == "fuel" ? (baseImportance + 0.25) : baseImportance;
 
         results.add(
           MapPoi(
@@ -176,7 +184,9 @@ nwr["aeroway"="aerodrome"](BBOX);
 
     for (final endpoint in _endpoints) {
       _postToEndpoint(endpoint, query).then((response) {
-        if (!completer.isCompleted && response != null && response.statusCode == 200) {
+        if (!completer.isCompleted &&
+            response != null &&
+            response.statusCode == 200) {
           completer.complete(response);
           return;
         }
@@ -188,7 +198,10 @@ nwr["aeroway"="aerodrome"](BBOX);
       });
     }
 
-    return completer.future.timeout(const Duration(seconds: 8), onTimeout: () => null);
+    return completer.future.timeout(
+      const Duration(seconds: 8),
+      onTimeout: () => null,
+    );
   }
 
   Future<http.Response?> _postToEndpoint(String endpoint, String query) async {
@@ -196,12 +209,13 @@ nwr["aeroway"="aerodrome"](BBOX);
       return await http
           .post(
             Uri.parse(endpoint),
-            headers: kIsWeb
-                ? {'Content-Type': 'application/x-www-form-urlencoded'}
-                : {
-                  'Content-Type': 'application/x-www-form-urlencoded',
-                  'User-Agent': 'SmartRoad App (contact@smartroad.app)',
-                },
+            headers:
+                kIsWeb
+                    ? {'Content-Type': 'application/x-www-form-urlencoded'}
+                    : {
+                      'Content-Type': 'application/x-www-form-urlencoded',
+                      'User-Agent': 'SmartRoad App (contact@smartroad.app)',
+                    },
             body: 'data=${Uri.encodeComponent(query)}',
           )
           .timeout(const Duration(seconds: 7));

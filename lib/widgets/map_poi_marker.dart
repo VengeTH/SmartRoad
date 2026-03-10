@@ -47,12 +47,13 @@ class MapPoiMarker extends StatelessWidget {
     final shouldShowLabel = showLabel && safeLabel.isNotEmpty;
 
     final marker = Container(
-      padding: shouldShowLabel
-          ? const EdgeInsets.symmetric(
-            horizontal: pillPaddingHorizontal,
-            vertical: pillPaddingVertical,
-          )
-          : const EdgeInsets.all(iconOnlyPadding),
+      padding:
+          shouldShowLabel
+              ? const EdgeInsets.symmetric(
+                horizontal: pillPaddingHorizontal,
+                vertical: pillPaddingVertical,
+              )
+              : const EdgeInsets.all(iconOnlyPadding),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor.withOpacity(0.9),
         borderRadius: BorderRadius.circular(999),
@@ -72,11 +73,7 @@ class MapPoiMarker extends StatelessWidget {
               color: accentColor.withOpacity(0.15),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              icon,
-              color: accentColor,
-              size: iconSize,
-            ),
+            child: Icon(icon, color: accentColor, size: iconSize),
           ),
           if (shouldShowLabel) ...[
             const SizedBox(width: 6),
@@ -132,4 +129,3 @@ class MapPoiMarker extends StatelessWidget {
     );
   }
 }
-

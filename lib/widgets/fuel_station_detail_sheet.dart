@@ -81,216 +81,263 @@ class _FuelStationDetailSheetState
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: LayoutBuilder(
-                  builder: (context, constraints) => ClipRect(
-                    child: Column(
-                    children: [
-                    // * Header — GestureDetector enables drag-to-resize on desktop/web
-                    GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onVerticalDragUpdate: (details) {
-                        final screenH = MediaQuery.of(context).size.height;
-                        final delta = -details.delta.dy / screenH;
-                        final next = (_sheetController.size + delta)
-                            .clamp(0.24, 0.95);
-                        _sheetController.jumpTo(next);
-                      },
-                      child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(14, 10, 10, 12),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // * Drag handle pill
-                          Align(
-                            child: MouseRegion(
-                              cursor: SystemMouseCursors.resizeUpDown,
+                  builder:
+                      (context, constraints) => ClipRect(
+                        child: Column(
+                          children: [
+                            // * Header — GestureDetector enables drag-to-resize on desktop/web
+                            GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onVerticalDragUpdate: (details) {
+                                final screenH =
+                                    MediaQuery.of(context).size.height;
+                                final delta = -details.delta.dy / screenH;
+                                final next = (_sheetController.size + delta)
+                                    .clamp(0.24, 0.95);
+                                _sheetController.jumpTo(next);
+                              },
                               child: Container(
-                                width: 48,
-                                height: 5,
-                                margin: const EdgeInsets.symmetric(
-                                  vertical: 4,
+                                width: double.infinity,
+                                padding: const EdgeInsets.fromLTRB(
+                                  14,
+                                  10,
+                                  10,
+                                  12,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: theme.dividerColor.withOpacity(0.8),
-                                  borderRadius: BorderRadius.circular(2.5),
+                                  color: theme.colorScheme.surface,
                                 ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // * Drag handle pill
+                                    Align(
+                                      child: MouseRegion(
+                                        cursor: SystemMouseCursors.resizeUpDown,
+                                        child: Container(
+                                          width: 48,
+                                          height: 5,
+                                          margin: const EdgeInsets.symmetric(
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: theme.dividerColor
+                                                .withOpacity(0.8),
+                                            borderRadius: BorderRadius.circular(
+                                              2.5,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 32,
+                                          height: 32,
+                                          decoration: BoxDecoration(
+                                            color: theme.colorScheme.primary
+                                                .withOpacity(0.20),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            Icons.local_gas_station,
+                                            size: 18,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            widget.station.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: Icon(
+                                            _isExpanded
+                                                ? Icons.unfold_less
+                                                : Icons.unfold_more,
+                                          ),
+                                          tooltip:
+                                              _isExpanded
+                                                  ? "Collapse"
+                                                  : "Expand",
+                                          onPressed: () {
+                                            final target =
+                                                _isExpanded ? 0.45 : 0.80;
+                                            _sheetController.animateTo(
+                                              target,
+                                              duration: const Duration(
+                                                milliseconds: 300,
+                                              ),
+                                              curve: Curves.easeInOut,
+                                            );
+                                            setState(
+                                              () => _isExpanded = !_isExpanded,
+                                            );
+                                          },
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.close),
+                                          onPressed: widget.onClose,
+                                        ),
+                                      ],
+                                    ),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.location_on,
+                                          size: 14,
+                                          color:
+                                              theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            "${widget.station.city}, ${widget.station.province}",
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  color:
+                                                      theme
+                                                          .colorScheme
+                                                          .onSurfaceVariant,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.schedule,
+                                          size: 12,
+                                          color:
+                                              theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          _stationLastUpdatedLabel(),
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                color:
+                                                    theme
+                                                        .colorScheme
+                                                        .onSurfaceVariant,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    _buildVerificationBadge(theme),
+                                  ],
+                                ),
+                              ), // end Container
+                            ), // end GestureDetector
+                            const Divider(height: 1),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                controller: scrollController,
+                                padding: const EdgeInsets.all(12),
+                                child:
+                                    widget.station.prices.isEmpty
+                                        ? _buildNoPricesState(theme)
+                                        : Column(
+                                          children: [
+                                            for (final price
+                                                in widget.station.prices) ...[
+                                              _buildPriceCard(theme, price),
+                                              const SizedBox(height: 10),
+                                            ],
+                                          ],
+                                        ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary.withOpacity(
-                                    0.20,
-                                  ),
-                                  shape: BoxShape.circle,
+                            // * Action buttons — hidden when sheet is too small to prevent overflow
+                            if (constraints.maxHeight > 220)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  8,
+                                  12,
+                                  12,
                                 ),
-                                child: Icon(
-                                  Icons.local_gas_station,
-                                  size: 18,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  widget.station.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  _isExpanded
-                                      ? Icons.unfold_less
-                                      : Icons.unfold_more,
-                                ),
-                                tooltip: _isExpanded ? "Collapse" : "Expand",
-                                onPressed: () {
-                                  final target = _isExpanded ? 0.45 : 0.80;
-                                  _sheetController.animateTo(
-                                    target,
-                                    duration: const Duration(milliseconds: 300),
-                                    curve: Curves.easeInOut,
-                                  );
-                                  setState(() => _isExpanded = !_isExpanded);
-                                },
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.close),
-                                onPressed: widget.onClose,
-                              ),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.location_on,
-                                size: 14,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  "${widget.station.city}, ${widget.station.province}",
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.schedule,
-                                size: 12,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                _stationLastUpdatedLabel(),
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          _buildVerificationBadge(theme),
-                        ],
-                      ),
-                    ), // end Container
-                    ), // end GestureDetector
-                    const Divider(height: 1),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        controller: scrollController,
-                        padding: const EdgeInsets.all(12),
-                        child:
-                            widget.station.prices.isEmpty
-                                ? _buildNoPricesState(theme)
-                                : Column(
+                                child: Column(
                                   children: [
-                                    for (final price
-                                        in widget.station.prices) ...[
-                                      _buildPriceCard(theme, price),
-                                      const SizedBox(height: 10),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: widget.onUpdatePrices,
+                                            icon: const Icon(
+                                              Icons.edit,
+                                              size: 18,
+                                            ),
+                                            label: const Text("Update Prices"),
+                                            style: OutlinedButton.styleFrom(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 10,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: _showReportDialog,
+                                            icon: const Icon(
+                                              Icons.flag,
+                                              size: 18,
+                                            ),
+                                            label: const Text(
+                                              "Report incorrect price",
+                                            ),
+                                            style: OutlinedButton.styleFrom(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 10,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (widget.onGetDirections != null) ...[
+                                      const SizedBox(height: 8),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: ElevatedButton.icon(
+                                          onPressed: widget.onGetDirections,
+                                          icon: const Icon(Icons.directions),
+                                          label: const Text("Get Directions"),
+                                          style: ElevatedButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 10,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                     ],
                                   ],
                                 ),
-                      ),
-                    ),
-                    // * Action buttons — hidden when sheet is too small to prevent overflow
-                    if (constraints.maxHeight > 220)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: widget.onUpdatePrices,
-                                  icon: const Icon(Icons.edit, size: 18),
-                                  label: const Text("Update Prices"),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 10,
-                                    ),
-                                  ),
-                                ),
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _showReportDialog,
-                                  icon: const Icon(Icons.flag, size: 18),
-                                  label: const Text("Report incorrect price"),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 10,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (widget.onGetDirections != null) ...[
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: widget.onGetDirections,
-                                icon: const Icon(Icons.directions),
-                                label: const Text("Get Directions"),
-                                style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 10,
-                                  ),
-                                ),
-                              ),
-                            ),
                           ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ), // end Column
-                ), // end ClipRect
+                        ), // end Column
+                      ), // end ClipRect
                 ), // end LayoutBuilder
               ),
             ),

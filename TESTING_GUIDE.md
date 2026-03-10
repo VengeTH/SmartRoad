@@ -587,6 +587,19 @@ SupabaseService().enableDemoMode();
 
 ## 📝 Notes
 
+## ⬇️ Bottom Sheet UX Tests
+
+- [ ] **Open place/fuel POI**: Tap a map POI and verify the detail sheet appears (initial height ≈45%).
+- [ ] **Expand/Collapse**: Drag the sheet up or tap the expand icon — sheet should animate to near-fullscreen (≈90–95%). Collapse returns it to the initial size.
+- [ ] **Desktop drag-to-resize**: On desktop/laptop, use the mouse to drag the sheet header up/down — sheet should resize smoothly and the cursor should indicate draggable state.
+- [ ] **Expand toggle**: Verify the header expand/collapse icon toggles between expanded and collapsed states and animates the sheet.
+- [ ] **Recent search badge**: Perform a place search, then open the matched place — a "Recently searched" badge should be visible in the expanded sheet for matches and absent for others.
+- [ ] **Footer hiding / no overflow**: Drag the sheet to its minimum height — fixed footers (comment composer / action buttons) should hide when available height is small (≈<=220px) and no overflow stripes should appear.
+- [ ] **Reappearance of footers**: Expand sheet above the threshold and verify footers/actions reappear and function normally.
+- [ ] **Visual artifact check**: Verify no clipping artifacts or yellow/black overflow stripes on mobile and desktop when resizing rapidly.
+- [ ] **Accessibility / keyboard**: On desktop, confirm the expand button is reachable via keyboard (Tab) and actionable with Enter/Space.
+
+
 - **QR Code Security**: QR codes expire after 5 minutes to prevent screenshot reuse
 - **Auto-Refresh**: QR codes refresh every 4 minutes (before expiry)
 - **Demo Mode**: Full functionality available without database

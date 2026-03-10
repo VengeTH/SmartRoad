@@ -21,6 +21,13 @@ This document tracks all version updates, feature additions, and significant cha
 - Added multi-fuel update dialog supporting `91/95/97/diesel` in one submission
 - Added map long-press action: **Add Fuel Station**
 - Added stale-price and confidence indicator rendering in fuel detail UI
+ - Improved bottom-sheet UX for place and fuel details:
+   - Initial sheet height now ~45%, minimum 24%, and expandable to ~95% for full content access
+   - Visible drag handle added for discoverability and consistent sizing across devices
+   - Desktop/web: header drag-to-resize support and an expand/collapse icon for keyboard accessibility
+   - Conditional footers (comment composer / action buttons) hide on very small sheet heights to avoid overflow
+ - Added "Recently searched" indicator in the place detail sheet when opening a result from search recents
+
 
 ### Backend + Admin Tooling
 - Added `supabase_fuel_schema.sql` with tables, indexes, RLS policies, and fuel RPCs

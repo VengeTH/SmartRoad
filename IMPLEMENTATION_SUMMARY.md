@@ -120,6 +120,7 @@ lib/
 - Demo credentials: `demo@smartroad.app` / `DemoPass123!`
 - Automatic fallback to demo mode if env vars missing
 - Mock user creation for demo flow
+ - Demo sessions behave as an authenticated demo user by default (demo interactions such as comments/likes/photos persist in in-memory/demo storage). Use the "Continue as Guest" flow to test anonymous/limited behaviors.
 
 ### Implementation Details
 - Uses Supabase Auth for production

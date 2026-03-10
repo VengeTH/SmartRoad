@@ -493,632 +493,714 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
                 clipBehavior: Clip.antiAlias,
                 elevation: 8,
                 child: LayoutBuilder(
-                  builder: (context, constraints) => ClipRect(
-                    child: Column(
-                    children: [
-                // * Handle bar — GestureDetector enables drag-to-resize on desktop/web
-                    GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onVerticalDragUpdate: (details) {
-                        final screenH = MediaQuery.of(context).size.height;
-                        final delta = -details.delta.dy / screenH;
-                        final next = (_sheetController.size + delta)
-                            .clamp(0.24, 0.95);
-                        _sheetController.jumpTo(next);
-                      },
-                      child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-                      decoration: const BoxDecoration(
-                        color: AppTheme.surfaceColor,
-                      ),
-                      child: Column(
-                        children: [
-                          // * Drag handle pill
-                          MouseRegion(
-                            cursor: SystemMouseCursors.resizeUpDown,
-                            child: Container(
-                              width: 48,
-                              height: 5,
-                              margin: const EdgeInsets.symmetric(vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppTheme.borderColor.withOpacity(0.8),
-                                borderRadius: BorderRadius.circular(2.5),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryColor.withOpacity(0.18),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.place_outlined,
-                                  size: 18,
-                                  color: AppTheme.primaryColor,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  widget.place.name,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              // * Desktop: expand/collapse button
-                              if (AppTheme.isDesktop(context))
-                                IconButton(
-                                  icon: const Icon(Icons.unfold_more),
-                                  tooltip: "Drag here to resize",
-                                  iconSize: 20,
-                                  color: AppTheme.textSecondary,
-                                  onPressed: () {
-                                    final cur = _sheetController.size;
-                                    _sheetController.animateTo(
-                                      cur < 0.7 ? 0.95 : 0.45,
-                                      duration: const Duration(milliseconds: 300),
-                                      curve: Curves.easeInOut,
-                                    );
-                                  },
-                                ),
-                              IconButton(
-                                icon: const Icon(Icons.close),
-                                onPressed: widget.onClose,
-                              ),
-                            ],
-                          ),
-                          if (widget.place.category != null ||
-                              widget.isRecentlySearched)
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 42),
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 6,
-                                  children: [
-                                    if (widget.place.category != null)
-                                      Chip(
-                                        label: Text(
-                                          widget.place.category!.toUpperCase(),
-                                        ),
-                                        backgroundColor: AppTheme.primaryColor
-                                            .withOpacity(0.12),
-                                      ),
-                                    if (widget.isRecentlySearched)
-                                      Chip(
-                                        avatar: const Icon(
-                                          Icons.history,
-                                          size: 16,
-                                          color: AppTheme.infoColor,
-                                        ),
-                                        label: Text(
-                                          widget.recentSearchMeta == null ||
-                                                  widget.recentSearchMeta!
-                                                      .trim()
-                                                      .isEmpty
-                                              ? "Recently searched"
-                                              : "Recent • ${widget.recentSearchMeta!}",
-                                        ),
-                                        backgroundColor:
-                                            AppTheme.infoColor.withOpacity(0.12),
-                                        side: BorderSide(
-                                          color: AppTheme.infoColor
-                                              .withOpacity(0.35),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    ), // end GestureDetector
-                    Expanded(
-                      child: SingleChildScrollView(
-                        controller: scrollController,
-                        padding: const EdgeInsets.all(16),
+                  builder:
+                      (context, constraints) => ClipRect(
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const SizedBox(height: 2),
-
-                            if (widget.onGetDirections != null) ...[
-                              SizedBox(
+                            // * Handle bar — GestureDetector enables drag-to-resize on desktop/web
+                            GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onVerticalDragUpdate: (details) {
+                                final screenH =
+                                    MediaQuery.of(context).size.height;
+                                final delta = -details.delta.dy / screenH;
+                                final next = (_sheetController.size + delta)
+                                    .clamp(0.24, 0.95);
+                                _sheetController.jumpTo(next);
+                              },
+                              child: Container(
                                 width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: () {
-                                    HapticFeedback.mediumImpact();
-                                    widget.onGetDirections?.call();
-                                  },
-                                  icon: const Icon(Icons.directions),
-                                  label: const Text(
-                                    "Get Directions",
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppTheme.primaryColor,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: AppTheme.spacingMD,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(
-                                        AppTheme.radiusMD,
-                                      ),
-                                    ),
-                                  ),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  12,
+                                  12,
                                 ),
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-
-                            // * Photos
-                            FutureBuilder<List<PlaceImage>>(
-                              future: _approvedImagesFuture,
-                              builder: (context, snapshot) {
-                                final images = snapshot.data ?? [];
-                                if (snapshot.connectionState ==
-                                    ConnectionState.waiting) {
-                                  return const SizedBox(
-                                    height: 180,
-                                    child: Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
-                                  );
-                                }
-
-                                if (images.isEmpty) {
-                                  return Container(
-                                    height: 180,
-                                    width: double.infinity,
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.surfaceVariant,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: AppTheme.borderColor.withOpacity(
-                                          0.4,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.photo_library_outlined,
-                                            size: 42,
-                                            color: AppTheme.textSecondary
-                                                .withOpacity(0.7),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            "No approved photos yet",
-                                            style: TextStyle(
-                                              color: AppTheme.textSecondary
-                                                  .withOpacity(0.9),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            "Be the first to add one (reviewed before posting)",
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: AppTheme.textTertiary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }
-
-                                return Column(
+                                decoration: const BoxDecoration(
+                                  color: AppTheme.surfaceColor,
+                                ),
+                                child: Column(
                                   children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: SizedBox(
-                                        height: 220,
-                                        width: double.infinity,
-                                        child: PageView.builder(
-                                          itemCount: images.length,
-                                          onPageChanged: (index) {
-                                            setState(
-                                              () => _activeImageIndex = index,
-                                            );
-                                          },
-                                          itemBuilder: (context, index) {
-                                            final image = images[index];
-                                            return Image.network(
-                                              image.imageUrl,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (
-                                                context,
-                                                error,
-                                                stackTrace,
-                                              ) {
-                                                return const Center(
-                                                  child: Icon(
-                                                    Icons.broken_image,
-                                                  ),
-                                                );
-                                              },
-                                            );
-                                          },
+                                    // * Drag handle pill
+                                    MouseRegion(
+                                      cursor: SystemMouseCursors.resizeUpDown,
+                                      child: Container(
+                                        width: 48,
+                                        height: 5,
+                                        margin: const EdgeInsets.symmetric(
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.borderColor
+                                              .withOpacity(0.8),
+                                          borderRadius: BorderRadius.circular(
+                                            2.5,
+                                          ),
                                         ),
                                       ),
                                     ),
                                     const SizedBox(height: 8),
                                     Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: List.generate(images.length, (
-                                        index,
-                                      ) {
-                                        final active =
-                                            index == _activeImageIndex;
-                                        return AnimatedContainer(
-                                          duration: const Duration(
-                                            milliseconds: 200,
-                                          ),
-                                          margin: const EdgeInsets.symmetric(
-                                            horizontal: 4,
-                                          ),
-                                          width: active ? 18 : 8,
-                                          height: 8,
+                                      children: [
+                                        Container(
+                                          width: 32,
+                                          height: 32,
                                           decoration: BoxDecoration(
-                                            color:
-                                                active
-                                                    ? AppTheme.primaryColor
-                                                    : AppTheme.borderColor,
-                                            borderRadius: BorderRadius.circular(
-                                              99,
-                                            ),
+                                            color: AppTheme.primaryColor
+                                                .withOpacity(0.18),
+                                            shape: BoxShape.circle,
                                           ),
-                                        );
-                                      }),
+                                          child: const Icon(
+                                            Icons.place_outlined,
+                                            size: 18,
+                                            color: AppTheme.primaryColor,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            widget.place.name,
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        // * Desktop: expand/collapse button
+                                        if (AppTheme.isDesktop(context))
+                                          IconButton(
+                                            icon: const Icon(Icons.unfold_more),
+                                            tooltip: "Drag here to resize",
+                                            iconSize: 20,
+                                            color: AppTheme.textSecondary,
+                                            onPressed: () {
+                                              final cur = _sheetController.size;
+                                              _sheetController.animateTo(
+                                                cur < 0.7 ? 0.95 : 0.45,
+                                                duration: const Duration(
+                                                  milliseconds: 300,
+                                                ),
+                                                curve: Curves.easeInOut,
+                                              );
+                                            },
+                                          ),
+                                        IconButton(
+                                          icon: const Icon(Icons.close),
+                                          onPressed: widget.onClose,
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                );
-                              },
-                            ),
-
-                            const SizedBox(height: 12),
-
-                            // * Rating
-                            _buildRatingSection(
-                              isAuthenticated: isAuthenticated,
-                            ),
-                            const SizedBox(height: 12),
-
-                            // * Likes + Add Photo
-                            Row(
-                              children: [
-                                IconButton(
-                                  onPressed:
-                                      _isTogglingLike ? null : _toggleLike,
-                                  icon: Icon(
-                                    _hasLiked
-                                        ? Icons.thumb_up
-                                        : Icons.thumb_up_outlined,
-                                    color:
-                                        _hasLiked
-                                            ? AppTheme.primaryColor
-                                            : AppTheme.textSecondary,
-                                  ),
-                                  tooltip: _hasLiked ? "Unlike" : "Like",
-                                ),
-                                if (_isLoadingLikes)
-                                  const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                else
-                                  Text(
-                                    "$_likesCount",
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    onPressed: _addPhoto,
-                                    icon: const Icon(Icons.add_a_photo),
-                                    label: const Text("Add Photo"),
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AppTheme.warningColor.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(
-                                  AppTheme.radiusMD,
-                                ),
-                                border: Border.all(
-                                  color: AppTheme.warningColor.withOpacity(0.3),
-                                ),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(
-                                    Icons.gpp_good,
-                                    color: AppTheme.warningColor,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      "Photos are reviewed before posting. No nudity, no unrelated content, and only accurate place photos.",
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppTheme.textSecondary,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // * Comments
-                            const SizedBox(height: 18),
-                            const Divider(),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.comment_outlined,
-                                  size: 20,
-                                  color: AppTheme.textSecondary,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  "Comments",
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(width: 8),
-                                commentsAsync.when(
-                                  data:
-                                      (comments) => Text(
-                                        "(${comments.length})",
-                                        style: const TextStyle(
-                                          color: AppTheme.textSecondary,
-                                          fontSize: 14,
+                                    if (widget.place.category != null ||
+                                        widget.isRecentlySearched)
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(
+                                            left: 42,
+                                          ),
+                                          child: Wrap(
+                                            spacing: 8,
+                                            runSpacing: 6,
+                                            children: [
+                                              if (widget.place.category != null)
+                                                Chip(
+                                                  label: Text(
+                                                    widget.place.category!
+                                                        .toUpperCase(),
+                                                  ),
+                                                  backgroundColor: AppTheme
+                                                      .primaryColor
+                                                      .withOpacity(0.12),
+                                                ),
+                                              if (widget.isRecentlySearched)
+                                                Chip(
+                                                  avatar: const Icon(
+                                                    Icons.history,
+                                                    size: 16,
+                                                    color: AppTheme.infoColor,
+                                                  ),
+                                                  label: Text(
+                                                    widget.recentSearchMeta ==
+                                                                null ||
+                                                            widget
+                                                                .recentSearchMeta!
+                                                                .trim()
+                                                                .isEmpty
+                                                        ? "Recently searched"
+                                                        : "Recent • ${widget.recentSearchMeta!}",
+                                                  ),
+                                                  backgroundColor: AppTheme
+                                                      .infoColor
+                                                      .withOpacity(0.12),
+                                                  side: BorderSide(
+                                                    color: AppTheme.infoColor
+                                                        .withOpacity(0.35),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                  loading: () => const SizedBox.shrink(),
-                                  error: (_, __) => const SizedBox.shrink(),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
+                              ),
+                            ), // end GestureDetector
+                            Expanded(
+                              child: SingleChildScrollView(
+                                controller: scrollController,
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 2),
 
-                            commentsAsync.when(
-                              data: (comments) {
-                                if (comments.isEmpty) {
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 20,
-                                    ),
-                                    child: Center(
-                                      child: Column(
-                                        children: [
-                                          Icon(
-                                            Icons.comment_outlined,
-                                            size: 40,
-                                            color: AppTheme.textSecondary
-                                                .withOpacity(0.5),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            "No comments yet",
+                                    if (widget.onGetDirections != null) ...[
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: ElevatedButton.icon(
+                                          onPressed: () {
+                                            HapticFeedback.mediumImpact();
+                                            widget.onGetDirections?.call();
+                                          },
+                                          icon: const Icon(Icons.directions),
+                                          label: const Text(
+                                            "Get Directions",
                                             style: TextStyle(
-                                              color: AppTheme.textSecondary
-                                                  .withOpacity(0.7),
-                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 16,
                                             ),
                                           ),
-                                          if (!isAuthenticated) ...[
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              "Sign in to add a comment",
-                                              style: TextStyle(
-                                                color: AppTheme.textTertiary,
-                                                fontSize: 12,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                AppTheme.primaryColor,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: AppTheme.spacingMD,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                    AppTheme.radiusMD,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                    ],
+
+                                    // * Photos
+                                    FutureBuilder<List<PlaceImage>>(
+                                      future: _approvedImagesFuture,
+                                      builder: (context, snapshot) {
+                                        final images = snapshot.data ?? [];
+                                        if (snapshot.connectionState ==
+                                            ConnectionState.waiting) {
+                                          return const SizedBox(
+                                            height: 180,
+                                            child: Center(
+                                              child:
+                                                  CircularProgressIndicator(),
+                                            ),
+                                          );
+                                        }
+
+                                        if (images.isEmpty) {
+                                          return Container(
+                                            height: 180,
+                                            width: double.infinity,
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.surfaceVariant,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: AppTheme.borderColor
+                                                    .withOpacity(0.4),
                                               ),
                                             ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }
-
-                                return Column(
-                                  children:
-                                      comments.map((comment) {
-                                        return Container(
-                                          margin: const EdgeInsets.only(
-                                            bottom: 12,
-                                          ),
-                                          padding: const EdgeInsets.all(12),
-                                          decoration: BoxDecoration(
-                                            color: AppTheme.surfaceVariant,
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Row(
+                                            child: Center(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  CircleAvatar(
-                                                    radius: 14,
-                                                    backgroundColor: AppTheme
-                                                        .primaryColor
-                                                        .withOpacity(0.2),
-                                                    backgroundImage:
-                                                        comment.userPhotoUrl !=
-                                                                null
-                                                            ? NetworkImage(
-                                                              comment
-                                                                  .userPhotoUrl!,
-                                                            )
-                                                            : null,
-                                                    child:
-                                                        comment.userPhotoUrl ==
-                                                                null
-                                                            ? const Icon(
-                                                              Icons.person,
-                                                              size: 16,
-                                                            )
-                                                            : null,
+                                                  Icon(
+                                                    Icons
+                                                        .photo_library_outlined,
+                                                    size: 42,
+                                                    color: AppTheme
+                                                        .textSecondary
+                                                        .withOpacity(0.7),
                                                   ),
-                                                  const SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: Text(
-                                                      comment.userName ??
-                                                          "Anonymous",
-                                                      style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 13,
-                                                      ),
-                                                    ),
-                                                  ),
+                                                  const SizedBox(height: 8),
                                                   Text(
-                                                    _formatTimeAgo(
-                                                      comment.createdAt,
+                                                    "No approved photos yet",
+                                                    style: TextStyle(
+                                                      color: AppTheme
+                                                          .textSecondary
+                                                          .withOpacity(0.9),
                                                     ),
-                                                    style: const TextStyle(
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    "Be the first to add one (reviewed before posting)",
+                                                    style: TextStyle(
+                                                      fontSize: 12,
                                                       color:
                                                           AppTheme.textTertiary,
-                                                      fontSize: 11,
                                                     ),
                                                   ),
                                                 ],
                                               ),
-                                              const SizedBox(height: 8),
-                                              Text(comment.text),
-                                            ],
-                                          ),
+                                            ),
+                                          );
+                                        }
+
+                                        return Column(
+                                          children: [
+                                            ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              child: SizedBox(
+                                                height: 220,
+                                                width: double.infinity,
+                                                child: PageView.builder(
+                                                  itemCount: images.length,
+                                                  onPageChanged: (index) {
+                                                    setState(
+                                                      () =>
+                                                          _activeImageIndex =
+                                                              index,
+                                                    );
+                                                  },
+                                                  itemBuilder: (
+                                                    context,
+                                                    index,
+                                                  ) {
+                                                    final image = images[index];
+                                                    return Image.network(
+                                                      image.imageUrl,
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder: (
+                                                        context,
+                                                        error,
+                                                        stackTrace,
+                                                      ) {
+                                                        return const Center(
+                                                          child: Icon(
+                                                            Icons.broken_image,
+                                                          ),
+                                                        );
+                                                      },
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: List.generate(
+                                                images.length,
+                                                (index) {
+                                                  final active =
+                                                      index ==
+                                                      _activeImageIndex;
+                                                  return AnimatedContainer(
+                                                    duration: const Duration(
+                                                      milliseconds: 200,
+                                                    ),
+                                                    margin:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 4,
+                                                        ),
+                                                    width: active ? 18 : 8,
+                                                    height: 8,
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          active
+                                                              ? AppTheme
+                                                                  .primaryColor
+                                                              : AppTheme
+                                                                  .borderColor,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            99,
+                                                          ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            ),
+                                          ],
                                         );
-                                      }).toList(),
-                                );
-                              },
-                              loading:
-                                  () => const Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                              error:
-                                  (error, _) => Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 16,
+                                      },
                                     ),
-                                    child: Text(
-                                      "Failed to load comments: ${error.toString()}",
-                                      style: const TextStyle(
-                                        color: AppTheme.errorColor,
+
+                                    const SizedBox(height: 12),
+
+                                    // * Rating
+                                    _buildRatingSection(
+                                      isAuthenticated: isAuthenticated,
+                                    ),
+                                    const SizedBox(height: 12),
+
+                                    // * Likes + Add Photo
+                                    Row(
+                                      children: [
+                                        IconButton(
+                                          onPressed:
+                                              _isTogglingLike
+                                                  ? null
+                                                  : _toggleLike,
+                                          icon: Icon(
+                                            _hasLiked
+                                                ? Icons.thumb_up
+                                                : Icons.thumb_up_outlined,
+                                            color:
+                                                _hasLiked
+                                                    ? AppTheme.primaryColor
+                                                    : AppTheme.textSecondary,
+                                          ),
+                                          tooltip:
+                                              _hasLiked ? "Unlike" : "Like",
+                                        ),
+                                        if (_isLoadingLikes)
+                                          const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        else
+                                          Text(
+                                            "$_likesCount",
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: _addPhoto,
+                                            icon: const Icon(Icons.add_a_photo),
+                                            label: const Text("Add Photo"),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.warningColor
+                                            .withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(
+                                          AppTheme.radiusMD,
+                                        ),
+                                        border: Border.all(
+                                          color: AppTheme.warningColor
+                                              .withOpacity(0.3),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Icon(
+                                            Icons.gpp_good,
+                                            color: AppTheme.warningColor,
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              "Photos are reviewed before posting. No nudity, no unrelated content, and only accurate place photos.",
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: AppTheme.textSecondary,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
 
-                    // * Comment input — hidden when sheet is too small to prevent overflow
-                    if (constraints.maxHeight > 220)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceColor,
-                        border: Border(
-                          top: BorderSide(
-                            color: AppTheme.borderColor.withOpacity(0.5),
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _commentController,
-                              enabled: isAuthenticated && !_isSubmittingComment,
-                              decoration: InputDecoration(
-                                hintText:
-                                    isAuthenticated
-                                        ? "Add a comment..."
-                                        : "Log in to comment",
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: AppTheme.borderColor,
-                                  ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(
-                                    color: AppTheme.borderColor,
-                                  ),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
+                                    // * Comments
+                                    const SizedBox(height: 18),
+                                    const Divider(),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.comment_outlined,
+                                          size: 20,
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          "Comments",
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        commentsAsync.when(
+                                          data:
+                                              (comments) => Text(
+                                                "(${comments.length})",
+                                                style: const TextStyle(
+                                                  color: AppTheme.textSecondary,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                          loading:
+                                              () => const SizedBox.shrink(),
+                                          error:
+                                              (_, __) =>
+                                                  const SizedBox.shrink(),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+
+                                    commentsAsync.when(
+                                      data: (comments) {
+                                        if (comments.isEmpty) {
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 20,
+                                            ),
+                                            child: Center(
+                                              child: Column(
+                                                children: [
+                                                  Icon(
+                                                    Icons.comment_outlined,
+                                                    size: 40,
+                                                    color: AppTheme
+                                                        .textSecondary
+                                                        .withOpacity(0.5),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                    "No comments yet",
+                                                    style: TextStyle(
+                                                      color: AppTheme
+                                                          .textSecondary
+                                                          .withOpacity(0.7),
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                  if (!isAuthenticated) ...[
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      "Sign in to add a comment",
+                                                      style: TextStyle(
+                                                        color:
+                                                            AppTheme
+                                                                .textTertiary,
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        }
+
+                                        return Column(
+                                          children:
+                                              comments.map((comment) {
+                                                return Container(
+                                                  margin: const EdgeInsets.only(
+                                                    bottom: 12,
+                                                  ),
+                                                  padding: const EdgeInsets.all(
+                                                    12,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        AppTheme.surfaceVariant,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Row(
+                                                        children: [
+                                                          CircleAvatar(
+                                                            radius: 14,
+                                                            backgroundColor:
+                                                                AppTheme
+                                                                    .primaryColor
+                                                                    .withOpacity(
+                                                                      0.2,
+                                                                    ),
+                                                            backgroundImage:
+                                                                comment.userPhotoUrl !=
+                                                                        null
+                                                                    ? NetworkImage(
+                                                                      comment
+                                                                          .userPhotoUrl!,
+                                                                    )
+                                                                    : null,
+                                                            child:
+                                                                comment.userPhotoUrl ==
+                                                                        null
+                                                                    ? const Icon(
+                                                                      Icons
+                                                                          .person,
+                                                                      size: 16,
+                                                                    )
+                                                                    : null,
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 8,
+                                                          ),
+                                                          Expanded(
+                                                            child: Text(
+                                                              comment.userName ??
+                                                                  "Anonymous",
+                                                              style: const TextStyle(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                fontSize: 13,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          Text(
+                                                            _formatTimeAgo(
+                                                              comment.createdAt,
+                                                            ),
+                                                            style: const TextStyle(
+                                                              color:
+                                                                  AppTheme
+                                                                      .textTertiary,
+                                                              fontSize: 11,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      Text(comment.text),
+                                                    ],
+                                                  ),
+                                                );
+                                              }).toList(),
+                                        );
+                                      },
+                                      loading:
+                                          () => const Center(
+                                            child: CircularProgressIndicator(),
+                                          ),
+                                      error:
+                                          (error, _) => Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 16,
+                                            ),
+                                            child: Text(
+                                              "Failed to load comments: ${error.toString()}",
+                                              style: const TextStyle(
+                                                color: AppTheme.errorColor,
+                                              ),
+                                            ),
+                                          ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              textInputAction: TextInputAction.send,
-                              onSubmitted: (_) => _submitComment(),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            onPressed:
-                                _isSubmittingComment ? null : _submitComment,
-                            icon:
-                                _isSubmittingComment
-                                    ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+
+                            // * Comment input — hidden when sheet is too small to prevent overflow
+                            if (constraints.maxHeight > 220)
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.surfaceColor,
+                                  border: Border(
+                                    top: BorderSide(
+                                      color: AppTheme.borderColor.withOpacity(
+                                        0.5,
                                       ),
-                                    )
-                                    : const Icon(Icons.send),
-                            color: AppTheme.primaryColor,
-                            tooltip: "Send",
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ), // end Column
-                ), // end ClipRect
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _commentController,
+                                        enabled:
+                                            isAuthenticated &&
+                                            !_isSubmittingComment,
+                                        decoration: InputDecoration(
+                                          hintText:
+                                              isAuthenticated
+                                                  ? "Add a comment..."
+                                                  : "Log in to comment",
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            borderSide: BorderSide(
+                                              color: AppTheme.borderColor,
+                                            ),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            borderSide: BorderSide(
+                                              color: AppTheme.borderColor,
+                                            ),
+                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 10,
+                                              ),
+                                        ),
+                                        textInputAction: TextInputAction.send,
+                                        onSubmitted: (_) => _submitComment(),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    IconButton(
+                                      onPressed:
+                                          _isSubmittingComment
+                                              ? null
+                                              : _submitComment,
+                                      icon:
+                                          _isSubmittingComment
+                                              ? const SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                              : const Icon(Icons.send),
+                                      color: AppTheme.primaryColor,
+                                      tooltip: "Send",
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ), // end Column
+                      ), // end ClipRect
                 ), // end LayoutBuilder
               ),
             ),

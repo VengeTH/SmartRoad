@@ -36,6 +36,9 @@ smartroad/
 - **Authentication (Optional)**: Email/password authentication via Supabase Auth with demo mode support
 - **Guest Mode**: Use SmartRoad without logging in (navigation + map browsing)
 - **Interactive Map**: OpenStreetMap integration with real-time hazard markers
+
+- **Bottom Sheet UX Improvements**: Place and fuel detail sheets are more expandable (initial ~45% → max ~95%), include a visible drag handle, and support desktop drag-to-resize and an expand/collapse control; recently searched places show a "Recently searched" badge when applicable.
+- **Demo-mode Authentication Semantics**: Demo sessions act as authenticated demo users by default (allowing in-app contributions in demo storage). To test limited/anonymous flows, choose **Continue as Guest** at login.
 - **Hazard Reporting**: Report road hazards with type, severity, description, and photos (requires login)
 - **Feed View**: Reverse-chronological list of all reported hazards
 - **User Profiles**: View and update profile information

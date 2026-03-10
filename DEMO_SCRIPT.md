@@ -14,6 +14,7 @@
 - Tap "Demo Mode" button OR
 - Enter demo credentials and login
 - **Result**: User is authenticated and sees map
+	- **Note**: Demo authentication behaves like an authenticated user by default (you can comment/like/upload in demo storage). To test anonymous/limited flows, use **Continue as Guest** from the login screen.
 
 #### 2. View Map & Hazards (10 seconds)
 - Map loads with OpenStreetMap tiles
@@ -24,6 +25,7 @@
 - Traffic colors: Green (free flow), Yellow (moderate), Red (heavy), Dark red (standstill)
 - Tap a hazard marker
 - **Result**: Bottom sheet shows hazard details (type, description, severity, image if available)
+	- **Tip**: Place and fuel detail sheets are expandable — drag the top handle or use the expand icon on desktop to view more content. Recently searched places will show a "Recently searched" badge in the expanded sheet.
 
 #### 3. Report New Hazard (15 seconds)
 - Tap "Report Hazard" floating button

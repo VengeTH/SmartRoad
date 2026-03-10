@@ -1,6 +1,7 @@
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 
+import "../core/theme/app_theme.dart";
 import "../models/fuel_station.dart";
 import "../models/fuel_price.dart";
 import "../models/fuel_type.dart";
@@ -37,172 +38,242 @@ class FuelStationDetailSheet extends ConsumerStatefulWidget {
 
 class _FuelStationDetailSheetState
     extends ConsumerState<FuelStationDetailSheet> {
+  bool _isExpanded = false;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+    return AnimatedPadding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // * Drag handle
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: theme.dividerColor,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-
-          // * Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+      duration: AppTheme.animationFast,
+      curve: AppTheme.animationCurve,
+      child: DraggableScrollableSheet(
+        initialChildSize: _isExpanded ? 0.80 : 0.45,
+        minChildSize: 0.24,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) {
+          return Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: AppTheme.maxContentWidth(context),
+              ),
+              child: Material(
+                color: theme.colorScheme.surface,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
                   children: [
-                    Expanded(
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(14, 10, 10, 12),
+                      decoration: BoxDecoration(color: theme.colorScheme.surface),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            widget.station.name,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
+                          // * Drag handle - visible indicator for expandability
+                          Align(
+                            child: Tooltip(
+                              message: AppTheme.isDesktop(context)
+                                  ? "Drag to expand or collapse"
+                                  : "Swipe to expand",
+                              child: MouseRegion(
+                                cursor: SystemMouseCursors.grab,
+                                child: Container(
+                                  width: 48,
+                                  height: 5,
+                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: theme.dividerColor.withOpacity(0.8),
+                                    borderRadius: BorderRadius.circular(2.5),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                          if (widget.station.brand != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.station.brand!,
-                              style: theme.textTheme.bodyMedium?.copyWith(
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary.withOpacity(0.20),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.local_gas_station,
+                                  size: 18,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  widget.station.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  _isExpanded
+                                      ? Icons.unfold_less
+                                      : Icons.unfold_more,
+                                ),
+                                tooltip:
+                                    _isExpanded
+                                        ? "Collapse"
+                                        : "Expand",
+                                onPressed: () {
+                                  setState(() {
+                                    _isExpanded = !_isExpanded;
+                                  });
+                                },
+                              ),                              // * Desktop: show expand hint icon
+                              if (AppTheme.isDesktop(context))
+                                Tooltip(
+                                  message: "Drag sheet to resize",
+                                  child: Icon(
+                                    Icons.unfold_more,
+                                    size: 20,
+                                    color: theme.colorScheme.onSurface.withOpacity(0.4),
+                                  ),
+                                ),
+                              if (AppTheme.isDesktop(context))
+                                const SizedBox(width: 8),                              IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: widget.onClose,
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.location_on,
+                                size: 14,
                                 color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  "${widget.station.city}, ${widget.station.province}",
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.schedule,
+                                size: 12,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _stationLastUpdatedLabel(),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          _buildVerificationBadge(theme),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: scrollController,
+                        padding: const EdgeInsets.all(12),
+                        child:
+                            widget.station.prices.isEmpty
+                                ? _buildNoPricesState(theme)
+                                : Column(
+                                  children: [
+                                    for (final price
+                                        in widget.station.prices) ...[
+                                      _buildPriceCard(theme, price),
+                                      const SizedBox(height: 10),
+                                    ],
+                                  ],
+                                ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: widget.onUpdatePrices,
+                                  icon: const Icon(Icons.edit, size: 18),
+                                  label: const Text("Update Prices"),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _showReportDialog,
+                                  icon: const Icon(Icons.flag, size: 18),
+                                  label: const Text("Report incorrect price"),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (widget.onGetDirections != null) ...[
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: widget.onGetDirections,
+                                icon: const Icon(Icons.directions),
+                                label: const Text("Get Directions"),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: widget.onClose,
-                    ),
                   ],
                 ),
-                const SizedBox(height: 8),
-
-                // * Location info
-                Row(
-                  children: [
-                    Icon(
-                      Icons.location_on,
-                      size: 16,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        "${widget.station.city}, ${widget.station.province}",
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // * Station-level last updated
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.schedule,
-                      size: 14,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _stationLastUpdatedLabel(),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-
-                // * Verification badge
-                const SizedBox(height: 8),
-                _buildVerificationBadge(theme),
-              ],
+              ),
             ),
-          ),
-
-          const Divider(height: 1),
-
-          // * Fuel prices list
-          Flexible(
-            child:
-                widget.station.prices.isEmpty
-                    ? _buildNoPricesState(theme)
-                    : ListView.separated(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.all(16),
-                      itemCount: widget.station.prices.length,
-                      separatorBuilder:
-                          (context, index) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final price = widget.station.prices[index];
-                        return _buildPriceCard(theme, price);
-                      },
-                    ),
-          ),
-
-          // * Actions
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: widget.onUpdatePrices,
-                        icon: const Icon(Icons.edit, size: 18),
-                        label: const Text("Update Prices"),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _showReportDialog,
-                        icon: const Icon(Icons.flag, size: 18),
-                        label: const Text("Report incorrect price"),
-                      ),
-                    ),
-                  ],
-                ),
-                if (widget.onGetDirections != null) ...[
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: widget.onGetDirections,
-                      icon: const Icon(Icons.directions),
-                      label: const Text("Get Directions"),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -434,10 +505,9 @@ class _FuelStationDetailSheetState
     if (widget.station.prices.isEmpty) {
       return "Last updated: —";
     }
-    final latest =
-        widget.station.prices.reduce(
-          (a, b) => a.updatedAt.isAfter(b.updatedAt) ? a : b,
-        );
+    final latest = widget.station.prices.reduce(
+      (a, b) => a.updatedAt.isAfter(b.updatedAt) ? a : b,
+    );
     return "Last updated: ${FuelUtils.formatRelativeTime(latest.updatedAt)}";
   }
 
@@ -445,29 +515,26 @@ class _FuelStationDetailSheetState
     final prices = widget.station.prices;
     if (prices.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("No prices to report. Add prices first."),
-        ),
+        const SnackBar(content: Text("No prices to report. Add prices first.")),
       );
       return;
     }
 
     showDialog<void>(
       context: context,
-      builder: (context) => _ReportFuelPriceDialog(
-        stationId: widget.station.id,
-        prices: prices,
-        onSuccess: () {
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Report submitted. Thank you."),
-            ),
-          );
-          ref.read(selectedFuelStationProvider.notifier).refresh();
-        },
-        onCancel: () => Navigator.of(context).pop(),
-      ),
+      builder:
+          (context) => _ReportFuelPriceDialog(
+            stationId: widget.station.id,
+            prices: prices,
+            onSuccess: () {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Report submitted. Thank you.")),
+              );
+              ref.read(selectedFuelStationProvider.notifier).refresh();
+            },
+            onCancel: () => Navigator.of(context).pop(),
+          ),
     );
   }
 }
@@ -491,7 +558,8 @@ class _ReportFuelPriceDialog extends ConsumerStatefulWidget {
       _ReportFuelPriceDialogState();
 }
 
-class _ReportFuelPriceDialogState extends ConsumerState<_ReportFuelPriceDialog> {
+class _ReportFuelPriceDialogState
+    extends ConsumerState<_ReportFuelPriceDialog> {
   FuelType? _selectedFuelType;
   final _priceController = TextEditingController();
   final _reasonController = TextEditingController();
@@ -501,7 +569,8 @@ class _ReportFuelPriceDialogState extends ConsumerState<_ReportFuelPriceDialog> 
   @override
   void initState() {
     super.initState();
-    _selectedFuelType = widget.prices.isNotEmpty ? widget.prices.first.fuelType : null;
+    _selectedFuelType =
+        widget.prices.isNotEmpty ? widget.prices.first.fuelType : null;
     if (_selectedFuelType != null) {
       final p = widget.prices.firstWhere(
         (e) => e.fuelType == _selectedFuelType,
@@ -547,14 +616,17 @@ class _ReportFuelPriceDialogState extends ConsumerState<_ReportFuelPriceDialog> 
       _errorMessage = null;
     });
 
-    await ref.read(fuelSubmissionProvider.notifier).reportIncorrectPrice(
-      stationId: widget.stationId,
-      fuelType: fuelType,
-      reportedIncorrectPrice: reportedPrice,
-      reason: _reasonController.text.trim().isEmpty
-          ? null
-          : _reasonController.text.trim(),
-    );
+    await ref
+        .read(fuelSubmissionProvider.notifier)
+        .reportIncorrectPrice(
+          stationId: widget.stationId,
+          fuelType: fuelType,
+          reportedIncorrectPrice: reportedPrice,
+          reason:
+              _reasonController.text.trim().isEmpty
+                  ? null
+                  : _reasonController.text.trim(),
+        );
 
     final state = ref.read(fuelSubmissionProvider);
     if (!mounted) return;
@@ -594,12 +666,13 @@ class _ReportFuelPriceDialogState extends ConsumerState<_ReportFuelPriceDialog> 
                 labelText: "Fuel type",
                 border: OutlineInputBorder(),
               ),
-              items: widget.prices.map((p) {
-                return DropdownMenuItem<FuelType>(
-                  value: p.fuelType,
-                  child: Text(p.fuelType.displayName),
-                );
-              }).toList(),
+              items:
+                  widget.prices.map((p) {
+                    return DropdownMenuItem<FuelType>(
+                      value: p.fuelType,
+                      child: Text(p.fuelType.displayName),
+                    );
+                  }).toList(),
               onChanged: _onFuelTypeChanged,
             ),
             const SizedBox(height: 12),
@@ -609,7 +682,9 @@ class _ReportFuelPriceDialogState extends ConsumerState<_ReportFuelPriceDialog> 
                 labelText: "Incorrect price (₱)",
                 border: OutlineInputBorder(),
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -639,13 +714,14 @@ class _ReportFuelPriceDialogState extends ConsumerState<_ReportFuelPriceDialog> 
         ),
         FilledButton(
           onPressed: _isSubmitting ? null : _submit,
-          child: _isSubmitting
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text("Submit report"),
+          child:
+              _isSubmitting
+                  ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Text("Submit report"),
         ),
       ],
     );

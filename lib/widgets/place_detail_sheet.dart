@@ -18,12 +18,16 @@ import "../services/supabase_service.dart";
 /// * Photos are user-submitted and must be approved by an Admin before they appear publicly.
 class PlaceDetailSheet extends ConsumerStatefulWidget {
   final Place place;
+  final bool isRecentlySearched;
+  final String? recentSearchMeta;
   final VoidCallback onClose;
   final VoidCallback? onGetDirections;
 
   const PlaceDetailSheet({
     super.key,
     required this.place,
+    this.isRecentlySearched = false,
+    this.recentSearchMeta,
     required this.onClose,
     this.onGetDirections,
   });
@@ -129,7 +133,8 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
       if (!mounted) return;
       setState(() {
         _avgRating = (avg is num) ? avg.toDouble() : 0.0;
-        _ratingsCount = (count is int) ? count : ((count is num) ? count.toInt() : 0);
+        _ratingsCount =
+            (count is int) ? count : ((count is num) ? count.toInt() : 0);
         _myRating = myRating;
         _isLoadingRatings = false;
       });
@@ -151,7 +156,10 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
 
     setState(() => _isSubmittingRating = true);
     try {
-      await SupabaseService().setPlaceRating(placeId: widget.place.id, rating: rating);
+      await SupabaseService().setPlaceRating(
+        placeId: widget.place.id,
+        rating: rating,
+      );
       await _loadRatings();
     } catch (e) {
       if (mounted) {
@@ -195,9 +203,7 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
       decoration: BoxDecoration(
         color: AppTheme.surfaceVariant,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppTheme.borderColor.withOpacity(0.6),
-        ),
+        border: Border.all(color: AppTheme.borderColor.withOpacity(0.6)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,20 +256,25 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
             children: [
               for (int i = 1; i <= 5; i++)
                 InkWell(
-                  onTap: (!isAuthenticated || _isSubmittingRating)
-                      ? null
-                      : () {
-                          HapticFeedback.lightImpact();
-                          _setRating(i);
-                        },
+                  onTap:
+                      (!isAuthenticated || _isSubmittingRating)
+                          ? null
+                          : () {
+                            HapticFeedback.lightImpact();
+                            _setRating(i);
+                          },
                   borderRadius: BorderRadius.circular(8),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 2,
+                      vertical: 2,
+                    ),
                     child: Icon(
                       (_myRating ?? 0) >= i ? Icons.star : Icons.star_border,
-                      color: (_myRating ?? 0) >= i
-                          ? AppTheme.warningColor
-                          : AppTheme.borderColor,
+                      color:
+                          (_myRating ?? 0) >= i
+                              ? AppTheme.warningColor
+                              : AppTheme.borderColor,
                       size: 22,
                     ),
                   ),
@@ -419,15 +430,20 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
       }
 
       await service.createPlaceImage(placeId: widget.place.id, imageUrl: url);
+      setState(() {
+        _approvedImagesFuture = _loadApprovedImages();
+      });
 
       if (mounted) {
+        final message =
+            service.isDemoMode
+                ? "Photo added in demo mode."
+                : "Photo submitted for review. It will appear once approved.";
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              "Photo submitted for review. It will appear once approved.",
-            ),
+          SnackBar(
+            content: Text(message),
             backgroundColor: AppTheme.successColor,
-            duration: Duration(seconds: 3),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -455,10 +471,10 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
       duration: AppTheme.animationFast,
       curve: AppTheme.animationCurve,
       child: DraggableScrollableSheet(
-        // * Keep the preview compact by default so the map remains usable.
-        initialChildSize: 0.38,
-        minChildSize: 0.22,
-        maxChildSize: 0.85,
+        // * Start large enough for immediate preview, but keep map context visible.
+        initialChildSize: 0.45,
+        minChildSize: 0.24,
+        maxChildSize: 0.95,
         expand: false,
         builder: (context, scrollController) {
           return Center(
@@ -477,12 +493,122 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
                   children: [
                     // * Handle bar
                     Container(
-                      margin: const EdgeInsets.only(top: 12),
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppTheme.borderColor,
-                        borderRadius: BorderRadius.circular(2),
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                      decoration: const BoxDecoration(
+                        color: AppTheme.surfaceColor,
+                      ),
+                      child: Column(
+                        children: [
+                          // * Drag handle - visible indicator for expandability
+                          Tooltip(
+                            message: AppTheme.isDesktop(context)
+                                ? "Drag to expand or collapse"
+                                : "Swipe to expand",
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.grab,
+                              child: Container(
+                                width: 48,
+                                height: 5,
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.borderColor.withOpacity(0.8),
+                                  borderRadius: BorderRadius.circular(2.5),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryColor.withOpacity(0.18),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.place_outlined,
+                                  size: 18,
+                                  color: AppTheme.primaryColor,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  widget.place.name,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              // * Desktop: show expand hint icon
+                              if (AppTheme.isDesktop(context))
+                                Tooltip(
+                                  message: "Drag sheet to resize",
+                                  child: Icon(
+                                    Icons.unfold_more,
+                                    size: 20,
+                                    color: AppTheme.textSecondary.withOpacity(0.6),
+                                  ),
+                                ),
+                              if (AppTheme.isDesktop(context))
+                                const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: widget.onClose,
+                              ),
+                            ],
+                          ),
+                          if (widget.place.category != null ||
+                              widget.isRecentlySearched)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 42),
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  children: [
+                                    if (widget.place.category != null)
+                                      Chip(
+                                        label: Text(
+                                          widget.place.category!.toUpperCase(),
+                                        ),
+                                        backgroundColor: AppTheme.primaryColor
+                                            .withOpacity(0.12),
+                                      ),
+                                    if (widget.isRecentlySearched)
+                                      Chip(
+                                        avatar: const Icon(
+                                          Icons.history,
+                                          size: 16,
+                                          color: AppTheme.infoColor,
+                                        ),
+                                        label: Text(
+                                          widget.recentSearchMeta == null ||
+                                                  widget.recentSearchMeta!
+                                                      .trim()
+                                                      .isEmpty
+                                              ? "Recently searched"
+                                              : "Recent • ${widget.recentSearchMeta!}",
+                                        ),
+                                        backgroundColor:
+                                            AppTheme.infoColor.withOpacity(0.12),
+                                        side: BorderSide(
+                                          color: AppTheme.infoColor
+                                              .withOpacity(0.35),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     Expanded(
@@ -492,36 +618,7 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // * Header
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    widget.place.name,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.close),
-                                  onPressed: widget.onClose,
-                                ),
-                              ],
-                            ),
-                            if (widget.place.category != null) ...[
-                              const SizedBox(height: 6),
-                              Chip(
-                                label: Text(
-                                  widget.place.category!.toUpperCase(),
-                                ),
-                                backgroundColor: AppTheme.primaryColor
-                                    .withOpacity(0.12),
-                              ),
-                            ],
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 2),
 
                             if (widget.onGetDirections != null) ...[
                               SizedBox(
@@ -689,7 +786,9 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
                             const SizedBox(height: 12),
 
                             // * Rating
-                            _buildRatingSection(isAuthenticated: isAuthenticated),
+                            _buildRatingSection(
+                              isAuthenticated: isAuthenticated,
+                            ),
                             const SizedBox(height: 12),
 
                             // * Likes + Add Photo

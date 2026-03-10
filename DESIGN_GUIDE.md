@@ -257,15 +257,23 @@ SmartRoad supports **known-location previews** (e.g., malls, terminals) with com
 ### Place Preview Sheet
 
 - **Layout order**:
-  - Place name + optional category chip
+  - Drag handle (horizontal pill-shaped indicator at top)
+  - Place name + optional category chip (with recent search indicator if applicable)
   - Get Directions / Start Navigation (primary action)
   - Rating (average + count + user rating)
   - Photo carousel (approved photos only)
   - Like + Add Photo actions
   - Content guideline note (photo moderation rules)
   - Comments list + comment composer
-- **Behavior**: Draggable bottom sheet (compact by default; expandable to read comments/photos).
-- **Responsiveness**: Constrain max width on desktop (don’t stretch full-width).
+- **Behavior**: Draggable bottom sheet with generous expandability for content access.
+  - Initial: 45% of screen height (shows core info immediately)
+  - Min: 24% (compact view)
+  - Max: 95% (nearly full-screen for extended content)
+  - Drag handle visible at top for discoverability
+- **Responsiveness**: 
+  - Constrain max width on desktop (don't stretch full-width)
+  - Drag handle shows pointer cursor on web/desktop for clarity
+  - Touch-optimized sizing (48x5px handle) works on all devices
 - **Tone**: Helpful, neutral, safety-first (no memes, no loud colors).
 
 ## User Location Marker (Map)
@@ -293,6 +301,48 @@ SmartRoad supports **known-location previews** (e.g., malls, terminals) with com
   - OSM `maxspeed` tag (when available)
   - Default per `highway` type (fallback, user-editable)
   - Unknown (hide warning)
+
+### Fuel Station Detail Sheet
+
+- **Layout**: Similar expandable bottom sheet as place preview
+  - Drag handle at top for discoverability
+- **Behavior**: 
+  - Initial: 45% of screen height (80% when expanded via toggle)
+  - Min: 24%
+  - Max: 95%
+  - Responsive drag handle with pointer cursor on web/desktop
+- **Content**: Station details, fuel prices, navigation actions, and community features
+
+### Drag Handle Standards
+
+All draggable bottom sheets should include a visible drag handle:
+- **Size**: 48px wide × 5px tall (touch-optimized)
+- **Position**: Centered at top of sheet, 4px vertical margin
+- **Color**: Theme divider/border color with 80% opacity
+- **Shape**: Rounded pill (2.5px border radius)
+- **Interaction**: 
+  - Mobile: Shows "Swipe to expand" tooltip
+  - Desktop: Shows "Drag to expand or collapse" tooltip with grab cursor
+  - Click and drag vertically to resize the sheet
+- **Desktop Enhancement**: For place sheets, an `unfold_more` icon appears next to the close button with tooltip "Drag sheet to resize"
+- **Purpose**: Visual affordance that sheet can be dragged to expand/collapse
+
+### Desktop vs Mobile Interaction Consistency
+
+**Consistency Rules:**
+- **Desktop-to-Desktop**: All desktop/laptop/web browsers must have identical interaction patterns
+  - Same tooltips ("Drag to expand or collapse")
+  - Same cursor indicators (grab cursor on handle)
+  - Same expand icons visible
+  - Click + drag gesture for resizing
+- **Mobile-to-Mobile**: All mobile/tablet devices must have identical interaction patterns
+  - Same tooltips ("Swipe to expand")  
+  - Touch-optimized drag handle sizing
+  - Swipe gesture for resizing
+- **Desktop vs Mobile**: Different interaction patterns are acceptable when they improve platform-specific UX
+  - Desktop shows more detailed tooltips and cursor hints
+  - Desktop may show additional expand icons
+  - Mobile optimizes for touch gestures
 
 ## Guest Mode (No Login)
 

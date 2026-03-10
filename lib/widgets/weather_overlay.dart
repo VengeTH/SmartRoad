@@ -13,14 +13,14 @@ class WeatherOverlay extends StatefulWidget {
   final LatLng center;
   final LatLngBounds? bounds;
   final bool isVisible;
-  
+
   const WeatherOverlay({
     super.key,
     required this.center,
     this.bounds,
     this.isVisible = true,
   });
-  
+
   @override
   State<WeatherOverlay> createState() => _WeatherOverlayState();
 }
@@ -30,7 +30,7 @@ class _WeatherOverlayState extends State<WeatherOverlay> {
   WeatherData? _weatherData;
   bool _isLoading = false;
   Timer? _updateTimer;
-  
+
   @override
   void initState() {
     super.initState();
@@ -42,7 +42,7 @@ class _WeatherOverlayState extends State<WeatherOverlay> {
       });
     }
   }
-  
+
   @override
   void didUpdateWidget(WeatherOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -58,26 +58,26 @@ class _WeatherOverlayState extends State<WeatherOverlay> {
       }
     }
   }
-  
+
   @override
   void dispose() {
     _updateTimer?.cancel();
     super.dispose();
   }
-  
+
   Future<void> _fetchWeather() async {
     if (!widget.isVisible || _isLoading) return;
-    
+
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
       final weatherData = await _weatherService.fetchWeatherData(
         center: widget.center,
         bounds: widget.bounds,
       );
-      
+
       if (mounted) {
         setState(() {
           _weatherData = weatherData;
@@ -92,21 +92,17 @@ class _WeatherOverlayState extends State<WeatherOverlay> {
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     if (!widget.isVisible || _weatherData == null) {
       return const SizedBox.shrink();
     }
-    
+
     return Stack(
       children: [
         // * Semi-transparent color overlay
-        Positioned.fill(
-          child: Container(
-            color: _weatherData!.overlayColor,
-          ),
-        ),
+        Positioned.fill(child: Container(color: _weatherData!.overlayColor)),
         // * Weather icon at center
         Positioned(
           left: MediaQuery.of(context).size.width / 2 - 20,
@@ -124,9 +120,10 @@ class _WeatherOverlayState extends State<WeatherOverlay> {
                 ),
               ],
             ),
-            child: Text(
-              _weatherData!.icon,
-              style: const TextStyle(fontSize: 24),
+            child: Icon(
+              _weatherData!.iconData,
+              size: 24,
+              color: AppTheme.textPrimary,
             ),
           ),
         ),
@@ -139,25 +136,22 @@ class _WeatherOverlayState extends State<WeatherOverlay> {
 class WeatherOverlayToggle extends StatelessWidget {
   final bool isEnabled;
   final VoidCallback onToggle;
-  
+
   const WeatherOverlayToggle({
     super.key,
     required this.isEnabled,
     required this.onToggle,
   });
-  
+
   @override
   Widget build(BuildContext context) {
     return FloatingActionButton.small(
       onPressed: onToggle,
-      backgroundColor: isEnabled 
-          ? AppTheme.primaryColor 
-          : AppTheme.surfaceColor,
+      backgroundColor:
+          isEnabled ? AppTheme.primaryColor : AppTheme.surfaceColor,
       child: Icon(
         isEnabled ? Icons.cloud : Icons.cloud_outlined,
-        color: isEnabled 
-            ? Colors.white 
-            : AppTheme.textSecondary,
+        color: isEnabled ? Colors.white : AppTheme.textSecondary,
       ),
     );
   }
@@ -166,7 +160,7 @@ class WeatherOverlayToggle extends StatelessWidget {
 /// * Weather legend widget
 class WeatherLegend extends StatelessWidget {
   const WeatherLegend({super.key});
-  
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -174,10 +168,7 @@ class WeatherLegend extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor.withOpacity(0.95),
         borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-        border: Border.all(
-          color: AppTheme.borderColor,
-          width: 1,
-        ),
+        border: Border.all(color: AppTheme.borderColor, width: 1),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -185,9 +176,9 @@ class WeatherLegend extends StatelessWidget {
         children: [
           Text(
             "Weather Conditions",
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: AppTheme.spacingMD),
           _LegendItem(icon: "☀️", label: "Sunny"),
@@ -204,30 +195,20 @@ class WeatherLegend extends StatelessWidget {
 class _LegendItem extends StatelessWidget {
   final String icon;
   final String label;
-  
-  const _LegendItem({
-    required this.icon,
-    required this.label,
-  });
-  
+
+  const _LegendItem({required this.icon, required this.label});
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppTheme.spacingSM),
       child: Row(
         children: [
-          Text(
-            icon,
-            style: const TextStyle(fontSize: 20),
-          ),
+          Text(icon, style: const TextStyle(fontSize: 20)),
           const SizedBox(width: AppTheme.spacingMD),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
     );
   }
 }
-

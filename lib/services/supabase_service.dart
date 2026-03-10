@@ -12,12 +12,20 @@ import "../core/constants/app_constants.dart";
 
 /// * Supabase service for database operations
 class SupabaseService {
+  static const String demoUserId = "demo-user-id";
+
   static final SupabaseService _instance = SupabaseService._internal();
   factory SupabaseService() => _instance;
   SupabaseService._internal();
-  
+
   bool _isInitialized = false;
-  
+  bool _isDemoAuthenticated = false;
+
+  final Map<String, List<PlaceComment>> _demoPlaceComments = {};
+  final Map<String, Set<String>> _demoPlaceLikes = {};
+  final Map<String, Map<String, int>> _demoPlaceRatings = {};
+  final Map<String, List<PlaceImage>> _demoPlaceImages = {};
+
   /// * Check if running in demo mode (no database connection)
   bool get isDemoMode => !_isInitialized || !Env.validate();
   
@@ -42,12 +50,12 @@ class SupabaseService {
       _isInitialized = false;
       return;
     }
-    
+
     try {
-    await Supabase.initialize(
-      url: Env.supabaseUrl,
-      anonKey: Env.supabaseAnonKey,
-    );
+      await Supabase.initialize(
+        url: Env.supabaseUrl,
+        anonKey: Env.supabaseAnonKey,
+      );
       _isInitialized = true;
       debugPrint("✅ Supabase initialized successfully");
     } catch (e) {
@@ -56,7 +64,17 @@ class SupabaseService {
       // * Don't throw - allow demo mode
     }
   }
-  
+
+  /// * Mark demo mode as authenticated.
+  void markDemoAuthenticated() {
+    _isDemoAuthenticated = true;
+  }
+
+  /// * Mark demo mode as guest/not authenticated.
+  void clearDemoAuthentication() {
+    _isDemoAuthenticated = false;
+  }
+
   // * Authentication Methods
   
   /// * Sign up with email and password
@@ -77,13 +95,12 @@ class SupabaseService {
   }
   
   /// * Sign in with email and password
-  /// * In demo mode, validates demo credentials and returns a mock response
+  /// * In demo mode, validates demo credentials and marks the local demo session.
   Future<AuthResponse> signIn(String email, String password) async {
     if (isDemoMode) {
       // * Check if using demo credentials
       if (email == AppConstants.demoEmail && password == AppConstants.demoPassword) {
-        // * Create a mock user for demo mode
-        // * Note: This won't actually authenticate with Supabase, but allows demo flow
+        _isDemoAuthenticated = true;
         debugPrint("✅ Demo login successful");
         // * Return a mock AuthResponse - the app will handle demo mode separately
         throw Exception("DEMO_MODE_LOGIN"); // * Special exception to indicate demo login
@@ -102,11 +119,10 @@ class SupabaseService {
   }
   
   /// * Sign out
-  /// * In demo mode, clears the demo user state
+  /// * In demo mode, clears the local demo auth state.
   Future<void> signOut() async {
     if (isDemoMode) {
-      // * Demo mode sign out is handled by clearing demo user state
-      // * This is done in the UI layer (profile screen)
+      _isDemoAuthenticated = false;
       return;
     }
     final c = client;
@@ -116,21 +132,44 @@ class SupabaseService {
     await c.auth.signOut();
   }
   
-  /// * Get current user (returns null in demo mode)
+  /// * Get current user (returns null when no authenticated session exists)
   User? get currentUser {
+    if (isDemoMode) {
+      if (!_isDemoAuthenticated) return null;
+      return User(
+        id: demoUserId,
+        appMetadata: const {},
+        userMetadata: const {
+          "name": "Demo User",
+          "email": AppConstants.demoEmail,
+        },
+        aud: "authenticated",
+        createdAt: DateTime.now().toIso8601String(),
+      );
+    }
+
     final c = client;
     return c?.auth.currentUser;
   }
-  
-  /// * Get current user ID (returns null in demo mode)
-  String? get currentUserId => currentUser?.id;
-  
+
+  /// * Get current user ID
+  String? get currentUserId {
+    if (isDemoMode) {
+      return _isDemoAuthenticated ? demoUserId : null;
+    }
+    return currentUser?.id;
+  }
+
   /// * Check if user is authenticated
   bool get isAuthenticated {
-    if (isDemoMode) return false;
+    if (isDemoMode) {
+      return _isDemoAuthenticated;
+    }
     return currentUser != null;
   }
-  
+
+  String? get _effectiveUserId => currentUserId;
+
   // * Profile Methods
   
   /// * Get user profile
@@ -577,7 +616,9 @@ class SupabaseService {
   /// * Get comments for a place
   Future<List<PlaceComment>> getPlaceComments(String placeId) async {
     if (isDemoMode) {
-      return [];
+      final comments = List<PlaceComment>.from(_demoPlaceComments[placeId] ?? const []);
+      comments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return comments;
     }
     final c = client;
     if (c == null) {
@@ -616,12 +657,27 @@ class SupabaseService {
     required String placeId,
     required String text,
   }) async {
-    if (isDemoMode) {
-      throw Exception("Creating place comments not available in demo mode");
-    }
     if (!isAuthenticated) {
       throw Exception("User must be authenticated to comment");
     }
+
+    if (isDemoMode) {
+      final now = DateTime.now();
+      final userId = _effectiveUserId ?? demoUserId;
+      final comment = PlaceComment(
+        id: "demo-comment-${now.microsecondsSinceEpoch}",
+        placeId: placeId,
+        userId: userId,
+        text: text.trim(),
+        createdAt: now,
+        updatedAt: now,
+        userName: "Demo User",
+      );
+      final comments = _demoPlaceComments.putIfAbsent(placeId, () => <PlaceComment>[]);
+      comments.insert(0, comment);
+      return comment;
+    }
+
     final c = client;
     if (c == null) {
       throw Exception("Supabase client not available");
@@ -773,7 +829,14 @@ class SupabaseService {
     PlaceImageStatus? status,
   }) async {
     if (isDemoMode) {
-      return [];
+      final source = List<PlaceImage>.from(_demoPlaceImages[placeId] ?? const []);
+      if (status == null) {
+        source.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return source;
+      }
+      final filtered = source.where((item) => item.status == status).toList();
+      filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return filtered;
     }
     final c = client;
     if (c == null) {
@@ -818,12 +881,28 @@ class SupabaseService {
     required String placeId,
     required String imageUrl,
   }) async {
-    if (isDemoMode) {
-      throw Exception("Creating place images not available in demo mode");
-    }
     if (!isAuthenticated) {
       throw Exception("User must be authenticated to submit photos");
     }
+
+    if (isDemoMode) {
+      final now = DateTime.now();
+      final userId = _effectiveUserId ?? demoUserId;
+      final image = PlaceImage(
+        id: "demo-image-${now.microsecondsSinceEpoch}",
+        placeId: placeId,
+        userId: userId,
+        imageUrl: imageUrl,
+        status: PlaceImageStatus.approved,
+        createdAt: now,
+        updatedAt: now,
+        userName: "Demo User",
+      );
+      final images = _demoPlaceImages.putIfAbsent(placeId, () => <PlaceImage>[]);
+      images.insert(0, image);
+      return image;
+    }
+
     final c = client;
     if (c == null) {
       throw Exception("Supabase client not available");
@@ -941,7 +1020,7 @@ class SupabaseService {
   /// * Get likes count for a place
   Future<int> getPlaceLikesCount(String placeId) async {
     if (isDemoMode) {
-      return 0;
+      return (_demoPlaceLikes[placeId] ?? const <String>{}).length;
     }
     final c = client;
     if (c == null) {
@@ -958,9 +1037,16 @@ class SupabaseService {
 
   /// * Check if current user liked a place
   Future<bool> hasLikedPlace(String placeId) async {
-    if (isDemoMode || !isAuthenticated) {
+    if (!isAuthenticated) {
       return false;
     }
+
+    if (isDemoMode) {
+      final userId = _effectiveUserId;
+      if (userId == null) return false;
+      return (_demoPlaceLikes[placeId] ?? const <String>{}).contains(userId);
+    }
+
     final c = client;
     if (c == null) {
       return false;
@@ -983,12 +1069,24 @@ class SupabaseService {
 
   /// * Toggle like for current user on a place (like/unlike)
   Future<void> togglePlaceLike(String placeId) async {
-    if (isDemoMode) {
-      throw Exception("Likes not available in demo mode");
-    }
     if (!isAuthenticated) {
       throw Exception("User must be authenticated to like");
     }
+
+    if (isDemoMode) {
+      final userId = _effectiveUserId;
+      if (userId == null) {
+        throw Exception("User not available");
+      }
+      final likes = _demoPlaceLikes.putIfAbsent(placeId, () => <String>{});
+      if (likes.contains(userId)) {
+        likes.remove(userId);
+      } else {
+        likes.add(userId);
+      }
+      return;
+    }
+
     final c = client;
     if (c == null) {
       throw Exception("Supabase client not available");
@@ -1023,9 +1121,16 @@ class SupabaseService {
 
   /// * Get current user's rating for a place (1–5), or null if not rated.
   Future<int?> getMyPlaceRating(String placeId) async {
-    if (isDemoMode || !isAuthenticated) {
+    if (!isAuthenticated) {
       return null;
     }
+
+    if (isDemoMode) {
+      final userId = _effectiveUserId;
+      if (userId == null) return null;
+      return _demoPlaceRatings[placeId]?[userId];
+    }
+
     final c = client;
     if (c == null) {
       return null;
@@ -1063,9 +1168,21 @@ class SupabaseService {
   /// * - ratingsCount: 0..n
   Future<Map<String, dynamic>> getPlaceRatingsSummary(String placeId) async {
     if (isDemoMode) {
+      final ratings = (_demoPlaceRatings[placeId] ?? const <String, int>{})
+          .values
+          .toList();
+      if (ratings.isEmpty) {
+        return {
+          "avgRating": 0.0,
+          "ratingsCount": 0,
+        };
+      }
+
+      final total = ratings.fold<int>(0, (sum, r) => sum + r);
+      final avg = total / ratings.length;
       return {
-        "avgRating": 0.0,
-        "ratingsCount": 0,
+        "avgRating": avg,
+        "ratingsCount": ratings.length,
       };
     }
     final c = client;
@@ -1118,12 +1235,23 @@ class SupabaseService {
     if (rating < 1 || rating > 5) {
       throw Exception("Rating must be between 1 and 5");
     }
-    if (isDemoMode) {
-      throw Exception("Ratings not available in demo mode");
-    }
     if (!isAuthenticated) {
       throw Exception("User must be authenticated to rate places");
     }
+
+    if (isDemoMode) {
+      final userId = _effectiveUserId;
+      if (userId == null) {
+        throw Exception("User not available");
+      }
+      final ratings = _demoPlaceRatings.putIfAbsent(
+        placeId,
+        () => <String, int>{},
+      );
+      ratings[userId] = rating;
+      return;
+    }
+
     final c = client;
     if (c == null) {
       throw Exception("Supabase client not available");

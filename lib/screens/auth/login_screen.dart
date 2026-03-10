@@ -150,9 +150,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       
       // * Check if in demo mode
       if (service.isDemoMode) {
+        service.markDemoAuthenticated();
+
         // * Create a demo user
         final demoUser = User(
-          id: "demo-user-id",
+          id: SupabaseService.demoUserId,
           appMetadata: {},
           userMetadata: {
             'name': 'Demo User',
@@ -161,7 +163,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           aud: 'authenticated',
           createdAt: DateTime.now().toIso8601String(),
         );
-        
+
         // * Set demo user in state
         ref.read(demoUserStateProvider.notifier).state = demoUser;
         
@@ -210,8 +212,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       // * Check if it's the special demo mode exception
       if (e.toString().contains("DEMO_MODE_LOGIN")) {
         // * This shouldn't happen, but handle it just in case
+        SupabaseService().markDemoAuthenticated();
         final demoUser = User(
-          id: "demo-user-id",
+          id: SupabaseService.demoUserId,
           appMetadata: {},
           userMetadata: {
             'name': 'Demo User',
@@ -267,6 +270,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     // * Dismiss keyboard
     FocusScope.of(context).unfocus();
     HapticFeedback.lightImpact();
+
+    final service = SupabaseService();
+    if (service.isDemoMode) {
+      service.clearDemoAuthentication();
+      ref.read(demoUserStateProvider.notifier).state = null;
+    }
 
     if (!mounted) return;
 

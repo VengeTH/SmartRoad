@@ -40,7 +40,6 @@ import "../../services/speed_limit_service.dart";
 import "../../services/supabase_service.dart";
 import "../../services/app_preferences_service.dart";
 import "../../providers/map_ui_provider.dart";
-import "../../providers/hazards_provider.dart" show MapHazardsNotifier;
 import "../../providers/sticker_provider.dart";
 import "../../providers/navigation_settings_provider.dart";
 import "../../models/sticker.dart";
@@ -428,7 +427,7 @@ class _LocationOptionsSheet extends StatelessWidget {
             // * Location name
             Padding(
               padding: const EdgeInsets.symmetric(
-                horizontal: AppTheme.spacingXL,
+                horizontal: AppTheme.spacingLG,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,11 +442,11 @@ class _LocationOptionsSheet extends StatelessWidget {
                               locationName,
                               style: Theme.of(
                                 context,
-                              ).textTheme.titleLarge?.copyWith(
+                              ).textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: AppTheme.textPrimary,
                               ),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             if (address != null) ...[
@@ -470,10 +469,13 @@ class _LocationOptionsSheet extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: AppTheme.spacingMD),
+                  const SizedBox(height: AppTheme.spacingSM),
                   // * Coordinates
                   Container(
-                    padding: const EdgeInsets.all(AppTheme.spacingSM),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.spacingSM,
+                      vertical: AppTheme.spacingXS,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.surfaceVariant,
                       borderRadius: BorderRadius.circular(AppTheme.radiusMD),
@@ -494,6 +496,8 @@ class _LocationOptionsSheet extends StatelessWidget {
                             color: AppTheme.textSecondary,
                             fontFamily: 'monospace',
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -501,11 +505,11 @@ class _LocationOptionsSheet extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: AppTheme.spacingLG),
+            const SizedBox(height: AppTheme.spacingSM),
             // * Action buttons
             Padding(
               padding: const EdgeInsets.symmetric(
-                horizontal: AppTheme.spacingXL,
+                horizontal: AppTheme.spacingLG,
               ),
               child: Column(
                 children: [
@@ -529,7 +533,7 @@ class _LocationOptionsSheet extends StatelessWidget {
                         backgroundColor: AppTheme.primaryColor,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
-                          vertical: AppTheme.spacingMD,
+                          vertical: AppTheme.spacingSM,
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(
@@ -552,7 +556,7 @@ class _LocationOptionsSheet extends StatelessWidget {
                       label: const Text("Photos & Comments"),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
-                          vertical: AppTheme.spacingMD,
+                          vertical: AppTheme.spacingSM,
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(
@@ -574,7 +578,7 @@ class _LocationOptionsSheet extends StatelessWidget {
                       label: const Text("Add Fuel Station"),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
-                          vertical: AppTheme.spacingMD,
+                          vertical: AppTheme.spacingSM,
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(
@@ -598,7 +602,7 @@ class _LocationOptionsSheet extends StatelessWidget {
                           label: const Text("Save"),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
-                              vertical: AppTheme.spacingMD,
+                              vertical: AppTheme.spacingSM,
                             ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(
@@ -619,7 +623,7 @@ class _LocationOptionsSheet extends StatelessWidget {
                           label: const Text("Share"),
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
-                              vertical: AppTheme.spacingMD,
+                              vertical: AppTheme.spacingSM,
                             ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(
@@ -644,7 +648,7 @@ class _LocationOptionsSheet extends StatelessWidget {
                       label: const Text("View on Map"),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
-                          vertical: AppTheme.spacingMD,
+                          vertical: AppTheme.spacingSM,
                         ),
                       ),
                     ),
@@ -652,7 +656,7 @@ class _LocationOptionsSheet extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: AppTheme.spacingXL),
+            const SizedBox(height: AppTheme.spacingMD),
           ],
         ),
       ),
@@ -735,9 +739,9 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen> {
   static const double _knownPlacesMinZoom =
-      9.0; // * Show known places earlier (was 11.0)
-  static const double _dynamicPoisMinZoom =
-      12.0; // * Show dynamic POIs earlier (was 16.0)
+  9.0; // * Show curated places earlier as instant POI fallback
+    static const double _dynamicPoisMinZoom =
+      7.0; // * Show dynamic POIs earlier for better context
   static const double _navigationFollowZoom = 16.8;
   static const Duration _navigationCameraThrottle = Duration(milliseconds: 250);
 
@@ -773,6 +777,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   List<Place> _knownPlaces = [];
   List<MapPoi> _dynamicPois = [];
   bool _isLoadingDynamicPois = false;
+  bool _pendingPoiRefresh = false;
+  final Map<String, List<MapPoi>> _poiResponseCache = {};
   Timer? _poiDebounceTimer;
   String? _lastPoiRequestKey;
   DateTime? _lastPoiFetchedAt;
@@ -1173,11 +1179,105 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
+  FuelStation? _resolveFuelStationFromSearchResult(
+    Map<String, dynamic> result,
+  ) {
+    final stations = ref.read(mapFuelStationsProvider).valueOrNull ?? const [];
+    if (stations.isEmpty) return null;
+
+    final lat = double.tryParse(result["lat"]?.toString() ?? "");
+    final lon = double.tryParse(result["lon"]?.toString() ?? "");
+    final selectedLocation =
+        (lat != null && lon != null) ? LatLng(lat, lon) : null;
+
+    final rawName = (result["display_name"] ?? "").toString();
+    final primaryName = rawName.split(",").first.trim();
+    final normalizedQuery = _normalizePoiName(primaryName);
+
+    final withinRadius =
+        selectedLocation == null
+            ? stations
+            : stations.where((s) {
+              final distanceMeters = _calculateHaversineDistance(
+                selectedLocation,
+                s.location,
+              );
+              return distanceMeters <= 300;
+            }).toList();
+
+    List<FuelStation> candidatePool =
+        withinRadius.isNotEmpty ? withinRadius : stations;
+
+    if (normalizedQuery.isNotEmpty) {
+      final exactNameMatches =
+          candidatePool
+              .where((s) => _normalizePoiName(s.name) == normalizedQuery)
+              .toList();
+      if (exactNameMatches.isNotEmpty) {
+        candidatePool = exactNameMatches;
+      } else {
+        final containsNameMatches =
+            candidatePool.where((s) {
+              final stationName = _normalizePoiName(s.name);
+              return stationName.contains(normalizedQuery) ||
+                  normalizedQuery.contains(stationName);
+            }).toList();
+        if (containsNameMatches.isNotEmpty) {
+          candidatePool = containsNameMatches;
+        }
+      }
+    }
+
+    candidatePool.sort((a, b) {
+      if (selectedLocation == null) return 0;
+      final distA = _calculateHaversineDistance(selectedLocation, a.location);
+      final distB = _calculateHaversineDistance(selectedLocation, b.location);
+      return distA.compareTo(distB);
+    });
+
+    return candidatePool.isEmpty ? null : candidatePool.first;
+  }
+
   String _buildPoiRequestKey({required double zoom, required LatLng center}) {
     final zoomBucket = zoom.floor(); // * Reduce refresh spam while zooming.
-    final latKey = (center.latitude * 1000).round(); // ~100m-ish bucket
-    final lonKey = (center.longitude * 1000).round();
+    final latKey = (center.latitude * 250).round(); // ~400m bucket
+    final lonKey = (center.longitude * 250).round();
     return "$zoomBucket:$latKey:$lonKey";
+  }
+
+  List<MapPoi>? _findNearbyCachedPois(String requestKey) {
+    final parts = requestKey.split(":");
+    if (parts.length != 3) return null;
+
+    final zoomBucket = int.tryParse(parts[0]);
+    final latKey = int.tryParse(parts[1]);
+    final lonKey = int.tryParse(parts[2]);
+    if (zoomBucket == null || latKey == null || lonKey == null) return null;
+
+    List<MapPoi>? best;
+    var bestDistance = 1 << 30;
+    for (final entry in _poiResponseCache.entries) {
+      final keyParts = entry.key.split(":");
+      if (keyParts.length != 3) continue;
+
+      final z = int.tryParse(keyParts[0]);
+      final y = int.tryParse(keyParts[1]);
+      final x = int.tryParse(keyParts[2]);
+      if (z == null || y == null || x == null) continue;
+      if (z != zoomBucket) continue;
+
+      final distance = (y - latKey).abs() + (x - lonKey).abs();
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = entry.value;
+      }
+    }
+
+    if (best != null && bestDistance <= 2) {
+      return best;
+    }
+
+    return null;
   }
 
   void _scheduleDynamicPoiRefresh() {
@@ -1192,7 +1292,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     _poiDebounceTimer?.cancel();
-    _poiDebounceTimer = Timer(const Duration(milliseconds: 400), () {
+    _poiDebounceTimer = Timer(const Duration(milliseconds: 40), () {
       if (mounted) {
         _loadDynamicPoisForViewport();
       }
@@ -1200,7 +1300,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   Future<void> _loadDynamicPoisForViewport() async {
-    if (_isLoadingDynamicPois || !_isMapReady) return;
+    if (!_isMapReady) return;
+    if (_isLoadingDynamicPois) {
+      _pendingPoiRefresh = true;
+      return;
+    }
 
     final zoom = _mapZoom;
     if (_isNavigating || zoom < _dynamicPoisMinZoom) {
@@ -1209,16 +1313,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     final now = DateTime.now();
     if (_lastPoiFetchedAt != null &&
-        now.difference(_lastPoiFetchedAt!).inSeconds < 2) {
+        now.difference(_lastPoiFetchedAt!).inMilliseconds < 120) {
       return;
     }
 
     final center = _mapCenter;
     final requestKey = _buildPoiRequestKey(zoom: zoom, center: center);
-    if (_lastPoiRequestKey == requestKey &&
-        _lastPoiFetchedAt != null &&
-        now.difference(_lastPoiFetchedAt!).inSeconds < 20) {
-      return;
+    final cachedPois = _poiResponseCache[requestKey];
+    final nearbyCachedPois = cachedPois ?? _findNearbyCachedPois(requestKey);
+    if (nearbyCachedPois != null && nearbyCachedPois.isNotEmpty && mounted) {
+      setState(() {
+        _dynamicPois = nearbyCachedPois;
+      });
+    }
+
+    if (_lastPoiRequestKey == requestKey && _lastPoiFetchedAt != null) {
+      // * If previous fetch was empty, retry sooner so POIs recover quickly.
+      final minRetrySeconds = _dynamicPois.isEmpty ? 0 : 2;
+      if (now.difference(_lastPoiFetchedAt!).inSeconds < minRetrySeconds) {
+        return;
+      }
     }
 
     setState(() => _isLoadingDynamicPois = true);
@@ -1226,103 +1340,148 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final bounds = _mapVisibleBounds;
       if (bounds == null) return;
 
-      // * Use Overpass API for ambient landmark display (tag-based, zoom-tiered).
-      // * This is far more reliable than Nominatim keyword search for POI browsing.
-      final rawPois = await OverpassPoiService().fetchInBounds(
+      List<MapPoi> buildLimited(List<MapPoi> source, {required int maxCount}) {
+        final knownNameIndex = _buildKnownPlaceNameIndex();
+
+        // * Dedupe by Overpass element id, filtering out known places.
+        final byId = <String, MapPoi>{};
+        for (final poi in source) {
+          final normalizedName = _normalizePoiName(poi.name);
+          if (normalizedName.isEmpty) continue;
+          final category = (poi.category ?? poi.type ?? "").toLowerCase();
+          final isFuelPoi = category == "fuel";
+
+          if (!isFuelPoi && knownNameIndex.contains(normalizedName)) continue;
+
+          if (!isFuelPoi) {
+            final tooCloseToKnown = _knownPlaces.any(
+              (p) => _calculateHaversineDistance(p.location, poi.location) < 70,
+            );
+            if (tooCloseToKnown) continue;
+          }
+
+          final existing = byId[poi.id];
+          if (existing == null) {
+            byId[poi.id] = poi;
+          } else {
+            final existingImportance = existing.importance ?? 0;
+            final nextImportance = poi.importance ?? 0;
+            if (nextImportance > existingImportance) {
+              byId[poi.id] = poi;
+            }
+          }
+        }
+
+        final byNameBucket = <String, MapPoi>{};
+        for (final poi in byId.values) {
+          final normalizedName = _normalizePoiName(poi.name);
+          final latKey = (poi.latitude * 2000).round();
+          final lonKey = (poi.longitude * 2000).round();
+          final dedupeKey = "$normalizedName:$latKey:$lonKey";
+
+          final existing = byNameBucket[dedupeKey];
+          if (existing == null) {
+            byNameBucket[dedupeKey] = poi;
+          } else {
+            final existingImportance = existing.importance ?? 0;
+            final nextImportance = poi.importance ?? 0;
+            if (nextImportance > existingImportance) {
+              byNameBucket[dedupeKey] = poi;
+            }
+          }
+        }
+
+        final merged =
+            byNameBucket.values.toList()
+              ..sort(
+                (a, b) => (b.importance ?? 0).compareTo(a.importance ?? 0),
+              );
+
+        final fuels =
+            merged
+                .where(
+                  (p) => (p.category ?? p.type ?? "").toLowerCase() == "fuel",
+                )
+                .toList();
+
+        final suppressed =
+            merged.where((p) {
+                final cat = (p.category ?? p.type ?? "").toLowerCase();
+                if (cat == "fuel") return true;
+                for (final f in fuels) {
+                  if (_calculateHaversineDistance(p.location, f.location) < 80) {
+                    return false;
+                  }
+                }
+                return true;
+              }).toList()
+              ..sort(
+                (a, b) => (b.importance ?? 0).compareTo(a.importance ?? 0),
+              );
+
+        return suppressed.take(maxCount).toList();
+      }
+
+      // * Stage 1: fetch a smaller set first for quicker first paint.
+      final quickRaw = await OverpassPoiService().fetchInBounds(
         bounds: bounds,
         zoom: zoom,
-        limit: 60,
+        limit: 36,
       );
       if (!mounted) return;
 
-      final knownNameIndex = _buildKnownPlaceNameIndex();
-
-      // * Dedupe by Overpass element id, filtering out known places.
-      final byId = <String, MapPoi>{};
-      for (final poi in rawPois) {
-        final normalizedName = _normalizePoiName(poi.name);
-        if (normalizedName.isEmpty) continue;
-
-        // * Remove POIs that are clearly the same as our curated known places.
-        if (knownNameIndex.contains(normalizedName)) continue;
-
-        // * Also remove POIs too close to known places (keeps the map clean).
-        final tooCloseToKnown = _knownPlaces.any(
-          (p) => _calculateHaversineDistance(p.location, poi.location) < 250,
-        );
-        if (tooCloseToKnown) continue;
-
-        final existing = byId[poi.id];
-        if (existing == null) {
-          byId[poi.id] = poi;
-        } else {
-          final existingImportance = existing.importance ?? 0;
-          final nextImportance = poi.importance ?? 0;
-          if (nextImportance > existingImportance) byId[poi.id] = poi;
-        }
-      }
-
-      // * Secondary dedupe by (name + ~55m coordinate bucket)
-      final byNameBucket = <String, MapPoi>{};
-      for (final poi in byId.values) {
-        final normalizedName = _normalizePoiName(poi.name);
-        final latKey = (poi.latitude * 2000).round();
-        final lonKey = (poi.longitude * 2000).round();
-        final dedupeKey = "$normalizedName:$latKey:$lonKey";
-
-        final existing = byNameBucket[dedupeKey];
-        if (existing == null) {
-          byNameBucket[dedupeKey] = poi;
-        } else {
-          final existingImportance = existing.importance ?? 0;
-          final nextImportance = poi.importance ?? 0;
-          if (nextImportance > existingImportance)
-            byNameBucket[dedupeKey] = poi;
-        }
-      }
-
-      final merged =
-          byNameBucket.values.toList()
-            ..sort((a, b) => (b.importance ?? 0).compareTo(a.importance ?? 0));
-
-      // * If a fuel POI exists, suppress nearby non-fuel POIs so the gas station label wins.
-      final fuels =
-          merged
-              .where(
-                (p) => (p.category ?? p.type ?? "").toLowerCase() == "fuel",
-              )
-              .toList();
-      final suppressed = merged.where((p) {
-        final cat = (p.category ?? p.type ?? "").toLowerCase();
-        if (cat == "fuel") return true;
-        for (final f in fuels) {
-          if (_calculateHaversineDistance(p.location, f.location) < 90) {
-            return false;
-          }
-        }
-        return true;
-      }).toList()
-        ..sort((a, b) => (b.importance ?? 0).compareTo(a.importance ?? 0));
-
-      // * Limit POI count to avoid clutter — Overpass already tiers by zoom.
-      final maxCount =
-          zoom >= 15.0
-              ? 40
-              : zoom >= 12.0
-              ? 38
-              : 20;
-      final limited = suppressed.take(maxCount).toList();
+      final quickLimited = buildLimited(
+        quickRaw,
+        maxCount: zoom >= 15.0 ? 70 : (zoom >= 12.0 ? 52 : 34),
+      );
 
       setState(() {
-        _dynamicPois = limited;
+        // * Keep previous markers if a transient request returns empty.
+        if (quickLimited.isNotEmpty || _dynamicPois.isEmpty) {
+          _dynamicPois = quickLimited;
+        }
+        if (quickLimited.isNotEmpty) {
+          _poiResponseCache[requestKey] = quickLimited;
+          if (_poiResponseCache.length > 36) {
+            _poiResponseCache.remove(_poiResponseCache.keys.first);
+          }
+        }
         _lastPoiRequestKey = requestKey;
         _lastPoiFetchedAt = now;
       });
+
+      // * Stage 2: fetch richer set and upgrade markers if still in same viewport key.
+      final fullRaw = await OverpassPoiService().fetchInBounds(
+        bounds: bounds,
+        zoom: zoom,
+        limit: 120,
+      );
+      if (!mounted) return;
+      final currentKey = _buildPoiRequestKey(zoom: _mapZoom, center: _mapCenter);
+      if (currentKey != requestKey) return;
+
+      final fullLimited = buildLimited(
+        fullRaw,
+        maxCount: zoom >= 15.0 ? 120 : (zoom >= 12.0 ? 86 : 52),
+      );
+
+      if (fullLimited.length > quickLimited.length) {
+        setState(() {
+          _dynamicPois = fullLimited;
+          _poiResponseCache[requestKey] = fullLimited;
+          _lastPoiRequestKey = requestKey;
+          _lastPoiFetchedAt = DateTime.now();
+        });
+      }
     } catch (e) {
       debugPrint("❌ [MapScreen] Failed to load dynamic POIs: $e");
     } finally {
       if (mounted) {
         setState(() => _isLoadingDynamicPois = false);
+      }
+      if (_pendingPoiRefresh && mounted) {
+        _pendingPoiRefresh = false;
+        _scheduleDynamicPoiRefresh();
       }
     }
   }
@@ -1673,12 +1832,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         ),
                         onTap: () {
                           Navigator.of(context).pop();
+                          final normalizedCategory =
+                              (poi.type ?? poi.category ?? "")
+                                  .trim()
+                                  .toLowerCase();
                           _selectSearchResult({
                             'display_name': poi.name,
                             'lat': poi.latitude.toString(),
                             'lon': poi.longitude.toString(),
                             'place_id': rawPlaceId,
                             'type': poi.type,
+                            'sr_kind': 'overpass_poi',
+                            'sr_poi_id': poi.id,
+                            'sr_poi_category': normalizedCategory,
                             'address': null,
                           });
                         },
@@ -1759,7 +1925,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // ! Avoid global fallback when we already have local matches or a country code.
       final hasLocalMatches = combined.any((r) => r.containsKey("sr_score"));
       final shouldFetchGlobal =
-          !hasLocalMatches && (country == null || country.isEmpty) && combined.length < 10;
+          !hasLocalMatches &&
+          (country == null || country.isEmpty) &&
+          combined.length < 10;
       if (shouldFetchGlobal) {
         final globalResults = await _nominatimSearch(query: trimmed, limit: 24);
         combined.addAll(globalResults);
@@ -1905,8 +2073,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       return 0;
     }
 
+    int queryBoost(String name) {
+      final n = name.toLowerCase();
+      if (q == "ntn") {
+        if (n.contains("ntn")) return 40;
+        if (n.contains("south emerald")) return -12;
+      }
+      return 0;
+    }
+
     // * Fuel stations already loaded from Supabase (within bounds/viewport).
-    final fuelStations = ref.read(mapFuelStationsProvider).valueOrNull ?? const [];
+    final fuelStations =
+        ref.read(mapFuelStationsProvider).valueOrNull ?? const [];
     for (final s in fuelStations) {
       final score = scoreText(s.name);
       if (score <= 0) continue;
@@ -1918,7 +2096,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         "type": "fuel",
         "sr_kind": "fuel_station",
         "sr_station_id": s.id,
-        "sr_score": score + 30, // * Prefer explicit fuel stations
+        "sr_score": score + 30 + queryBoost(s.name), // * Prefer explicit fuel stations
       });
     }
 
@@ -1937,13 +2115,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         "sr_kind": "overpass_poi",
         "sr_poi_id": poi.id,
         "sr_poi_category": category,
-        "sr_score": score + (isFuel ? 20 : 0),
+        "sr_score": score + (isFuel ? 20 : 0) + queryBoost(poi.name),
       });
     }
 
     // * Known places shipped with the app.
     for (final p in _knownPlaces) {
-      final score = scoreText(p.name);
+      final aliasScore = p.aliases.fold<int>(
+        0,
+        (best, alias) => math.max(best, scoreText(alias)),
+      );
+      final score = math.max(scoreText(p.name), aliasScore);
       if (score <= 0) continue;
       results.add({
         "display_name": p.name,
@@ -1953,14 +2135,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         "type": p.category,
         "sr_kind": "known_place",
         "sr_place_id": p.id,
-        "sr_score": score,
+        "sr_score": score + queryBoost(p.name),
       });
     }
 
     // * Sort local results by score then distance
     results.sort((a, b) {
-      final aScore = (a["sr_score"] is num) ? (a["sr_score"] as num).toInt() : 0;
-      final bScore = (b["sr_score"] is num) ? (b["sr_score"] as num).toInt() : 0;
+      final aScore =
+          (a["sr_score"] is num) ? (a["sr_score"] as num).toInt() : 0;
+      final bScore =
+          (b["sr_score"] is num) ? (b["sr_score"] as num).toInt() : 0;
       if (aScore != bScore) return bScore.compareTo(aScore);
 
       final aLat = double.tryParse(a["lat"]?.toString() ?? "");
@@ -1969,11 +2153,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final bLon = double.tryParse(b["lon"]?.toString() ?? "");
       final aDist =
           (aLat != null && aLon != null)
-              ? _calculateStraightLineDistance(_currentLocation, LatLng(aLat, aLon))
+              ? _calculateStraightLineDistance(
+                _currentLocation,
+                LatLng(aLat, aLon),
+              )
               : 1e9;
       final bDist =
           (bLat != null && bLon != null)
-              ? _calculateStraightLineDistance(_currentLocation, LatLng(bLat, bLon))
+              ? _calculateStraightLineDistance(
+                _currentLocation,
+                LatLng(bLat, bLon),
+              )
               : 1e9;
       return aDist.compareTo(bDist);
     });
@@ -2138,6 +2328,59 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
+  String _formatRecentAge(DateTime updatedAt) {
+    final now = DateTime.now();
+    final diff = now.difference(updatedAt);
+    if (diff.inMinutes < 1) return "just now";
+    if (diff.inHours < 1) return "${diff.inMinutes}m ago";
+    if (diff.inDays < 1) return "${diff.inHours}h ago";
+    return "${diff.inDays}d ago";
+  }
+
+  String _recentSummaryLabel() {
+    if (_recentLocations.isEmpty) return "No recents";
+    final latest = _recentLocations
+        .map((e) => e.updatedAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+    return "${_recentLocations.length} • ${_formatRecentAge(latest)}";
+  }
+
+  RecentLocation? _findRecentMatchForPlace(Place place) {
+    if (_recentLocations.isEmpty) return null;
+
+    final normalizedName = place.name.trim().toLowerCase();
+    RecentLocation? best;
+    double bestDistanceKm = double.infinity;
+
+    for (final recent in _recentLocations) {
+      final distanceKm = _calculateDistance(
+        place.location,
+        LatLng(recent.latitude, recent.longitude),
+      );
+
+      if (distanceKm > 0.3) {
+        continue;
+      }
+
+      final recentLabel = recent.label.trim().toLowerCase();
+      final nameMatches =
+          recentLabel.isNotEmpty &&
+          (normalizedName.contains(recentLabel) ||
+              recentLabel.contains(normalizedName));
+
+      if (!nameMatches && distanceKm > 0.12) {
+        continue;
+      }
+
+      if (distanceKm < bestDistanceKm) {
+        bestDistanceKm = distanceKm;
+        best = recent;
+      }
+    }
+
+    return best;
+  }
+
   double _getSearchResultsDropdownMaxHeight(BuildContext context) {
     final viewportHeight = MediaQuery.sizeOf(context).height;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
@@ -2272,28 +2515,34 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     // * Original behavior for normal search
     try {
+      final selectedFuelStation = _resolveFuelStationFromSearchResult(result);
+
       // * Local-first result: fuel station selection should open station UI directly.
       final srKind = result["sr_kind"]?.toString();
       if (srKind == "fuel_station") {
         final stationId = result["sr_station_id"]?.toString();
+        final stations =
+            ref.read(mapFuelStationsProvider).valueOrNull ?? const [];
+        FuelStation? station;
         if (stationId != null && stationId.trim().isNotEmpty) {
-          final stations = ref.read(mapFuelStationsProvider).valueOrNull ?? const [];
-          final match =
-              stations.where((s) => s.id == stationId).toList();
+          final match = stations.where((s) => s.id == stationId).toList();
           if (match.isNotEmpty) {
-            final station = match.first;
-            setState(() {
-              _selectedFuelStation = station;
-              _selectedHazard = null;
-              _selectedPlace = null;
-              _pinnedLocation = null;
-              _pinnedLocationLabel = null;
-              _showSearchResults = false;
-              _searchFocusNode.unfocus();
-            });
-            _safeMoveMap(station.location, 16.0);
-            return;
+            station = match.first;
           }
+        }
+        station ??= selectedFuelStation;
+        if (station != null) {
+          setState(() {
+            _selectedFuelStation = station;
+            _selectedHazard = null;
+            _selectedPlace = null;
+            _pinnedLocation = null;
+            _pinnedLocationLabel = null;
+            _showSearchResults = false;
+            _searchFocusNode.unfocus();
+          });
+          _safeMoveMap(station.location, 16.0);
+          return;
         }
       }
 
@@ -2301,7 +2550,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       if (srKind == "overpass_poi") {
         final category = result["sr_poi_category"]?.toString().trim();
         if (category == "fuel") {
-          final name = (result["display_name"] ?? "Fuel Station").toString().trim();
+          if (selectedFuelStation != null) {
+            setState(() {
+              _selectedFuelStation = selectedFuelStation;
+              _selectedHazard = null;
+              _selectedPlace = null;
+              _pinnedLocation = null;
+              _pinnedLocationLabel = null;
+              _showSearchResults = false;
+              _searchFocusNode.unfocus();
+            });
+            _safeMoveMap(selectedFuelStation.location, 16.0);
+            return;
+          }
+
+          final name =
+              (result["display_name"] ?? "Fuel Station").toString().trim();
           final lat = double.tryParse(result["lat"]?.toString() ?? "");
           final lon = double.tryParse(result["lon"]?.toString() ?? "");
           if (lat != null && lon != null) {
@@ -2332,6 +2596,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             _safeMoveMap(station.location, 16.0);
             return;
           }
+        }
+      }
+
+      final isFuelTypeResult =
+          (result['type']?.toString().trim().toLowerCase() ?? '') == 'fuel';
+      if (isFuelTypeResult) {
+        if (selectedFuelStation != null) {
+          setState(() {
+            _selectedFuelStation = selectedFuelStation;
+            _selectedHazard = null;
+            _selectedPlace = null;
+            _pinnedLocation = null;
+            _pinnedLocationLabel = null;
+            _showSearchResults = false;
+            _searchFocusNode.unfocus();
+          });
+          _safeMoveMap(selectedFuelStation.location, 16.0);
+          return;
         }
       }
 
@@ -2406,7 +2688,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       builder:
           (context) => _LocationOptionsSheet(
             location: location,
-            locationName: fullName.isNotEmpty ? fullName : "Location",
+            locationName:
+                shortName.isNotEmpty
+                    ? shortName
+                    : (fullName.isNotEmpty ? fullName : "Location"),
             address:
                 result["address"] != null
                     ? _formatAddress(result["address"] as Map<String, dynamic>)
@@ -6221,7 +6506,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           _hasPreciseLocation = true;
         });
         try {
-          _safeMoveMap(location, AppConstants.defaultZoom);
+          _safeMoveMap(location, _mapZoom);
           debugPrint("📍 [MapScreen] Map moved to last known location");
           // * Detect country code when location is updated
           _detectCountryCode();
@@ -6232,7 +6517,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
       // * Then get fresh position (await it to ensure we get location)
       try {
-        final position = await locationService.getCurrentPosition();
+        final position = await locationService.getCurrentPosition(
+          desiredAccuracy:
+              kIsWeb ? LocationAccuracy.medium : LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 4),
+          preferCached: true,
+        );
         if (!mounted) return;
         if (position != null) {
           final location = LatLng(position.latitude, position.longitude);
@@ -6252,19 +6542,48 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           // * Removed verbose logging to prevent console overflow
           // * Detect country code when location is updated
           _detectCountryCode();
+
+          // * Refine in background with higher precision without blocking UI.
+          unawaited(() async {
+            final precise = await locationService.getCurrentPosition(
+              desiredAccuracy:
+                  kIsWeb
+                      ? LocationAccuracy.high
+                      : LocationAccuracy.bestForNavigation,
+              timeLimit: const Duration(seconds: 10),
+              preferCached: false,
+            );
+            if (!mounted || precise == null) return;
+
+            final refined = LatLng(precise.latitude, precise.longitude);
+            final movedMeters = _calculateHaversineDistance(
+              _currentLocation,
+              refined,
+            );
+            if (movedMeters < 8) return;
+
+            setState(() {
+              _currentLocation = refined;
+              _hasPreciseLocation = true;
+            });
+
+            if (!_isNavigating) {
+              _safeMoveMap(refined, _mapZoom);
+            }
+          }());
         } else {
           debugPrint(
             "⚠️ [MapScreen] Could not get fresh location, using last known or default",
           );
           if (lastKnown == null && mounted) {
             // * Only use default if we have no location at all
-            _safeMoveMap(_currentLocation, AppConstants.defaultZoom);
+            _safeMoveMap(_currentLocation, _mapZoom);
           }
         }
       } catch (e) {
         debugPrint("❌ [MapScreen] Error getting fresh location: $e");
         if (lastKnown == null && mounted) {
-          _safeMoveMap(_currentLocation, AppConstants.defaultZoom);
+          _safeMoveMap(_currentLocation, _mapZoom);
         }
       }
     } catch (e) {
@@ -6345,7 +6664,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
       // * Get position directly
       debugPrint("📍 [MapScreen] Getting current position...");
-      final position = await locationService.getCurrentPosition();
+      final position = await locationService.getCurrentPosition(
+        desiredAccuracy: kIsWeb ? LocationAccuracy.medium : LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 4),
+        preferCached: true,
+      );
 
       if (position != null && mounted) {
         final location = LatLng(position.latitude, position.longitude);
@@ -6357,11 +6680,38 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           _currentLocation = location;
         });
 
-        // * Move map to location
-        _safeMoveMap(location, AppConstants.defaultZoom);
+        // * Move map to location without changing current zoom.
+        _safeMoveMap(location, _mapZoom);
 
         // * Refresh the provider
         ref.invalidate(currentLocationProvider);
+
+        // * Background refinement to improve precision without delaying feedback.
+        unawaited(() async {
+          final precise = await locationService.getCurrentPosition(
+            desiredAccuracy:
+                kIsWeb
+                    ? LocationAccuracy.high
+                    : LocationAccuracy.bestForNavigation,
+            timeLimit: const Duration(seconds: 10),
+            preferCached: false,
+          );
+          if (!mounted || precise == null) return;
+
+          final refined = LatLng(precise.latitude, precise.longitude);
+          final movedMeters = _calculateHaversineDistance(
+            _currentLocation,
+            refined,
+          );
+          if (movedMeters < 8) return;
+
+          setState(() {
+            _currentLocation = refined;
+            _hasPreciseLocation = true;
+          });
+          _safeMoveMap(refined, _mapZoom);
+          ref.invalidate(currentLocationProvider);
+        }());
 
         // * Show success message
         if (mounted) {
@@ -6494,21 +6844,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // * Fuel stations: use viewport bounds when available so panning shows stations in visible area
       final bounds = _mapVisibleBounds;
       if (!_isNavigating && bounds != null) {
-        ref.read(mapFuelStationsProvider.notifier).loadStationsInBounds(
-          minLat: bounds.south,
-          maxLat: bounds.north,
-          minLon: bounds.west,
-          maxLon: bounds.east,
-          includeUnverified: true,
-        );
+        ref
+            .read(mapFuelStationsProvider.notifier)
+            .loadStationsInBounds(
+              minLat: bounds.south,
+              maxLat: bounds.north,
+              minLon: bounds.west,
+              maxLon: bounds.east,
+              includeUnverified: true,
+            );
       } else {
-        ref.read(mapFuelStationsProvider.notifier).loadStationsInBounds(
-          minLat: _currentLocation.latitude - offset,
-          maxLat: _currentLocation.latitude + offset,
-          minLon: _currentLocation.longitude - offset,
-          maxLon: _currentLocation.longitude + offset,
-          includeUnverified: true,
-        );
+        ref
+            .read(mapFuelStationsProvider.notifier)
+            .loadStationsInBounds(
+              minLat: _currentLocation.latitude - offset,
+              maxLat: _currentLocation.latitude + offset,
+              minLon: _currentLocation.longitude - offset,
+              maxLon: _currentLocation.longitude + offset,
+              includeUnverified: true,
+            );
       }
       // * Removed verbose logging to prevent console overflow
     } catch (e, stackTrace) {
@@ -6549,21 +6903,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // * Fuel stations: use viewport bounds when not navigating so panning shows stations in visible area (e.g. Dolores)
       final bounds = _mapVisibleBounds;
       if (!_isNavigating && bounds != null) {
-        ref.read(mapFuelStationsProvider.notifier).loadStationsInBounds(
-          minLat: bounds.south,
-          maxLat: bounds.north,
-          minLon: bounds.west,
-          maxLon: bounds.east,
-          includeUnverified: true,
-        );
+        ref
+            .read(mapFuelStationsProvider.notifier)
+            .loadStationsInBounds(
+              minLat: bounds.south,
+              maxLat: bounds.north,
+              minLon: bounds.west,
+              maxLon: bounds.east,
+              includeUnverified: true,
+            );
       } else {
-        ref.read(mapFuelStationsProvider.notifier).loadStationsInBounds(
-          minLat: _currentLocation.latitude - offset,
-          maxLat: _currentLocation.latitude + offset,
-          minLon: _currentLocation.longitude - offset,
-          maxLon: _currentLocation.longitude + offset,
-          includeUnverified: true,
-        );
+        ref
+            .read(mapFuelStationsProvider.notifier)
+            .loadStationsInBounds(
+              minLat: _currentLocation.latitude - offset,
+              maxLat: _currentLocation.latitude + offset,
+              minLon: _currentLocation.longitude - offset,
+              maxLon: _currentLocation.longitude + offset,
+              includeUnverified: true,
+            );
       }
       _scheduleDynamicPoiRefresh();
       // * Removed verbose logging to prevent console overflow
@@ -6685,12 +7043,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final showRecents =
           _searchController.text.trim().isEmpty &&
           (_recentLocations.isNotEmpty || _isLoadingRecents);
+      final selectedPlaceRecentMatch =
+          _selectedPlace == null ? null : _findRecentMatchForPlace(_selectedPlace!);
       final fuelStationsAsync = ref.watch(mapFuelStationsProvider);
       final fuelStations =
           fuelStationsAsync.valueOrNull ?? const <FuelStation>[];
       final showKnownPlaces = !_isNavigating && mapZoom >= _knownPlacesMinZoom;
       final showDynamicPois = !_isNavigating && mapZoom >= _dynamicPoisMinZoom;
-      final showFuelStations = !_isNavigating && mapZoom >= 12.0;
+      final showFuelStations = !_isNavigating && mapZoom >= 10.0;
       final showHazardMarkers = mapZoom >= _knownPlacesMinZoom;
       final showHoaMarkers = !_isNavigating && mapZoom >= 13.0;
 
@@ -6781,6 +7141,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       });
                     }
                     try {
+                      if (!_isLoadingDynamicPois) {
+                        _loadDynamicPoisForViewport();
+                      }
                       _onMapMoved();
                     } catch (e, stackTrace) {
                       debugPrint(
@@ -6997,6 +7360,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         _selectedHazard = null;
                         _selectedPlace = null;
                         _selectedFuelStation = null;
+                        _pinnedLocation = null;
+                        _pinnedLocationLabel = null;
                         _showSearchResults = false;
                         _searchFocusNode.unfocus();
                       });
@@ -7289,64 +7654,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     markers: [
                       Marker(
                         point: _pinnedLocation!,
-                        width: 48,
-                        height: 56,
+                        width: 40,
+                        height: 48,
                         child: Stack(
                           alignment: Alignment.topCenter,
                           children: [
-                            if ((_pinnedLocationLabel?.trim().isNotEmpty ??
-                                false))
-                              Positioned(
-                                top: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: AppTheme.spacingSM,
-                                    vertical: AppTheme.spacingXS,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.surfaceColor,
-                                    borderRadius: BorderRadius.circular(
-                                      AppTheme.radiusFull,
-                                    ),
-                                    border: Border.all(
-                                      color: AppTheme.borderColor,
-                                      width: 1,
-                                    ),
-                                    boxShadow: AppTheme.shadowSmall,
-                                  ),
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 220,
-                                  ),
-                                  child: Text(
-                                    _pinnedLocationLabel!,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.labelMedium?.copyWith(
-                                      color: AppTheme.textPrimary,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ),
                             Icon(
                               Icons.location_on,
-                              size: 54,
+                              size: 42,
                               color: AppTheme.errorColor,
-                              shadows: AppTheme.shadowMedium,
-                            ),
-                            Positioned(
-                              top: 14,
-                              child: Container(
-                                width: 16,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  boxShadow: AppTheme.shadowSmall,
-                                ),
-                              ),
                             ),
                           ],
                         ),
@@ -7375,7 +7691,35 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   MarkerLayer(
                     markers:
                         _filterOverlappingMarkers<Place>(
-                          markers: _knownPlaces,
+                          markers:
+                              _knownPlaces.where((place) {
+                                final nearDynamicFuel =
+                                    showDynamicPois &&
+                                    _dynamicPois.any((poi) {
+                                      final category =
+                                          (poi.category ?? poi.type ?? "")
+                                              .toLowerCase();
+                                      if (category != 'fuel') return false;
+                                      return _calculateHaversineDistance(
+                                            place.location,
+                                            poi.location,
+                                          ) <
+                                          520;
+                                    });
+                                if (nearDynamicFuel) return false;
+
+                                final nearFuelStation =
+                                    showFuelStations &&
+                                    fuelStations.any(
+                                      (station) =>
+                                          _calculateHaversineDistance(
+                                            place.location,
+                                            station.location,
+                                          ) <
+                                          520,
+                                    );
+                                return !nearFuelStation;
+                              }).toList(),
                           getLocation: (p) => p.location,
                           getWidth: (p) {
                             final showLabel =
@@ -7452,7 +7796,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                               return showLabel ? 200.0 : 40.0;
                             },
                             minPixelSpacing:
-                                50.0, // * Minimum 50px spacing between dynamic POI markers
+                              20.0, // * Keep more POIs visible
                             zoom: mapZoom,
                           );
                           return filtered;
@@ -7516,8 +7860,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
                           // * Show labels based on zoom tier and POI prominence.
                           final showLabel =
-                              (mapZoom >= 13.0 && originalIndex < 20) ||
-                              (mapZoom >= 15.0 && originalIndex < 35);
+                              category == 'fuel' ||
+                              (mapZoom >= 12.0 && originalIndex < 32) ||
+                              (mapZoom >= 14.0 && originalIndex < 55);
                           final markerWidth = showLabel ? 200.0 : 40.0;
                           final markerAlignment = Marker.computePixelAlignment(
                             width: markerWidth,
@@ -7559,7 +7904,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                       region: null,
                                       verified: false,
                                       source: "osm",
-                                      prices: RegionalFuelDefaults.getDefaultPricesForStation("", null),
+                                      prices:
+                                          RegionalFuelDefaults.getDefaultPricesForStation(
+                                            "",
+                                            null,
+                                          ),
                                       createdAt: DateTime.now(),
                                       updatedAt: DateTime.now(),
                                     );
@@ -7581,50 +7930,48 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 if (showFuelStations && fuelStations.isNotEmpty)
                   MarkerLayer(
                     markers:
-                        fuelStations
-                            .map(
-                              (station) {
-                                final isUnverifiedCommunity = !station.verified &&
-                                    station.source == "community";
-                                return Marker(
-                                  point: station.location,
-                                  width: 40,
-                                  height: 40,
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      if (!mounted) return;
-                                      setState(() {
-                                        _selectedFuelStation = station;
-                                        _selectedPlace = null;
-                                        _selectedHazard = null;
-                                        _showSearchResults = false;
-                                      });
-                                      _searchFocusNode.unfocus();
-                                    },
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: isUnverifiedCommunity
-                                            ? Theme.of(context)
-                                                .colorScheme
-                                                .secondary
-                                            : AppTheme.warningColor,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: Colors.white,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      child: const Icon(
-                                        Icons.local_gas_station,
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                                    ),
-                                  ),
-                                );
+                        fuelStations.map((station) {
+                          final isUnverifiedCommunity =
+                              !station.verified &&
+                              station.source == "community";
+                          return Marker(
+                            point: station.location,
+                            width: 40,
+                            height: 40,
+                            child: GestureDetector(
+                              onTap: () {
+                                if (!mounted) return;
+                                setState(() {
+                                  _selectedFuelStation = station;
+                                  _selectedPlace = null;
+                                  _selectedHazard = null;
+                                  _showSearchResults = false;
+                                });
+                                _searchFocusNode.unfocus();
                               },
-                            )
-                            .toList(),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color:
+                                      isUnverifiedCommunity
+                                          ? Theme.of(
+                                            context,
+                                          ).colorScheme.secondary
+                                          : AppTheme.warningColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.local_gas_station,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
                   ),
                 // * Hazard markers
                 if (showHazardMarkers)
@@ -7724,10 +8071,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                               }
 
                               // * Center on current location
-                              _safeMoveMap(
-                                _currentLocation,
-                                AppConstants.defaultZoom,
-                              );
+                              _safeMoveMap(_currentLocation, _mapZoom);
                             }
                             : _requestLocationPermission,
                     tooltip:
@@ -7755,11 +8099,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               right: AppTheme.spacingMD,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-                child: Container(
+                child: AnimatedContainer(
+                  duration: AppTheme.animationFast,
+                  curve: Curves.easeOutCubic,
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceColor,
                     borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-                    border: Border.all(color: AppTheme.borderColor, width: 1.5),
+                    border: Border.all(
+                      color: AppTheme.borderColor,
+                      width: 1.5,
+                    ),
                     boxShadow: AppTheme.shadowLarge,
                   ),
                   child: Column(
@@ -7801,6 +8150,37 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                     _showRecentsOverlay();
                                   },
                                   tooltip: "Clear",
+                                ),
+                              if (_recentLocations.isNotEmpty)
+                                Tooltip(
+                                  message:
+                                      "Recent searches: ${_recentSummaryLabel()}",
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppTheme.spacingSM,
+                                      vertical: AppTheme.spacingXS,
+                                    ),
+                                    margin: const EdgeInsets.only(
+                                      right: AppTheme.spacingSM,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.infoColor.withOpacity(
+                                        0.14,
+                                      ),
+                                      borderRadius: BorderRadius.circular(
+                                        AppTheme.radiusSM,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _recentSummaryLabel(),
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.labelSmall?.copyWith(
+                                        color: AppTheme.textPrimary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               Tooltip(
                                 message: "Hazards in view: ${hazards.length}",
@@ -7928,6 +8308,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           }
                         },
                       ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child:
+                            _isLoadingDynamicPois
+                                ? const LinearProgressIndicator(
+                                  key: ValueKey("poi-loading"),
+                                  minHeight: 2,
+                                  color: AppTheme.primaryColor,
+                                  backgroundColor: Colors.transparent,
+                                )
+                                : const SizedBox.shrink(
+                                  key: ValueKey("poi-idle"),
+                                ),
+                      ),
                       // * Search Results Dropdown
                       // * Wrap with a GestureDetector to ensure taps inside the dropdown
                       // * don't get interpreted as map taps (which would close the dropdown).
@@ -7969,65 +8363,113 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                       AppTheme.spacingMD,
                                       AppTheme.spacingSM,
                                     ),
-                                    child: SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: Row(
-                                        children: [
-                                          ActionChip(
-                                            label: const Text('Restaurants'),
-                                            onPressed: () {
-                                              HapticFeedback.lightImpact();
-                                              _openCategoryPoiSearch(
-                                                title: 'Restaurants',
-                                                query: 'restaurant',
-                                                icon: Icons.restaurant,
-                                              );
-                                            },
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.history,
+                                              size: 16,
+                                              color: AppTheme.infoColor,
+                                            ),
+                                            const SizedBox(
+                                              width: AppTheme.spacingXS,
+                                            ),
+                                            Text(
+                                              "Recent searches",
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .labelLarge
+                                                  ?.copyWith(
+                                                    color:
+                                                        AppTheme.textPrimary,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                            ),
+                                            const Spacer(),
+                                            Text(
+                                              _recentSummaryLabel(),
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .labelSmall
+                                                  ?.copyWith(
+                                                    color:
+                                                        AppTheme.textSecondary,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(
+                                          height: AppTheme.spacingSM,
+                                        ),
+                                        SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          child: Row(
+                                            children: [
+                                              ActionChip(
+                                                label: const Text(
+                                                  'Restaurants',
+                                                ),
+                                                onPressed: () {
+                                                  HapticFeedback.lightImpact();
+                                                  _openCategoryPoiSearch(
+                                                    title: 'Restaurants',
+                                                    query: 'restaurant',
+                                                    icon: Icons.restaurant,
+                                                  );
+                                                },
+                                              ),
+                                              const SizedBox(
+                                                width: AppTheme.spacingSM,
+                                              ),
+                                              ActionChip(
+                                                label: const Text('Hotels'),
+                                                onPressed: () {
+                                                  HapticFeedback.lightImpact();
+                                                  _openCategoryPoiSearch(
+                                                    title: 'Hotels',
+                                                    query: 'hotel',
+                                                    icon: Icons.hotel,
+                                                  );
+                                                },
+                                              ),
+                                              const SizedBox(
+                                                width: AppTheme.spacingSM,
+                                              ),
+                                              ActionChip(
+                                                label: const Text('Gas'),
+                                                onPressed: () {
+                                                  HapticFeedback.lightImpact();
+                                                  _openCategoryPoiSearch(
+                                                    title: 'Gas stations',
+                                                    query: 'gas station',
+                                                    icon:
+                                                        Icons
+                                                            .local_gas_station,
+                                                  );
+                                                },
+                                              ),
+                                              const SizedBox(
+                                                width: AppTheme.spacingSM,
+                                              ),
+                                              ActionChip(
+                                                label: const Text('ATM'),
+                                                onPressed: () {
+                                                  HapticFeedback.lightImpact();
+                                                  _openCategoryPoiSearch(
+                                                    title: 'ATMs',
+                                                    query: 'atm',
+                                                    icon: Icons.atm,
+                                                  );
+                                                },
+                                              ),
+                                            ],
                                           ),
-                                          const SizedBox(
-                                            width: AppTheme.spacingSM,
-                                          ),
-                                          ActionChip(
-                                            label: const Text('Hotels'),
-                                            onPressed: () {
-                                              HapticFeedback.lightImpact();
-                                              _openCategoryPoiSearch(
-                                                title: 'Hotels',
-                                                query: 'hotel',
-                                                icon: Icons.hotel,
-                                              );
-                                            },
-                                          ),
-                                          const SizedBox(
-                                            width: AppTheme.spacingSM,
-                                          ),
-                                          ActionChip(
-                                            label: const Text('Gas'),
-                                            onPressed: () {
-                                              HapticFeedback.lightImpact();
-                                              _openCategoryPoiSearch(
-                                                title: 'Gas stations',
-                                                query: 'gas station',
-                                                icon: Icons.local_gas_station,
-                                              );
-                                            },
-                                          ),
-                                          const SizedBox(
-                                            width: AppTheme.spacingSM,
-                                          ),
-                                          ActionChip(
-                                            label: const Text('ATM'),
-                                            onPressed: () {
-                                              HapticFeedback.lightImpact();
-                                              _openCategoryPoiSearch(
-                                                title: 'ATMs',
-                                                query: 'atm',
-                                                icon: Icons.atm,
-                                              );
-                                            },
-                                          ),
-                                        ],
-                                      ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 Flexible(
@@ -8111,6 +8553,37 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                                   maxLines: 2,
                                                   overflow:
                                                       TextOverflow.ellipsis,
+                                                ),
+                                                trailing: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal:
+                                                            AppTheme.spacingSM,
+                                                        vertical:
+                                                            AppTheme.spacingXS,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: AppTheme.infoColor
+                                                        .withOpacity(0.14),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          AppTheme.radiusSM,
+                                                        ),
+                                                  ),
+                                                  child: Text(
+                                                    _formatRecentAge(
+                                                      recent.updatedAt,
+                                                    ),
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .labelSmall
+                                                        ?.copyWith(
+                                                          color:
+                                                              AppTheme.textPrimary,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                  ),
                                                 ),
                                                 onTap: () async {
                                                   // * Re-promote recent to the top.
@@ -8437,6 +8910,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 alignment: Alignment.bottomCenter,
                 child: PlaceDetailSheet(
                   place: _selectedPlace!,
+                  isRecentlySearched: selectedPlaceRecentMatch != null,
+                  recentSearchMeta:
+                      selectedPlaceRecentMatch == null
+                          ? null
+                          : _formatRecentAge(selectedPlaceRecentMatch.updatedAt),
                   onGetDirections: () {
                     final destination = _selectedPlace!.location;
                     if (mounted) {

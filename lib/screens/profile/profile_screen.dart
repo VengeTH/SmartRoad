@@ -48,6 +48,7 @@ class ProfileScreen extends ConsumerWidget {
               final service = SupabaseService();
               if (service.isDemoMode) {
                 // * Clear demo user state
+                service.clearDemoAuthentication();
                 ref.read(demoUserStateProvider.notifier).state = null;
               } else {
                 await service.signOut();

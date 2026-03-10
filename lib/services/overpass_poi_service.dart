@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -19,7 +20,13 @@ class OverpassPoiService {
   factory OverpassPoiService() => _instance;
   OverpassPoiService._internal();
 
-  static const String _baseUrl = 'https://overpass-api.de/api/interpreter';
+  static const List<String> _endpoints = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+  ];
+  static const Duration _cacheTtl = Duration(seconds: 45);
+  static const int _maxCacheEntries = 36;
+  final Map<String, _CachedPoiResponse> _responseCache = {};
 
   // ---------------------------------------------------------------------------
   // * Zoom-tiered tag filters — mirrors Google Maps landmark density.
@@ -28,27 +35,27 @@ class OverpassPoiService {
 
   /// * zoom 10–11: major landmarks only (hospitals, malls, bus terminals, airports)
   static const _tierMajor = r'''
-node["amenity"~"^(hospital|bus_station|ferry_terminal)$"](BBOX);
-node["shop"~"^(mall|department_store|supermarket)$"](BBOX);
-node["tourism"~"^(attraction|museum|zoo|theme_park|aquarium)$"](BBOX);
-node["aeroway"="aerodrome"](BBOX);
+nwr["amenity"~"^(hospital|bus_station|ferry_terminal)$"](BBOX);
+nwr["shop"~"^(mall|department_store|supermarket)$"](BBOX);
+nwr["tourism"~"^(attraction|museum|zoo|theme_park|aquarium)$"](BBOX);
+nwr["aeroway"="aerodrome"](BBOX);
 ''';
 
   /// * zoom 12–13: + everyday services (schools, banks, fuel, hotels)
   static const _tierMid = r'''
-node["amenity"~"^(hospital|bus_station|ferry_terminal|school|university|college|bank|fuel|police|fire_station|library|cinema|theatre|place_of_worship)$"](BBOX);
-node["shop"~"^(mall|department_store|supermarket)$"](BBOX);
-node["tourism"~"^(attraction|museum|zoo|theme_park|aquarium|hotel|hostel|guest_house)$"](BBOX);
-node["aeroway"="aerodrome"](BBOX);
+nwr["amenity"~"^(hospital|bus_station|ferry_terminal|school|university|college|bank|fuel|police|fire_station|library|cinema|theatre|place_of_worship)$"](BBOX);
+nwr["shop"~"^(mall|department_store|supermarket)$"](BBOX);
+nwr["tourism"~"^(attraction|museum|zoo|theme_park|aquarium|hotel|hostel|guest_house)$"](BBOX);
+nwr["aeroway"="aerodrome"](BBOX);
 ''';
 
   /// * zoom 14+: fine-grained POIs (restaurants, ATMs, pharmacies, parks, etc.)
   static const _tierFine = r'''
-node["amenity"~"^(hospital|bus_station|ferry_terminal|school|university|college|bank|fuel|police|fire_station|library|cinema|theatre|place_of_worship|restaurant|fast_food|cafe|pharmacy|atm|parking|post_office|marketplace|community_centre|courthouse|embassy)$"](BBOX);
-node["shop"~"^(mall|department_store|supermarket|convenience|bakery|electronics|hardware)$"](BBOX);
-node["tourism"~"^(attraction|museum|zoo|theme_park|aquarium|hotel|hostel|guest_house|motel|viewpoint|information)$"](BBOX);
-node["leisure"~"^(park|stadium|sports_centre|golf_course|swimming_pool|water_park)$"](BBOX);
-node["aeroway"="aerodrome"](BBOX);
+nwr["amenity"~"^(hospital|bus_station|ferry_terminal|school|university|college|bank|fuel|police|fire_station|library|cinema|theatre|place_of_worship|restaurant|fast_food|cafe|pharmacy|atm|parking|post_office|marketplace|community_centre|courthouse|embassy)$"](BBOX);
+nwr["shop"~"^(mall|department_store|supermarket|convenience|bakery|electronics|hardware)$"](BBOX);
+nwr["tourism"~"^(attraction|museum|zoo|theme_park|aquarium|hotel|hostel|guest_house|motel|viewpoint|information)$"](BBOX);
+nwr["leisure"~"^(park|stadium|sports_centre|golf_course|swimming_pool|water_park)$"](BBOX);
+nwr["aeroway"="aerodrome"](BBOX);
 ''';
 
   // ---------------------------------------------------------------------------
@@ -62,6 +69,12 @@ node["aeroway"="aerodrome"](BBOX);
     required double zoom,
     int limit = 60,
   }) async {
+    final cacheKey = _buildCacheKey(bounds: bounds, zoom: zoom, limit: limit);
+    final cached = _responseCache[cacheKey];
+    if (cached != null && DateTime.now().difference(cached.fetchedAt) <= _cacheTtl) {
+      return cached.items;
+    }
+
     final tier =
         zoom >= 14.0
             ? _tierFine
@@ -73,19 +86,14 @@ node["aeroway"="aerodrome"](BBOX);
     final bbox =
         '${bounds.south},${bounds.west},${bounds.north},${bounds.east}';
     final tagLines = tier.replaceAll('BBOX', bbox);
-    final query = '[out:json][timeout:12];\n(\n${tagLines});\nout center $limit;';
+    final query = '[out:json][timeout:10];\n(\n${tagLines});\nout center $limit;';
 
     try {
-      final response = await http.post(
-        Uri.parse(_baseUrl),
-        headers: kIsWeb
-            ? {'Content-Type': 'application/x-www-form-urlencoded'}
-            : {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'User-Agent': 'SmartRoad App (contact@smartroad.app)',
-            },
-        body: 'data=${Uri.encodeComponent(query)}',
-      );
+      final response = await _firstSuccessfulResponse(query);
+
+      if (response == null) {
+        return [];
+      }
 
       if (response.statusCode != 200) {
         debugPrint(
@@ -145,11 +153,74 @@ node["aeroway"="aerodrome"](BBOX);
       debugPrint(
         '✅ [OverpassPoiService] Fetched ${results.length} POIs at zoom $zoom',
       );
+
+      if (results.isNotEmpty) {
+        _responseCache[cacheKey] = _CachedPoiResponse(
+          items: results,
+          fetchedAt: DateTime.now(),
+        );
+        if (_responseCache.length > _maxCacheEntries) {
+          _responseCache.remove(_responseCache.keys.first);
+        }
+      }
       return results;
     } catch (e) {
       debugPrint('❌ [OverpassPoiService] fetchInBounds failed: $e');
       return [];
     }
+  }
+
+  Future<http.Response?> _firstSuccessfulResponse(String query) async {
+    final completer = Completer<http.Response?>();
+    var completed = 0;
+
+    for (final endpoint in _endpoints) {
+      _postToEndpoint(endpoint, query).then((response) {
+        if (!completer.isCompleted && response != null && response.statusCode == 200) {
+          completer.complete(response);
+          return;
+        }
+
+        completed += 1;
+        if (completed == _endpoints.length && !completer.isCompleted) {
+          completer.complete(null);
+        }
+      });
+    }
+
+    return completer.future.timeout(const Duration(seconds: 8), onTimeout: () => null);
+  }
+
+  Future<http.Response?> _postToEndpoint(String endpoint, String query) async {
+    try {
+      return await http
+          .post(
+            Uri.parse(endpoint),
+            headers: kIsWeb
+                ? {'Content-Type': 'application/x-www-form-urlencoded'}
+                : {
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                  'User-Agent': 'SmartRoad App (contact@smartroad.app)',
+                },
+            body: 'data=${Uri.encodeComponent(query)}',
+          )
+          .timeout(const Duration(seconds: 7));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _buildCacheKey({
+    required LatLngBounds bounds,
+    required double zoom,
+    required int limit,
+  }) {
+    final z = zoom.floor();
+    final s = (bounds.south * 1000).round();
+    final w = (bounds.west * 1000).round();
+    final n = (bounds.north * 1000).round();
+    final e = (bounds.east * 1000).round();
+    return '$z:$limit:$s:$w:$n:$e';
   }
 
   // ---------------------------------------------------------------------------
@@ -212,4 +283,11 @@ node["aeroway"="aerodrome"](BBOX);
     if (leisure == 'stadium' || leisure == 'sports_centre') return 'sports';
     return 'landmark';
   }
+}
+
+class _CachedPoiResponse {
+  final List<MapPoi> items;
+  final DateTime fetchedAt;
+
+  const _CachedPoiResponse({required this.items, required this.fetchedAt});
 }

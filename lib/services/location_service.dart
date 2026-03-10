@@ -1,3 +1,5 @@
+import "dart:async";
+
 import "package:flutter/foundation.dart";
 import "package:geolocator/geolocator.dart";
 import "package:permission_handler/permission_handler.dart";
@@ -32,7 +34,11 @@ class LocationService {
   
   /// * Get current position
   /// * Returns null if permission denied or location unavailable
-  Future<Position?> getCurrentPosition() async {
+  Future<Position?> getCurrentPosition({
+    LocationAccuracy? desiredAccuracy,
+    Duration? timeLimit,
+    bool preferCached = true,
+  }) async {
     try {
       // * Removed verbose logging to prevent console overflow
       
@@ -55,11 +61,28 @@ class LocationService {
         return null;
       }
       }
+
+      Position? cachedPosition;
+      if (preferCached && !kIsWeb) {
+        try {
+          cachedPosition = await Geolocator.getLastKnownPosition();
+          if (cachedPosition != null) {
+            debugPrint("[LocationService] Using cached position for fast response");
+            return cachedPosition;
+          }
+        } catch (_) {
+          // * Ignore cached lookup errors and continue to fresh fetch.
+        }
+      }
       
       // * Use appropriate accuracy and timeout for platform
-      // * Web needs more time and lower accuracy
-      final accuracy = kIsWeb ? LocationAccuracy.high : LocationAccuracy.bestForNavigation;
-      final timeout = kIsWeb ? const Duration(seconds: 15) : const Duration(seconds: 10);
+      // * Fast-first defaults to reduce location wait time.
+      final accuracy =
+          desiredAccuracy ??
+          (kIsWeb ? LocationAccuracy.medium : LocationAccuracy.high);
+      final timeout =
+          timeLimit ??
+          (kIsWeb ? const Duration(seconds: 8) : const Duration(seconds: 6));
       
       // * Removed verbose logging to prevent console overflow
       
@@ -70,6 +93,17 @@ class LocationService {
       
       debugPrint("[LocationService] OK: Got position: ${position.latitude}, ${position.longitude}");
       return position;
+    } on TimeoutException catch (_) {
+      debugPrint("[LocationService] WARNING: Location request timed out");
+      if (!kIsWeb) {
+        try {
+          final fallback = await Geolocator.getLastKnownPosition();
+          if (fallback != null) return fallback;
+        } catch (_) {
+          // * Ignore and fall through to null.
+        }
+      }
+      return null;
     } catch (e, stackTrace) {
       debugPrint("[LocationService] ERROR: Error getting position: $e");
       debugPrint("[LocationService] ERROR: Stack: $stackTrace");

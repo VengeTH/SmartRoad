@@ -104,18 +104,29 @@ class MapPoiMarker extends StatelessWidget {
       label: safeLabel,
       child: Tooltip(
         message: safeLabel,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(999),
-            child: Align(
-              // * Let the pill shrink to its content, while keeping the marker box
-              // * stable for consistent map anchoring.
-              alignment: Alignment.centerLeft,
-              child: marker,
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.95, end: 1.0),
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(999),
+              child: Align(
+                // * Let the pill shrink to its content, while keeping the marker box
+                // * stable for consistent map anchoring.
+                alignment: Alignment.centerLeft,
+                child: marker,
+              ),
             ),
           ),
+          builder: (context, value, child) {
+            return Opacity(
+              opacity: value,
+              child: Transform.scale(scale: value, child: child),
+            );
+          },
         ),
       ),
     );

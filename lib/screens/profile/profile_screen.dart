@@ -20,24 +20,24 @@ import "../../widgets/music_control_settings_card.dart";
 /// * Profile screen
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
-  
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userId = ref.watch(currentUserIdProvider);
     final profileAsync = ref.watch(currentUserProfileProvider);
-    
+
     // * Removed verbose logging to prevent console overflow
     if (profileAsync.hasError) {
       debugPrint("🔍 [ProfileScreen] Error: ${profileAsync.error}");
     }
-    
+
     if (userId == null) {
       return Scaffold(
         appBar: AppBar(title: const Text("Profile")),
         body: const _GuestProfileContent(),
       );
     }
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Profile"),
@@ -64,7 +64,9 @@ class ProfileScreen extends ConsumerWidget {
           if (profile == null) {
             // * Profile is null - this shouldn't happen in demo mode
             // * Try to refresh
-            debugPrint("⚠️ [ProfileScreen] Profile is null, attempting refresh");
+            debugPrint(
+              "⚠️ [ProfileScreen] Profile is null, attempting refresh",
+            );
             Future.microtask(() {
               ref.invalidate(currentUserProfileProvider);
             });
@@ -79,20 +81,21 @@ class ProfileScreen extends ConsumerWidget {
               ),
             );
           }
-          
+
           // * Removed verbose logging to prevent console overflow
           return _ProfileContent(profile: profile);
         },
-        loading: () => const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: AppTheme.spacingMD),
-              Text("Loading profile..."),
-            ],
-          ),
-        ),
+        loading:
+            () => const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: AppTheme.spacingMD),
+                  Text("Loading profile..."),
+                ],
+              ),
+            ),
         error: (error, stack) {
           debugPrint("Profile error: $error");
           debugPrint("Stack: $stack");
@@ -226,7 +229,9 @@ class _GuestProfileContent extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AppTheme.spacingMD,
+                  ),
                 ),
               ),
               const SizedBox(height: AppTheme.spacingMD),
@@ -248,7 +253,9 @@ class _GuestProfileContent extends StatelessWidget {
                           padding: const EdgeInsets.all(AppTheme.spacingMD),
                           decoration: BoxDecoration(
                             color: AppTheme.secondaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusMD,
+                            ),
                           ),
                           child: Icon(
                             Icons.navigation,
@@ -304,7 +311,9 @@ class _GuestProfileContent extends StatelessWidget {
                           padding: const EdgeInsets.all(AppTheme.spacingMD),
                           decoration: BoxDecoration(
                             color: AppTheme.primaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusMD,
+                            ),
                           ),
                           child: Icon(
                             Icons.info_outline,
@@ -353,9 +362,9 @@ class _GuestProfileContent extends StatelessWidget {
 
 class _ProfileContent extends StatefulWidget {
   final UserProfile profile;
-  
+
   const _ProfileContent({required this.profile});
-  
+
   @override
   State<_ProfileContent> createState() => _ProfileContentState();
 }
@@ -365,21 +374,21 @@ class _ProfileContentState extends State<_ProfileContent> {
   late TextEditingController _emailController;
   bool _isUpdating = false;
   File? _selectedImage;
-  
+
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.profile.name ?? "");
     _emailController = TextEditingController(text: widget.profile.email ?? "");
   }
-  
+
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     super.dispose();
   }
-  
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final image = await picker.pickImage(
@@ -388,35 +397,37 @@ class _ProfileContentState extends State<_ProfileContent> {
       maxHeight: 800,
       imageQuality: 85,
     );
-    
+
     if (image != null) {
       setState(() => _selectedImage = File(image.path));
     }
   }
-  
+
   Future<void> _updateProfile() async {
     setState(() => _isUpdating = true);
-    
+
     try {
       String? imageUrl;
-      
+
       // * Upload new image if selected
       if (_selectedImage != null) {
-        final fileName = "${widget.profile.id}_${DateTime.now().millisecondsSinceEpoch}.jpg";
-        imageUrl = await SupabaseService().uploadImage(_selectedImage!, fileName);
+        final fileName =
+            "${widget.profile.id}_${DateTime.now().millisecondsSinceEpoch}.jpg";
+        imageUrl = await SupabaseService().uploadImage(
+          _selectedImage!,
+          fileName,
+        );
       }
-      
+
       // * Update profile
-      final updates = <String, dynamic>{
-        'name': _nameController.text.trim(),
-      };
-      
+      final updates = <String, dynamic>{'name': _nameController.text.trim()};
+
       if (imageUrl != null) {
         updates['photo_url'] = imageUrl;
       }
-      
+
       await SupabaseService().updateProfile(widget.profile.id, updates);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Profile updated successfully")),
@@ -425,9 +436,9 @@ class _ProfileContentState extends State<_ProfileContent> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: ${e.toString()}")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
       }
     } finally {
       if (mounted) {
@@ -435,710 +446,722 @@ class _ProfileContentState extends State<_ProfileContent> {
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isMobile = AppTheme.isMobile(context);
     final padding = AppTheme.responsivePadding(context);
     final maxWidth = AppTheme.maxContentWidth(context);
-    
+
     return Center(
       child: ScrollConfiguration(
-        behavior: ScrollConfiguration.of(context).copyWith(
-          scrollbars: false,
-        ),
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
         child: SingleChildScrollView(
           padding: EdgeInsets.all(padding),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: Column(
-        children: [
-          const SizedBox(height: AppTheme.spacingMD),
-          // * Profile Photo Section
-          Stack(
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppTheme.primaryColor,
-                    width: 3,
-                  ),
-                  boxShadow: AppTheme.shadowMedium,
-                ),
-                child: CircleAvatar(
-                  radius: 64,
-                  backgroundColor: AppTheme.surfaceVariant,
-                  backgroundImage: _selectedImage != null
-                      ? FileImage(_selectedImage!)
-                      : widget.profile.photoUrl != null
-                          ? NetworkImage(widget.profile.photoUrl!)
-                          : null,
-                  onBackgroundImageError: _selectedImage != null || widget.profile.photoUrl != null
-                      ? (exception, stackTrace) {
-                          // * Handle image load error
-                          debugPrint("Error loading profile image: $exception");
-                        }
-                      : null,
-                  child: widget.profile.photoUrl == null && _selectedImage == null
-                      ? Icon(
-                          Icons.person,
-                          size: 64,
-                          color: AppTheme.textSecondary,
-                        )
-                      : null,
-                ),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppTheme.backgroundColor,
-                      width: 3,
-                    ),
-                    boxShadow: AppTheme.shadowSmall,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.camera_alt, size: 20),
-                    onPressed: _pickImage,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppTheme.spacingXL),
-          // * Name Field
-          TextField(
-            controller: _nameController,
-            style: TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 16,
-            ),
-            decoration: InputDecoration(
-              labelText: "Full Name",
-              prefixIcon: const Icon(
-                Icons.person_outline, 
-                color: AppTheme.textSecondary,
-                size: 24,
-              ),
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacingMD),
-          // * Email (read-only)
-          TextField(
-            controller: _emailController,
-            style: TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 16,
-            ),
-            decoration: InputDecoration(
-              labelText: "Email",
-              prefixIcon: const Icon(
-                Icons.email_outlined, 
-                color: AppTheme.textSecondary,
-                size: 24,
-              ),
-            ),
-            readOnly: true,
-            enabled: false,
-          ),
-          const SizedBox(height: AppTheme.spacingLG),
-          // * Stats Cards
-          Row(
-            children: [
-              Expanded(
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppTheme.spacingMD),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.star_rounded,
-                          color: AppTheme.warningColor,
-                          size: 32,
-                        ),
-                        const SizedBox(height: AppTheme.spacingSM),
-                        Text(
-                          widget.profile.reporterLevel.value,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-            ),
-          ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "Reporter Level",
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppTheme.spacingMD),
-              Expanded(
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppTheme.spacingMD),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.check_circle_rounded,
-                          color: AppTheme.successColor,
-                          size: 32,
-                        ),
-                        const SizedBox(height: AppTheme.spacingSM),
-                        Text(
-                          "${widget.profile.validReportsCount}",
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "Valid Reports",
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ],
-            ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppTheme.spacingXL),
-          
-          // * Gate Pass Card
-          Card(
-            child: InkWell(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const GatePassScreen(),
-                  ),
-                );
-              },
-              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-              child: Padding(
-                padding: const EdgeInsets.all(AppTheme.spacingMD),
-                child: Row(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: Column(
+              children: [
+                const SizedBox(height: AppTheme.spacingMD),
+                // * Profile Photo Section
+                Stack(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(AppTheme.spacingMD),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppTheme.primaryColor,
+                          width: 3,
+                        ),
+                        boxShadow: AppTheme.shadowMedium,
                       ),
-                      child: Icon(
-                        Icons.qr_code_scanner,
-                        color: AppTheme.primaryColor,
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(width: AppTheme.spacingMD),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Gate Pass",
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "Show QR code for gate access",
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: AppTheme.textTertiary,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacingMD),
-          // * Manage Stickers Card
-          Card(
-            child: InkWell(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const ManageStickersScreen(),
-                  ),
-                );
-              },
-              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-              child: Padding(
-                padding: const EdgeInsets.all(AppTheme.spacingMD),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(AppTheme.spacingMD),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                      ),
-                      child: Icon(
-                        Icons.badge,
-                        color: AppTheme.primaryColor,
-                        size: 32,
+                      child: CircleAvatar(
+                        radius: 64,
+                        backgroundColor: AppTheme.surfaceVariant,
+                        backgroundImage:
+                            _selectedImage != null
+                                ? FileImage(_selectedImage!)
+                                : widget.profile.photoUrl != null
+                                ? NetworkImage(widget.profile.photoUrl!)
+                                : null,
+                        onBackgroundImageError:
+                            _selectedImage != null ||
+                                    widget.profile.photoUrl != null
+                                ? (exception, stackTrace) {
+                                  // * Handle image load error
+                                  debugPrint(
+                                    "Error loading profile image: $exception",
+                                  );
+                                }
+                                : null,
+                        child:
+                            widget.profile.photoUrl == null &&
+                                    _selectedImage == null
+                                ? Icon(
+                                  Icons.person,
+                                  size: 64,
+                                  color: AppTheme.textSecondary,
+                                )
+                                : null,
                       ),
                     ),
-                    const SizedBox(width: AppTheme.spacingMD),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "My Stickers",
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "Manage and upload physical stickers",
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: AppTheme.textTertiary,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacingMD),
-          // * Navigation Settings Card
-          Card(
-            child: InkWell(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const NavigationSettingsScreen(),
-                  ),
-                );
-              },
-              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-              child: Padding(
-                padding: const EdgeInsets.all(AppTheme.spacingMD),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(AppTheme.spacingMD),
-                      decoration: BoxDecoration(
-                        color: AppTheme.secondaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                      ),
-                      child: Icon(
-                        Icons.navigation,
-                        color: AppTheme.secondaryColor,
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(width: AppTheme.spacingMD),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Navigation",
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "Customize avatar, speed alerts, and speed limits",
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: AppTheme.textTertiary,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacingMD),
-          // * Music Control Settings Card (Android only)
-          const MusicControlSettingsCard(),
-          const SizedBox(height: AppTheme.spacingMD),
-          // * Admin Tools - Place Photo Review
-          if (widget.profile.reporterLevel == ReporterLevel.admin) ...[
-            Card(
-              child: InkWell(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const PlacePhotoReviewScreen(),
-                    ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppTheme.spacingMD),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(AppTheme.spacingMD),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
                         decoration: BoxDecoration(
-                          color: AppTheme.warningColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                          color: AppTheme.primaryColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppTheme.backgroundColor,
+                            width: 3,
+                          ),
+                          boxShadow: AppTheme.shadowSmall,
                         ),
-                        child: Icon(
-                          Icons.gpp_good,
-                          color: AppTheme.warningColor,
-                          size: 32,
+                        child: IconButton(
+                          icon: const Icon(Icons.camera_alt, size: 20),
+                          onPressed: _pickImage,
+                          color: Colors.white,
                         ),
                       ),
-                      const SizedBox(width: AppTheme.spacingMD),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Photo Review",
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppTheme.spacingXL),
+                // * Name Field
+                TextField(
+                  controller: _nameController,
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 16),
+                  decoration: InputDecoration(
+                    labelText: "Full Name",
+                    prefixIcon: const Icon(
+                      Icons.person_outline,
+                      color: AppTheme.textSecondary,
+                      size: 24,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingMD),
+                // * Email (read-only)
+                TextField(
+                  controller: _emailController,
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+                  decoration: InputDecoration(
+                    labelText: "Email",
+                    prefixIcon: const Icon(
+                      Icons.email_outlined,
+                      color: AppTheme.textSecondary,
+                      size: 24,
+                    ),
+                  ),
+                  readOnly: true,
+                  enabled: false,
+                ),
+                const SizedBox(height: AppTheme.spacingLG),
+                // * Stats Cards
+                Row(
+                  children: [
+                    Expanded(
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppTheme.spacingMD),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.star_rounded,
+                                color: AppTheme.warningColor,
+                                size: 32,
+                              ),
+                              const SizedBox(height: AppTheme.spacingSM),
+                              Text(
+                                widget.profile.reporterLevel.value,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                "Reporter Level",
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppTheme.spacingMD),
+                    Expanded(
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppTheme.spacingMD),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.check_circle_rounded,
+                                color: AppTheme.successColor,
+                                size: 32,
+                              ),
+                              const SizedBox(height: AppTheme.spacingSM),
+                              Text(
+                                "${widget.profile.validReportsCount}",
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                "Valid Reports",
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppTheme.spacingXL),
+
+                // * Gate Pass Card
+                Card(
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const GatePassScreen(),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppTheme.spacingMD),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(AppTheme.spacingMD),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusMD,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "Review pending place photos for safety & accuracy",
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textSecondary,
+                            child: Icon(
+                              Icons.qr_code_scanner,
+                              color: AppTheme.primaryColor,
+                              size: 32,
+                            ),
+                          ),
+                          const SizedBox(width: AppTheme.spacingMD),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Gate Pass",
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Show QR code for gate access",
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: AppTheme.textTertiary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingMD),
+                // * Manage Stickers Card
+                Card(
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ManageStickersScreen(),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppTheme.spacingMD),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(AppTheme.spacingMD),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusMD,
                               ),
+                            ),
+                            child: Icon(
+                              Icons.badge,
+                              color: AppTheme.primaryColor,
+                              size: 32,
+                            ),
+                          ),
+                          const SizedBox(width: AppTheme.spacingMD),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "My Stickers",
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Manage and upload physical stickers",
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: AppTheme.textTertiary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingMD),
+                // * Navigation Settings Card
+                Card(
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const NavigationSettingsScreen(),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppTheme.spacingMD),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(AppTheme.spacingMD),
+                            decoration: BoxDecoration(
+                              color: AppTheme.secondaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusMD,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.navigation,
+                              color: AppTheme.secondaryColor,
+                              size: 32,
+                            ),
+                          ),
+                          const SizedBox(width: AppTheme.spacingMD),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Navigation",
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Customize avatar, speed alerts, and speed limits",
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: AppTheme.textTertiary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingMD),
+                // * Music Control Settings Card (Android only)
+                const MusicControlSettingsCard(),
+                const SizedBox(height: AppTheme.spacingMD),
+                // * Admin Tools - Place Photo Review
+                if (widget.profile.reporterLevel == ReporterLevel.admin) ...[
+                  Card(
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const PlacePhotoReviewScreen(),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppTheme.spacingMD),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(AppTheme.spacingMD),
+                              decoration: BoxDecoration(
+                                color: AppTheme.warningColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusMD,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.gpp_good,
+                                color: AppTheme.warningColor,
+                                size: 32,
+                              ),
+                            ),
+                            const SizedBox(width: AppTheme.spacingMD),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Photo Review",
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "Review pending place photos for safety & accuracy",
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              size: 16,
+                              color: AppTheme.textTertiary,
                             ),
                           ],
                         ),
                       ),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 16,
-                        color: AppTheme.textTertiary,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppTheme.spacingMD),
-            Card(
-              child: InkWell(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const FuelStationReviewScreen(),
                     ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppTheme.spacingMD),
-                  child: Row(
-                    children: [
-                      Container(
+                  ),
+                  const SizedBox(height: AppTheme.spacingMD),
+                  Card(
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const FuelStationReviewScreen(),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                      child: Padding(
                         padding: const EdgeInsets.all(AppTheme.spacingMD),
-                        decoration: BoxDecoration(
-                          color: AppTheme.infoColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                        ),
-                        child: Icon(
-                          Icons.local_gas_station,
-                          color: AppTheme.infoColor,
-                          size: 32,
-                        ),
-                      ),
-                      const SizedBox(width: AppTheme.spacingMD),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              "Fuel Station Review",
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
+                            Container(
+                              padding: const EdgeInsets.all(AppTheme.spacingMD),
+                              decoration: BoxDecoration(
+                                color: AppTheme.infoColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusMD,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.local_gas_station,
+                                color: AppTheme.infoColor,
+                                size: 32,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "Review pending community fuel stations",
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textSecondary,
+                            const SizedBox(width: AppTheme.spacingMD),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Fuel Station Review",
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "Review pending community fuel stations",
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                ],
                               ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              size: 16,
+                              color: AppTheme.textTertiary,
                             ),
                           ],
                         ),
                       ),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 16,
-                        color: AppTheme.textTertiary,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppTheme.spacingMD),
-            Card(
-              child: InkWell(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const FuelPriceReportReviewScreen(),
                     ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                child: Padding(
-                  padding: const EdgeInsets.all(AppTheme.spacingMD),
-                  child: Row(
-                    children: [
-                      Container(
+                  ),
+                  const SizedBox(height: AppTheme.spacingMD),
+                  Card(
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const FuelPriceReportReviewScreen(),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                      child: Padding(
                         padding: const EdgeInsets.all(AppTheme.spacingMD),
-                        decoration: BoxDecoration(
-                          color: AppTheme.warningColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                        ),
-                        child: Icon(
-                          Icons.flag,
-                          color: AppTheme.warningColor,
-                          size: 32,
-                        ),
-                      ),
-                      const SizedBox(width: AppTheme.spacingMD),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              "Fuel Price Reports",
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
+                            Container(
+                              padding: const EdgeInsets.all(AppTheme.spacingMD),
+                              decoration: BoxDecoration(
+                                color: AppTheme.warningColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusMD,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.flag,
+                                color: AppTheme.warningColor,
+                                size: 32,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "Review incorrect price reports from community",
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppTheme.textSecondary,
+                            const SizedBox(width: AppTheme.spacingMD),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Fuel Price Reports",
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "Review incorrect price reports from community",
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                ],
                               ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              size: 16,
+                              color: AppTheme.textTertiary,
                             ),
                           ],
                         ),
                       ),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 16,
-                        color: AppTheme.textTertiary,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppTheme.spacingMD),
-          ],
-          // * Guard Scanner Card (for testing)
-          Card(
-            child: InkWell(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const GuardScannerScreen(),
-                  ),
-                );
-              },
-              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-              child: Padding(
-                padding: const EdgeInsets.all(AppTheme.spacingMD),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(AppTheme.spacingMD),
-                      decoration: BoxDecoration(
-                        color: AppTheme.infoColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                      ),
-                      child: Icon(
-                        Icons.qr_code_scanner_outlined,
-                        color: AppTheme.infoColor,
-                        size: 32,
-                      ),
                     ),
-                    const SizedBox(width: AppTheme.spacingMD),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                  const SizedBox(height: AppTheme.spacingMD),
+                ],
+                // * Guard Scanner Card (for testing)
+                Card(
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const GuardScannerScreen(),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppTheme.spacingMD),
+                      child: Row(
                         children: [
-                          Text(
-                            "Guard Scanner",
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
+                          Container(
+                            padding: const EdgeInsets.all(AppTheme.spacingMD),
+                            decoration: BoxDecoration(
+                              color: AppTheme.infoColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusMD,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.qr_code_scanner_outlined,
+                              color: AppTheme.infoColor,
+                              size: 32,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "Scan QR codes to validate gate passes",
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textSecondary,
+                          const SizedBox(width: AppTheme.spacingMD),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Guard Scanner",
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Scan QR codes to validate gate passes",
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
                             ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: AppTheme.textTertiary,
                           ),
                         ],
                       ),
                     ),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: AppTheme.textTertiary,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacingMD),
-          // * About SmartRoad Card
-          Card(
-            child: InkWell(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const AboutScreen(),
                   ),
-                );
-              },
-              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-              child: Padding(
-                padding: const EdgeInsets.all(AppTheme.spacingMD),
-                child: Row(
-                  children: [
-                    Container(
+                ),
+                const SizedBox(height: AppTheme.spacingMD),
+                // * About SmartRoad Card
+                Card(
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AboutScreen()),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                    child: Padding(
                       padding: const EdgeInsets.all(AppTheme.spacingMD),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                      ),
-                      child: Icon(
-                        Icons.info_outline,
-                        color: AppTheme.primaryColor,
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(width: AppTheme.spacingMD),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Text(
-                            "About SmartRoad",
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
+                          Container(
+                            padding: const EdgeInsets.all(AppTheme.spacingMD),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusMD,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.info_outline,
+                              color: AppTheme.primaryColor,
+                              size: 32,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            "Learn more about the app",
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textSecondary,
+                          const SizedBox(width: AppTheme.spacingMD),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "About SmartRoad",
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Learn more about the app",
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
                             ),
+                          ),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 16,
+                            color: AppTheme.textTertiary,
                           ),
                         ],
                       ),
                     ),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: AppTheme.textTertiary,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: AppTheme.spacingXL),
-          // * Update Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _isUpdating ? null : _updateProfile,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppTheme.spacingXL,
-                  vertical: AppTheme.spacingLG,
-                ),
-                elevation: 3,
-                shadowColor: AppTheme.primaryColor.withOpacity(0.4),
-              ),
-              child: _isUpdating
-                  ? const SizedBox(
-                      height: 22,
-                      width: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+
+                const SizedBox(height: AppTheme.spacingXL),
+                // * Update Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _isUpdating ? null : _updateProfile,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.spacingXL,
+                        vertical: AppTheme.spacingLG,
                       ),
-                    )
-                  : Text(
-                      "Update Profile",
-                      style: TextStyle(
-                        fontSize: isMobile ? 16 : 17,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      elevation: 3,
+                      shadowColor: AppTheme.primaryColor.withOpacity(0.4),
                     ),
+                    child:
+                        _isUpdating
+                            ? const SizedBox(
+                              height: 22,
+                              width: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                            : Text(
+                              "Update Profile",
+                              style: TextStyle(
+                                fontSize: isMobile ? 16 : 17,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingXL),
+                // * Footer Branding
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppTheme.spacingMD),
+                  child: Text(
+                    "SmartRoad · by The Heedful",
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppTheme.textTertiary.withOpacity(0.7),
+                      letterSpacing: 0.3,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: AppTheme.spacingXL),
-          // * Footer Branding
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppTheme.spacingMD),
-            child: Text(
-              "SmartRoad · by The Heedful",
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AppTheme.textTertiary.withOpacity(0.7),
-                letterSpacing: 0.3,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-            ],
-          ),
-        ),
         ),
       ),
     );
   }
 }
-

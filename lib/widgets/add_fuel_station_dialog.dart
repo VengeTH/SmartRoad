@@ -94,8 +94,7 @@ class _AddFuelStationDialogState extends ConsumerState<AddFuelStationDialog> {
       }
 
       final bytes = await _selectedPhoto!.readAsBytes();
-      final fileName =
-          "station_${DateTime.now().millisecondsSinceEpoch}.jpg";
+      final fileName = "station_${DateTime.now().millisecondsSinceEpoch}.jpg";
       final path = "fuel-stations/$fileName";
 
       await client.storage.from("fuel-stations").uploadBinary(path, bytes);
@@ -133,21 +132,24 @@ class _AddFuelStationDialogState extends ConsumerState<AddFuelStationDialog> {
       }
 
       // * Submit new station
-      final stationId =
-          await ref.read(fuelSubmissionProvider.notifier).submitNewStation(
-                name: _nameController.text.trim(),
-                latitude: widget.location.latitude,
-                longitude: widget.location.longitude,
-                brand: _brandController.text.trim().isNotEmpty
+      final stationId = await ref
+          .read(fuelSubmissionProvider.notifier)
+          .submitNewStation(
+            name: _nameController.text.trim(),
+            latitude: widget.location.latitude,
+            longitude: widget.location.longitude,
+            brand:
+                _brandController.text.trim().isNotEmpty
                     ? _brandController.text.trim()
                     : null,
-                province: _provinceController.text.trim(),
-                city: _cityController.text.trim(),
-                region: _regionController.text.trim().isNotEmpty
+            province: _provinceController.text.trim(),
+            city: _cityController.text.trim(),
+            region:
+                _regionController.text.trim().isNotEmpty
                     ? _regionController.text.trim()
                     : null,
-                photoUrl: photoUrl,
-              );
+            photoUrl: photoUrl,
+          );
 
       final submissionState = ref.read(fuelSubmissionProvider);
       if (submissionState.isSuccess && stationId != null) {
@@ -175,9 +177,9 @@ class _AddFuelStationDialogState extends ConsumerState<AddFuelStationDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: ${e.toString()}")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
       }
     } finally {
       if (mounted) {
@@ -201,8 +203,9 @@ class _AddFuelStationDialogState extends ConsumerState<AddFuelStationDialog> {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: theme.colorScheme.primaryContainer,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(28)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
               ),
               child: Row(
                 children: [
@@ -407,18 +410,20 @@ class _AddFuelStationDialogState extends ConsumerState<AddFuelStationDialog> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _isSubmitting || _isUploadingPhoto
-                              ? null
-                              : _submit,
-                          child: _isSubmitting
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text("Submit Station"),
+                          onPressed:
+                              _isSubmitting || _isUploadingPhoto
+                                  ? null
+                                  : _submit,
+                          child:
+                              _isSubmitting
+                                  ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : const Text("Submit Station"),
                         ),
                       ),
                     ],

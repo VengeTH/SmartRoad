@@ -2,6 +2,9 @@ import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 
 import "../models/fuel_station.dart";
+import "../models/fuel_price.dart";
+import "../models/fuel_type.dart";
+import "../providers/fuel_provider.dart";
 import "../utils/fuel_utils.dart";
 
 /// * Bottom sheet showing fuel station details with prices and actions.
@@ -115,6 +118,25 @@ class _FuelStationDetailSheetState
                   ],
                 ),
 
+                // * Station-level last updated
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.schedule,
+                      size: 14,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _stationLastUpdatedLabel(),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+
                 // * Verification badge
                 const SizedBox(height: 8),
                 _buildVerificationBadge(theme),
@@ -126,19 +148,20 @@ class _FuelStationDetailSheetState
 
           // * Fuel prices list
           Flexible(
-            child: widget.station.prices.isEmpty
-                ? _buildNoPricesState(theme)
-                : ListView.separated(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: widget.station.prices.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final price = widget.station.prices[index];
-                      return _buildPriceCard(theme, price);
-                    },
-                  ),
+            child:
+                widget.station.prices.isEmpty
+                    ? _buildNoPricesState(theme)
+                    : ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: widget.station.prices.length,
+                      separatorBuilder:
+                          (context, index) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final price = widget.station.prices[index];
+                        return _buildPriceCard(theme, price);
+                      },
+                    ),
           ),
 
           // * Actions
@@ -160,7 +183,7 @@ class _FuelStationDetailSheetState
                       child: OutlinedButton.icon(
                         onPressed: _showReportDialog,
                         icon: const Icon(Icons.flag, size: 18),
-                        label: const Text("Report Error"),
+                        label: const Text("Report incorrect price"),
                       ),
                     ),
                   ],
@@ -275,7 +298,7 @@ class _FuelStationDetailSheetState
     );
   }
 
-  Widget _buildPriceCard(ThemeData theme, price) {
+  Widget _buildPriceCard(ThemeData theme, FuelPrice price) {
     final isStale = price.isStale;
     final confidence = price.confidenceScore;
     final confidenceColor = FuelUtils.getConfidenceColor(confidence);
@@ -294,9 +317,10 @@ class _FuelStationDetailSheetState
         color: cardColor ?? theme.colorScheme.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: isStale
-            ? theme.colorScheme.error.withValues(alpha: 0.5)
-              : theme.dividerColor,
+          color:
+              isStale
+                  ? theme.colorScheme.error.withValues(alpha: 0.5)
+                  : theme.dividerColor,
         ),
       ),
       child: Row(
@@ -317,6 +341,14 @@ class _FuelStationDetailSheetState
                   "Updated ${FuelUtils.formatRelativeTime(price.updatedAt)}",
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "${FuelUtils.getSourceDisplayLabel(price.source)} · Confidence ${FuelUtils.formatConfidence(price.confidenceScore)}",
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontSize: 11,
                   ),
                 ),
                 if (isStale) ...[
@@ -398,22 +430,224 @@ class _FuelStationDetailSheetState
     }
   }
 
+  String _stationLastUpdatedLabel() {
+    if (widget.station.prices.isEmpty) {
+      return "Last updated: —";
+    }
+    final latest =
+        widget.station.prices.reduce(
+          (a, b) => a.updatedAt.isAfter(b.updatedAt) ? a : b,
+        );
+    return "Last updated: ${FuelUtils.formatRelativeTime(latest.updatedAt)}";
+  }
+
   void _showReportDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Report Incorrect Price"),
-        content: const Text(
-          "This feature will allow you to report incorrect prices. "
-          "Coming soon in the multi-fuel update dialog.",
+    final prices = widget.station.prices;
+    if (prices.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("No prices to report. Add prices first."),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Close"),
-          ),
-        ],
+      );
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (context) => _ReportFuelPriceDialog(
+        stationId: widget.station.id,
+        prices: prices,
+        onSuccess: () {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Report submitted. Thank you."),
+            ),
+          );
+          ref.read(selectedFuelStationProvider.notifier).refresh();
+        },
+        onCancel: () => Navigator.of(context).pop(),
       ),
+    );
+  }
+}
+
+/// * Dialog to report an incorrect fuel price for a station.
+class _ReportFuelPriceDialog extends ConsumerStatefulWidget {
+  final String stationId;
+  final List<FuelPrice> prices;
+  final VoidCallback onSuccess;
+  final VoidCallback onCancel;
+
+  const _ReportFuelPriceDialog({
+    required this.stationId,
+    required this.prices,
+    required this.onSuccess,
+    required this.onCancel,
+  });
+
+  @override
+  ConsumerState<_ReportFuelPriceDialog> createState() =>
+      _ReportFuelPriceDialogState();
+}
+
+class _ReportFuelPriceDialogState extends ConsumerState<_ReportFuelPriceDialog> {
+  FuelType? _selectedFuelType;
+  final _priceController = TextEditingController();
+  final _reasonController = TextEditingController();
+  bool _isSubmitting = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedFuelType = widget.prices.isNotEmpty ? widget.prices.first.fuelType : null;
+    if (_selectedFuelType != null) {
+      final p = widget.prices.firstWhere(
+        (e) => e.fuelType == _selectedFuelType,
+        orElse: () => widget.prices.first,
+      );
+      _priceController.text = p.price.toStringAsFixed(2);
+    }
+  }
+
+  @override
+  void dispose() {
+    _priceController.dispose();
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  void _onFuelTypeChanged(FuelType? value) {
+    if (value == null) return;
+    setState(() {
+      _selectedFuelType = value;
+      final match = widget.prices.where((e) => e.fuelType == value).toList();
+      if (match.isNotEmpty) {
+        _priceController.text = match.first.price.toStringAsFixed(2);
+      }
+    });
+  }
+
+  Future<void> _submit() async {
+    final fuelType = _selectedFuelType;
+    if (fuelType == null) return;
+
+    final priceText = _priceController.text.trim();
+    final reportedPrice = double.tryParse(priceText);
+    if (reportedPrice == null || reportedPrice <= 0) {
+      setState(() {
+        _errorMessage = "Enter a valid price.";
+      });
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    await ref.read(fuelSubmissionProvider.notifier).reportIncorrectPrice(
+      stationId: widget.stationId,
+      fuelType: fuelType,
+      reportedIncorrectPrice: reportedPrice,
+      reason: _reasonController.text.trim().isEmpty
+          ? null
+          : _reasonController.text.trim(),
+    );
+
+    final state = ref.read(fuelSubmissionProvider);
+    if (!mounted) return;
+
+    setState(() => _isSubmitting = false);
+
+    if (state.isSuccess) {
+      widget.onSuccess();
+    } else {
+      setState(() {
+        _errorMessage = state.errorMessage ?? "Report failed.";
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return AlertDialog(
+      title: const Text("Report incorrect price"),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Select the fuel type and the price you believe is incorrect.",
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<FuelType>(
+              value: _selectedFuelType,
+              decoration: const InputDecoration(
+                labelText: "Fuel type",
+                border: OutlineInputBorder(),
+              ),
+              items: widget.prices.map((p) {
+                return DropdownMenuItem<FuelType>(
+                  value: p.fuelType,
+                  child: Text(p.fuelType.displayName),
+                );
+              }).toList(),
+              onChanged: _onFuelTypeChanged,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _priceController,
+              decoration: const InputDecoration(
+                labelText: "Incorrect price (₱)",
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _reasonController,
+              decoration: const InputDecoration(
+                labelText: "Reason (optional)",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSubmitting ? null : widget.onCancel,
+          child: const Text("Cancel"),
+        ),
+        FilledButton(
+          onPressed: _isSubmitting ? null : _submit,
+          child: _isSubmitting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text("Submit report"),
+        ),
+      ],
     );
   }
 }

@@ -55,7 +55,8 @@ class FuelUtils {
     final dLat = _toRadians(lat2 - lat1);
     final dLon = _toRadians(lon2 - lon1);
 
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
         math.cos(_toRadians(lat1)) *
             math.cos(_toRadians(lat2)) *
             math.sin(dLon / 2) *
@@ -87,15 +88,9 @@ class FuelUtils {
   /// * - `message`: user-facing error message if not allowed
   static FuelDistanceValidation validateDistance(double distanceMeters) {
     if (distanceMeters <= 50) {
-      return FuelDistanceValidation(
-        allowed: true,
-        requiresPhoto: false,
-      );
+      return FuelDistanceValidation(allowed: true, requiresPhoto: false);
     } else if (distanceMeters <= 200) {
-      return FuelDistanceValidation(
-        allowed: true,
-        requiresPhoto: true,
-      );
+      return FuelDistanceValidation(allowed: true, requiresPhoto: true);
     } else {
       return FuelDistanceValidation(
         allowed: false,
@@ -114,6 +109,26 @@ class FuelUtils {
   static String formatConfidence(double confidence) {
     final percentage = (confidence * 100).round();
     return "$percentage%";
+  }
+
+  /// * Get display label for price source (e.g. "Community Report", "SmartRoad").
+  static String getSourceDisplayLabel(String source) {
+    switch (source.toLowerCase()) {
+      case "community":
+        return "Community Report";
+      case "smartroad":
+        return "SmartRoad";
+      case "verified":
+        return "Verified";
+      case "official":
+        return "Official";
+      case "osm":
+        return "OSM";
+      case "default":
+        return "Regional default";
+      default:
+        return "Community Report";
+    }
   }
 
   /// * Get confidence label for UI display.
@@ -157,10 +172,4 @@ class FuelDistanceValidation {
 }
 
 /// * Confidence color indicator.
-enum ConfidenceColor {
-  high,
-  moderate,
-  low,
-  uncertain,
-}
-
+enum ConfidenceColor { high, moderate, low, uncertain }

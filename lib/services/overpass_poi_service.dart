@@ -113,14 +113,21 @@ node["aeroway"="aerodrome"](BBOX);
         if (lat == null || lon == null) continue;
 
         final tags = (el['tags'] as Map?) ?? {};
-        final name = (tags['name'] ?? tags['name:en'] ?? '').toString().trim();
+        String name = (tags['name'] ?? tags['name:en'] ?? '').toString().trim();
+        final category = _categoryFromTags(tags);
+        // * For fuel stations, prefer brand over name so "NTN" shows instead of building name "South Emerald"
+        if (category == 'fuel') {
+          final brand = (tags['brand'] ?? '').toString().trim();
+          if (brand.isNotEmpty) name = brand;
+        }
         if (name.isEmpty) continue;
 
         final id = 'overpass:${el['type']}:${el['id']}';
-        final category = _categoryFromTags(tags);
 
-        // * Assign importance proxy based on zoom tier (major = higher priority)
-        final importance = zoom >= 14.0 ? 0.4 : zoom >= 12.0 ? 0.6 : 0.8;
+        // * Assign importance proxy based on zoom tier (major = higher priority).
+        // * Fuel POIs get a boost so gas stations win over nearby malls/shops.
+        final baseImportance = zoom >= 14.0 ? 0.4 : zoom >= 12.0 ? 0.6 : 0.8;
+        final importance = category == "fuel" ? (baseImportance + 0.25) : baseImportance;
 
         results.add(
           MapPoi(

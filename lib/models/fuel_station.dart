@@ -71,14 +71,16 @@ class FuelStation {
     final source = json["source"] as String? ?? "community";
 
     final createdAtRaw = json["created_at"] as String?;
-    final createdAt = (createdAtRaw != null)
-        ? DateTime.tryParse(createdAtRaw) ?? DateTime.now()
-        : DateTime.now();
+    final createdAt =
+        (createdAtRaw != null)
+            ? DateTime.tryParse(createdAtRaw) ?? DateTime.now()
+            : DateTime.now();
 
     final updatedAtRaw = json["updated_at"] as String?;
-    final updatedAt = (updatedAtRaw != null)
-        ? DateTime.tryParse(updatedAtRaw) ?? DateTime.now()
-        : DateTime.now();
+    final updatedAt =
+        (updatedAtRaw != null)
+            ? DateTime.tryParse(updatedAtRaw) ?? DateTime.now()
+            : DateTime.now();
 
     final photoUrl = json["photo_url"] as String?;
 

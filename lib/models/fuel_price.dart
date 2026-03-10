@@ -27,9 +27,10 @@ class FuelPrice {
     final price = (priceRaw is num) ? priceRaw.toDouble() : 0.0;
 
     final updatedAtRaw = json["updated_at"] as String?;
-    final updatedAt = (updatedAtRaw != null)
-        ? DateTime.tryParse(updatedAtRaw) ?? DateTime.now()
-        : DateTime.now();
+    final updatedAt =
+        (updatedAtRaw != null)
+            ? DateTime.tryParse(updatedAtRaw) ?? DateTime.now()
+            : DateTime.now();
 
     final source = json["source"] as String? ?? "community";
 

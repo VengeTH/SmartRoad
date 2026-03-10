@@ -2,6 +2,7 @@ import "dart:convert";
 
 import "package:flutter/foundation.dart";
 import "package:hive_flutter/hive_flutter.dart";
+import "package:uuid/uuid.dart";
 
 import "../models/navigation_settings.dart";
 import "../models/recent_location.dart";
@@ -72,19 +73,24 @@ class AppPreferencesService {
     if (raw == null) return [];
 
     try {
-      final decoded =
-          raw is String ? jsonDecode(raw) : raw;
+      final decoded = raw is String ? jsonDecode(raw) : raw;
       if (decoded is! List) return [];
 
-      final items = decoded
-          .whereType<Map>()
-          .map((item) => RecentLocation.fromJson(Map<String, dynamic>.from(item)))
-          .where((item) =>
-              item.label.trim().isNotEmpty &&
-              item.latitude.isFinite &&
-              item.longitude.isFinite &&
-              (item.latitude != 0 || item.longitude != 0))
-          .toList();
+      final items =
+          decoded
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    RecentLocation.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .where(
+                (item) =>
+                    item.label.trim().isNotEmpty &&
+                    item.latitude.isFinite &&
+                    item.longitude.isFinite &&
+                    (item.latitude != 0 || item.longitude != 0),
+              )
+              .toList();
 
       items.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       return items.take(_recentLocationsMaxItems).toList();
@@ -116,10 +122,11 @@ class AppPreferencesService {
     final existing = await loadRecentLocations();
     final incomingKey = incoming.dedupeKey();
 
-    final merged = <RecentLocation>[
-      incoming,
-      ...existing.where((item) => item.dedupeKey() != incomingKey),
-    ].take(_recentLocationsMaxItems).toList();
+    final merged =
+        <RecentLocation>[
+          incoming,
+          ...existing.where((item) => item.dedupeKey() != incomingKey),
+        ].take(_recentLocationsMaxItems).toList();
 
     final encoded = jsonEncode(merged.map((e) => e.toJson()).toList());
     await box.put(_keyRecentLocations, encoded);
@@ -136,7 +143,8 @@ class AppPreferencesService {
   // ============================================================
 
   static const String _keyCommuteSettings = "commute_settings_v1";
-  static const String _keyRecentCommuteDestinations = "recent_commute_destinations_v1";
+  static const String _keyRecentCommuteDestinations =
+      "recent_commute_destinations_v1";
 
   /// * Load commute settings
   Future<Map<String, dynamic>> loadCommuteSettings() async {
@@ -169,7 +177,9 @@ class AppPreferencesService {
       };
     } catch (e) {
       if (kDebugMode) {
-        debugPrint("❌ [AppPreferencesService] Failed to parse commute settings: $e");
+        debugPrint(
+          "❌ [AppPreferencesService] Failed to parse commute settings: $e",
+        );
       }
       return {
         "alarmDistanceMeters": 500,
@@ -205,7 +215,9 @@ class AppPreferencesService {
           .toList();
     } catch (e) {
       if (kDebugMode) {
-        debugPrint("❌ [AppPreferencesService] Failed to parse commute destinations: $e");
+        debugPrint(
+          "❌ [AppPreferencesService] Failed to parse commute destinations: $e",
+        );
       }
       return [];
     }
@@ -218,7 +230,7 @@ class AppPreferencesService {
     required double longitude,
   }) async {
     final box = await _ensureBox();
-    
+
     final incoming = {
       "name": name.trim().isEmpty ? "Location" : name.trim(),
       "lat": latitude,
@@ -227,16 +239,19 @@ class AppPreferencesService {
     };
 
     final existing = await loadRecentCommuteDestinations();
-    
-    // * Remove duplicate by coordinates
-    final filtered = existing.where((item) {
-      final lat = item["lat"] as double?;
-      final lng = item["lng"] as double?;
-      if (lat == null || lng == null) return true;
-      return (lat - latitude).abs() > 0.0001 || (lng - longitude).abs() > 0.0001;
-    }).toList();
 
-    final merged = <Map<String, dynamic>>[incoming, ...filtered].take(10).toList();
+    // * Remove duplicate by coordinates
+    final filtered =
+        existing.where((item) {
+          final lat = item["lat"] as double?;
+          final lng = item["lng"] as double?;
+          if (lat == null || lng == null) return true;
+          return (lat - latitude).abs() > 0.0001 ||
+              (lng - longitude).abs() > 0.0001;
+        }).toList();
+
+    final merged =
+        <Map<String, dynamic>>[incoming, ...filtered].take(10).toList();
 
     final encoded = jsonEncode(merged);
     await box.put(_keyRecentCommuteDestinations, encoded);
@@ -295,19 +310,21 @@ class AppPreferencesService {
   static const String _keyFuelSubmissionLog = "fuel_submission_log_v1";
 
   /// * Get or create persistent anonymous device ID for fuel submissions.
+  /// *
+  /// * Uses UUID v4 for new devices; existing stored ID is preserved for
+  /// * backward compatibility. No login required.
   Future<String> getFuelDeviceId() async {
     final box = await _ensureBox();
     final existing = box.get(_keyFuelDeviceId);
-    
+
     if (existing is String && existing.trim().isNotEmpty) {
       return existing.trim();
     }
 
-    // * Generate new device ID (simple timestamp + random suffix)
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final random = (now % 100000).toString().padLeft(5, '0');
-    final deviceId = "device_$now$random";
-    
+    // * Generate new device ID as UUID (persistent, anonymous)
+    const uuid = Uuid();
+    final deviceId = uuid.v4();
+
     await box.put(_keyFuelDeviceId, deviceId);
     return deviceId;
   }
@@ -322,11 +339,11 @@ class AppPreferencesService {
   }) async {
     final box = await _ensureBox();
     final now = DateTime.now();
-    
+
     // * Load existing log
     final raw = box.get(_keyFuelSubmissionLog);
     Map<String, dynamic> log = {};
-    
+
     if (raw is String && raw.trim().isNotEmpty) {
       try {
         final decoded = jsonDecode(raw);
@@ -367,14 +384,16 @@ class AppPreferencesService {
   /// * Check if local rate limit allows submission (client-side mirror).
   /// *
   /// * Returns true if submission is allowed, false if rate-limited.
-  /// * Rules: max 5 submissions per fuel type in 10 minutes.
+  /// * Rules: max 5 submissions per fuel type per device (global across stations)
+  /// * in 10 minutes. Cooldown (same station + same fuel for 15 min) is
+  /// * enforced separately via [checkFuelCooldown].
   Future<bool> checkFuelRateLimit({
     required String stationId,
     required String fuelType,
   }) async {
     final box = await _ensureBox();
     final raw = box.get(_keyFuelSubmissionLog);
-    
+
     if (raw == null || raw is! String || raw.trim().isEmpty) {
       return true; // * No log yet, allow
     }
@@ -383,20 +402,24 @@ class AppPreferencesService {
       final decoded = jsonDecode(raw);
       if (decoded is! Map<String, dynamic>) return true;
 
-      final stationData = decoded[stationId] as Map<String, dynamic>?;
-      if (stationData == null) return true;
-
-      final timestamps = stationData[fuelType] as List?;
-      if (timestamps == null || timestamps.isEmpty) return true;
-
-      // * Count submissions in last 10 minutes
+      // * Aggregate timestamps for this fuelType across ALL stations
       final cutoff = DateTime.now().subtract(const Duration(minutes: 10));
-      final recentCount = timestamps.where((ts) {
-        if (ts is! String) return false;
-        final dt = DateTime.tryParse(ts);
-        if (dt == null) return false;
-        return dt.isAfter(cutoff);
-      }).length;
+      int recentCount = 0;
+
+      for (final stationEntry in decoded.entries) {
+        final stationData = stationEntry.value;
+        if (stationData is! Map<String, dynamic>) continue;
+
+        final timestamps = stationData[fuelType] as List?;
+        if (timestamps == null) continue;
+
+        for (final ts in timestamps) {
+          if (ts is! String) continue;
+          final dt = DateTime.tryParse(ts);
+          if (dt == null) continue;
+          if (dt.isAfter(cutoff)) recentCount++;
+        }
+      }
 
       return recentCount < 5;
     } catch (e) {
@@ -416,7 +439,7 @@ class AppPreferencesService {
   }) async {
     final box = await _ensureBox();
     final raw = box.get(_keyFuelSubmissionLog);
-    
+
     if (raw == null || raw is! String || raw.trim().isEmpty) {
       return true; // * No log yet, allow
     }
@@ -456,4 +479,3 @@ class AppPreferencesService {
     await box.delete(_keyFuelSubmissionLog);
   }
 }
-

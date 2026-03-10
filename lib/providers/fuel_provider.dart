@@ -38,22 +38,20 @@ final fuelServiceProvider = Provider<FuelService>((ref) {
 // ============================================================
 
 /// * Fuel stations visible on the map (within current bounds).
-final mapFuelStationsProvider =
-    StateNotifierProvider<MapFuelStationsNotifier, AsyncValue<List<FuelStation>>>(
-  (ref) {
-    return MapFuelStationsNotifier(
-      fuelService: ref.watch(fuelServiceProvider),
-    );
-  },
-);
+final mapFuelStationsProvider = StateNotifierProvider<
+  MapFuelStationsNotifier,
+  AsyncValue<List<FuelStation>>
+>((ref) {
+  return MapFuelStationsNotifier(fuelService: ref.watch(fuelServiceProvider));
+});
 
-class MapFuelStationsNotifier extends StateNotifier<AsyncValue<List<FuelStation>>> {
+class MapFuelStationsNotifier
+    extends StateNotifier<AsyncValue<List<FuelStation>>> {
   final FuelService _fuelService;
 
-  MapFuelStationsNotifier({
-    required FuelService fuelService,
-  })  : _fuelService = fuelService,
-        super(const AsyncValue.data([]));
+  MapFuelStationsNotifier({required FuelService fuelService})
+    : _fuelService = fuelService,
+      super(const AsyncValue.data([]));
 
   /// * Load fuel stations within map bounds.
   Future<void> loadStationsInBounds({
@@ -116,21 +114,18 @@ class MapFuelStationsNotifier extends StateNotifier<AsyncValue<List<FuelStation>
 
 /// * Currently selected fuel station on the map.
 final selectedFuelStationProvider =
-    StateNotifierProvider<SelectedFuelStationNotifier, FuelStation?>(
-  (ref) {
-    return SelectedFuelStationNotifier(
-      fuelService: ref.watch(fuelServiceProvider),
-    );
-  },
-);
+    StateNotifierProvider<SelectedFuelStationNotifier, FuelStation?>((ref) {
+      return SelectedFuelStationNotifier(
+        fuelService: ref.watch(fuelServiceProvider),
+      );
+    });
 
 class SelectedFuelStationNotifier extends StateNotifier<FuelStation?> {
   final FuelService _fuelService;
 
-  SelectedFuelStationNotifier({
-    required FuelService fuelService,
-  })  : _fuelService = fuelService,
-        super(null);
+  SelectedFuelStationNotifier({required FuelService fuelService})
+    : _fuelService = fuelService,
+      super(null);
 
   /// * Select a fuel station by ID and load detailed data.
   Future<void> selectStation(String stationId) async {
@@ -167,21 +162,18 @@ class SelectedFuelStationNotifier extends StateNotifier<FuelStation?> {
 
 /// * Tracks pending fuel submission operations.
 final fuelSubmissionProvider =
-    StateNotifierProvider<FuelSubmissionNotifier, FuelSubmissionState>(
-  (ref) {
-    return FuelSubmissionNotifier(
-      fuelService: ref.watch(fuelServiceProvider),
-    );
-  },
-);
+    StateNotifierProvider<FuelSubmissionNotifier, FuelSubmissionState>((ref) {
+      return FuelSubmissionNotifier(
+        fuelService: ref.watch(fuelServiceProvider),
+      );
+    });
 
 class FuelSubmissionNotifier extends StateNotifier<FuelSubmissionState> {
   final FuelService _fuelService;
 
-  FuelSubmissionNotifier({
-    required FuelService fuelService,
-  })  : _fuelService = fuelService,
-        super(FuelSubmissionState.idle());
+  FuelSubmissionNotifier({required FuelService fuelService})
+    : _fuelService = fuelService,
+      super(FuelSubmissionState.idle());
 
   /// * Submit a price update.
   Future<void> submitPriceUpdate({
@@ -320,12 +312,7 @@ class FuelSubmissionState {
   bool get isError => status == FuelSubmissionStatus.error;
 }
 
-enum FuelSubmissionStatus {
-  idle,
-  loading,
-  success,
-  error,
-}
+enum FuelSubmissionStatus { idle, loading, success, error }
 
 // ============================================================
 // * ADMIN PROVIDERS
@@ -334,16 +321,16 @@ enum FuelSubmissionStatus {
 /// * Pending fuel stations for admin review.
 final pendingFuelStationsProvider =
     FutureProvider.autoDispose<List<FuelStation>>((ref) async {
-  final fuelService = ref.watch(fuelServiceProvider);
-  return await fuelService.getPendingStations();
-});
+      final fuelService = ref.watch(fuelServiceProvider);
+      return await fuelService.getPendingStations();
+    });
 
 /// * Pending price reports for admin review.
 final pendingFuelReportsProvider =
     FutureProvider.autoDispose<List<FuelPriceReport>>((ref) async {
-  final fuelService = ref.watch(fuelServiceProvider);
-  return await fuelService.getPendingReports();
-});
+      final fuelService = ref.watch(fuelServiceProvider);
+      return await fuelService.getPendingReports();
+    });
 
 // ============================================================
 // * REGIONAL FUEL STATIONS PROVIDER (FOR HEATMAPS/ANALYTICS)
@@ -352,22 +339,19 @@ final pendingFuelReportsProvider =
 /// * Get fuel stations by region/province.
 final regionalFuelStationsProvider = FutureProvider.family
     .autoDispose<List<FuelStation>, RegionalFuelQuery>((ref, query) async {
-  final fuelService = ref.watch(fuelServiceProvider);
-  return await fuelService.getStationsByRegion(
-    province: query.province,
-    city: query.city,
-  );
-});
+      final fuelService = ref.watch(fuelServiceProvider);
+      return await fuelService.getStationsByRegion(
+        province: query.province,
+        city: query.city,
+      );
+    });
 
 /// * Query parameters for regional fuel stations.
 class RegionalFuelQuery {
   final String province;
   final String? city;
 
-  const RegionalFuelQuery({
-    required this.province,
-    this.city,
-  });
+  const RegionalFuelQuery({required this.province, this.city});
 
   @override
   bool operator ==(Object other) {

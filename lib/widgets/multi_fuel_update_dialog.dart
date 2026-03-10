@@ -33,8 +33,7 @@ class MultiFuelUpdateDialog extends ConsumerStatefulWidget {
       _MultiFuelUpdateDialogState();
 }
 
-class _MultiFuelUpdateDialogState
-    extends ConsumerState<MultiFuelUpdateDialog> {
+class _MultiFuelUpdateDialogState extends ConsumerState<MultiFuelUpdateDialog> {
   final Map<FuelType, TextEditingController> _controllers = {};
   final Map<FuelType, bool> _selectedFuels = {};
 
@@ -56,9 +55,10 @@ class _MultiFuelUpdateDialogState
       _selectedFuels[fuelType] = false;
 
       // * Pre-fill with existing prices if available
-      final existingPrice = widget.station.prices
-          .where((p) => p.fuelType == fuelType)
-          .firstOrNull;
+      final existingPrice =
+          widget.station.prices
+              .where((p) => p.fuelType == fuelType)
+              .firstOrNull;
       if (existingPrice != null) {
         _controllers[fuelType]!.text = existingPrice.price.toStringAsFixed(2);
       }
@@ -88,7 +88,8 @@ class _MultiFuelUpdateDialogState
 
       if (position == null) {
         setState(() {
-          _validationMessage = "Unable to get your location. Please enable GPS.";
+          _validationMessage =
+              "Unable to get your location. Please enable GPS.";
           _isValidatingLocation = false;
         });
         return;
@@ -175,7 +176,9 @@ class _MultiFuelUpdateDialogState
         if (priceText.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text("Please enter a price for ${entry.key.displayName}"),
+              content: Text(
+                "Please enter a price for ${entry.key.displayName}",
+              ),
             ),
           );
           return;
@@ -204,9 +207,9 @@ class _MultiFuelUpdateDialogState
 
     // * Validate location constraints
     if (_validationMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_validationMessage!)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_validationMessage!)));
       return;
     }
 
@@ -234,7 +237,9 @@ class _MultiFuelUpdateDialogState
       }
 
       // * Submit price update
-      await ref.read(fuelSubmissionProvider.notifier).submitPriceUpdate(
+      await ref
+          .read(fuelSubmissionProvider.notifier)
+          .submitPriceUpdate(
             stationId: widget.station.id,
             prices: selectedPrices,
             photoUrl: photoUrl,
@@ -253,18 +258,16 @@ class _MultiFuelUpdateDialogState
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                submissionState.errorMessage ?? "Update failed",
-              ),
+              content: Text(submissionState.errorMessage ?? "Update failed"),
             ),
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: ${e.toString()}")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
       }
     } finally {
       if (mounted) {
@@ -288,8 +291,9 @@ class _MultiFuelUpdateDialogState
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: theme.colorScheme.primaryContainer,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(28)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
               ),
               child: Row(
                 children: [
@@ -304,8 +308,7 @@ class _MultiFuelUpdateDialogState
                       children: [
                         Text(
                           "Update Fuel Prices",
-                          style:
-                              theme.textTheme.titleLarge?.copyWith(
+                          style: theme.textTheme.titleLarge?.copyWith(
                             color: theme.colorScheme.onPrimaryContainer,
                             fontWeight: FontWeight.bold,
                           ),
@@ -363,18 +366,20 @@ class _MultiFuelUpdateDialogState
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _isSubmitting || _isValidatingLocation
-                            ? null
-                            : _submit,
-                        child: _isSubmitting
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text("Submit Updates"),
+                        onPressed:
+                            _isSubmitting || _isValidatingLocation
+                                ? null
+                                : _submit,
+                        child:
+                            _isSubmitting
+                                ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : const Text("Submit Updates"),
                       ),
                     ),
                   ],
@@ -444,9 +449,10 @@ class _MultiFuelUpdateDialogState
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: _requiresPhoto
-              ? theme.colorScheme.secondaryContainer
-              : theme.colorScheme.primaryContainer,
+          color:
+              _requiresPhoto
+                  ? theme.colorScheme.secondaryContainer
+                  : theme.colorScheme.primaryContainer,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -454,9 +460,10 @@ class _MultiFuelUpdateDialogState
             Icon(
               Icons.check_circle_outline,
               size: 20,
-              color: _requiresPhoto
-                  ? theme.colorScheme.onSecondaryContainer
-                  : theme.colorScheme.onPrimaryContainer,
+              color:
+                  _requiresPhoto
+                      ? theme.colorScheme.onSecondaryContainer
+                      : theme.colorScheme.onPrimaryContainer,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -465,9 +472,10 @@ class _MultiFuelUpdateDialogState
                     ? "Distance: ${_distanceMeters!.toStringAsFixed(0)}m – Photo proof required"
                     : "Distance: ${_distanceMeters!.toStringAsFixed(0)}m – Ready to submit",
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: _requiresPhoto
-                      ? theme.colorScheme.onSecondaryContainer
-                      : theme.colorScheme.onPrimaryContainer,
+                  color:
+                      _requiresPhoto
+                          ? theme.colorScheme.onSecondaryContainer
+                          : theme.colorScheme.onPrimaryContainer,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -507,8 +515,9 @@ class _MultiFuelUpdateDialogState
             child: TextField(
               controller: _controllers[fuelType],
               enabled: _selectedFuels[fuelType] ?? false,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
               ],

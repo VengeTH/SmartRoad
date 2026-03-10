@@ -50,7 +50,7 @@ smartroad/
   - Car (Private) - Private vehicles, tolls optional
   - Truck - Commercial vehicles
   - Pedestrian - Walking routes
-- **Permission-Based Routing (MVP)**: 
+- **Permission-Based Routing (MVP)**:
   - Roads can be tagged as restricted/private (HOA roads)
   - Users with stickers can access restricted roads
   - Users without stickers are routed around private areas
@@ -62,7 +62,7 @@ smartroad/
   - **Real-time Calculation**: Distances calculated using actual route (GraphHopper) with fallback to straight-line distance
   - **Instant Display**: Fallback distance shows immediately while route calculation completes in background
   - **Auto-update**: Distance updates from fallback to actual route distance when calculation completes
-- **Real-time Navigation**: 
+- **Real-time Navigation**:
   - Live location updates during navigation (1m accuracy)
   - Off-route detection and automatic rerouting
   - Route progress tracking (traveled vs upcoming segments)
@@ -103,7 +103,7 @@ smartroad/
 ### Map Features
 - **Hazard Filtering**: Filter by type, severity, and expiry status
 - **Search Bar**: Location search with autocomplete and debouncing
-  - **Smart Country-Prioritized Search**: 
+  - **Smart Country-Prioritized Search**:
     - Prioritizes search results from user's current country (e.g., Philippines)
     - Also searches globally but only shows main cities (cities, towns, municipalities) from other countries
     - Prevents showing random streets or small places from other countries
@@ -112,7 +112,7 @@ smartroad/
   - **Distance Indicators**: Each search result displays route distance on the right side
   - **Loading State**: Small spinner appears next to distance while route is being calculated
   - **Fallback Distance**: Straight-line distance shown immediately, replaced by route distance when available
-- **Ambient Landmarks**: 
+- **Ambient Landmarks**:
   - Dynamically shows POIs (restaurants, schools, fuel, etc.) based on zoom level
   - Powered by **OpenStreetMap Overpass API** for reliable landmark data
   - Rich icons and color-coding for 20+ categories (Hospital, Bank, Mall, etc.)
@@ -139,7 +139,7 @@ smartroad/
   - Approved photos (with admin moderation workflow)
   - Likes + comments
   - Ratings (1–5 stars)
-- **Weather Tile Layers**: 
+- **Weather Tile Layers**:
   - Real-time weather visualization as map tile overlays
   - Three weather layers: Rain (precipitation), Heat (temperature), Clouds (cloud coverage)
   - Toggleable layers with opacity control (heat layer capped at 50% for better accuracy perception)
@@ -150,7 +150,7 @@ smartroad/
   - **Web Support**: Requires API key via `--dart-define` or backend proxy (see Weather Layers Setup below)
   - Uses OpenWeatherMap tile service for all layers
   - ⚠️ Visual only - no rerouting based on weather yet
-- **Live Traffic Layer**: 
+- **Live Traffic Layer**:
   - Real-time traffic flow visualization using TomTom Traffic Flow API
   - Toggleable traffic overlay in map filter panel
   - Color-coded traffic conditions:
@@ -300,7 +300,7 @@ Weather layers work natively on mobile/desktop. On web, you need either an OpenW
    # Create .env file in project root
    OPENWEATHERMAP_API_KEY=your_api_key_here
    ```
-   
+
    Then run:
    - Windows: `run.bat`
    - Linux/Mac: `./run-with-env.sh`

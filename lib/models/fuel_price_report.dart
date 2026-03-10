@@ -43,9 +43,10 @@ class FuelPriceReport {
     final userId = json["user_id"] as String?;
 
     final createdAtRaw = json["created_at"] as String?;
-    final createdAt = (createdAtRaw != null)
-        ? DateTime.tryParse(createdAtRaw) ?? DateTime.now()
-        : DateTime.now();
+    final createdAt =
+        (createdAtRaw != null)
+            ? DateTime.tryParse(createdAtRaw) ?? DateTime.now()
+            : DateTime.now();
 
     final status = json["status"] as String? ?? "pending";
 

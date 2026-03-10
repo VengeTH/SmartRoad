@@ -1,5 +1,6 @@
 import "package:flutter/foundation.dart";
 
+import "../config/regional_fuel_defaults.dart";
 import "../models/fuel_station.dart";
 import "../models/fuel_price.dart";
 import "../models/fuel_price_report.dart";
@@ -18,6 +19,16 @@ import "location_service.dart";
 /// * - Reporting incorrect prices
 /// * - Admin moderation queues
 /// * - Rate limiting (device-based)
+/// *
+/// * Future extensions (structure ready):
+/// * - Fuel price heatmap: use [getStationsByRegion] or [getStationsInBounds]
+/// *   plus price aggregation by region/grid.
+/// * - Cheapest fuel along route: route geometry + [getStationsInBounds] along
+/// *   segments or [getStationsByRegion] for waypoints; min price per fuel type.
+/// * - Province expansion: [getStationsByRegion], [getStationsInBounds], and
+/// *   [groupStationsByProvince] / [groupStationsByRegion] for nationwide coverage.
+/// * - Community contributor leaderboard: new table/view (e.g. contributions per
+/// *   device_id/user_id); new provider and screen.
 class FuelService {
   final SupabaseService _supabaseService;
   final AppPreferencesService _prefsService;
@@ -27,9 +38,9 @@ class FuelService {
     required SupabaseService supabaseService,
     required AppPreferencesService prefsService,
     required LocationService locationService,
-  })  : _supabaseService = supabaseService,
-        _prefsService = prefsService,
-        _locationService = locationService;
+  }) : _supabaseService = supabaseService,
+       _prefsService = prefsService,
+       _locationService = locationService;
 
   // ============================================================
   // * QUERY METHODS
@@ -74,7 +85,16 @@ class FuelService {
           final prices = await _getLatestPrices(stationId);
           final stationData = Map<String, dynamic>.from(item);
           stationData["prices"] = prices.map((p) => p.toJson()).toList();
-          stations.add(FuelStation.fromJson(stationData));
+          FuelStation station = FuelStation.fromJson(stationData);
+          if (station.prices.isEmpty) {
+            station = station.copyWith(
+              prices: RegionalFuelDefaults.getDefaultPricesForStation(
+                station.province,
+                station.region,
+              ),
+            );
+          }
+          stations.add(station);
         }
       }
 
@@ -98,17 +118,27 @@ class FuelService {
     if (client == null) return null;
 
     try {
-      final response = await client
-          .from("fuel_stations")
-          .select()
-          .eq("id", stationId)
-          .single();
+      final response =
+          await client
+              .from("fuel_stations")
+              .select()
+              .eq("id", stationId)
+              .single();
 
       final prices = await _getLatestPrices(stationId);
       final stationData = Map<String, dynamic>.from(response);
       stationData["prices"] = prices.map((p) => p.toJson()).toList();
 
-      return FuelStation.fromJson(stationData);
+      FuelStation station = FuelStation.fromJson(stationData);
+      if (station.prices.isEmpty) {
+        station = station.copyWith(
+          prices: RegionalFuelDefaults.getDefaultPricesForStation(
+            station.province,
+            station.region,
+          ),
+        );
+      }
+      return station;
     } catch (e) {
       debugPrint("❌ [FuelService] Failed to fetch station: $e");
       return null;
@@ -187,6 +217,34 @@ class FuelService {
     }
   }
 
+  /// * Group stations by province for UI or province expansion.
+  /// *
+  /// * Returns a map of province name -> list of stations in that province.
+  static Map<String, List<FuelStation>> groupStationsByProvince(
+    List<FuelStation> stations,
+  ) {
+    final map = <String, List<FuelStation>>{};
+    for (final s in stations) {
+      final key = s.province.trim().isEmpty ? "Unknown" : s.province;
+      map.putIfAbsent(key, () => []).add(s);
+    }
+    return map;
+  }
+
+  /// * Group stations by region for UI or nationwide expansion.
+  /// *
+  /// * Returns a map of region (or province if region is null) -> list of stations.
+  static Map<String, List<FuelStation>> groupStationsByRegion(
+    List<FuelStation> stations,
+  ) {
+    final map = <String, List<FuelStation>>{};
+    for (final s in stations) {
+      final key = (s.region ?? s.province).trim().isEmpty ? "Unknown" : (s.region ?? s.province);
+      map.putIfAbsent(key, () => []).add(s);
+    }
+    return map;
+  }
+
   // ============================================================
   // * SUBMISSION METHODS
   // ============================================================
@@ -213,7 +271,8 @@ class FuelService {
       return FuelSubmissionResult(
         success: false,
         error: "LOCATION_UNAVAILABLE",
-        message: "Unable to get your location. Please enable location services.",
+        message:
+            "Unable to get your location. Please enable location services.",
       );
     }
 
@@ -312,16 +371,19 @@ class FuelService {
 
       // * Submit each price update
       for (final entry in prices.entries) {
-        final response = await client.rpc("submit_fuel_price_update", params: {
-          "p_station_id": stationId,
-          "p_fuel_type": entry.key.dbKey,
-          "p_price": entry.value,
-          "p_reporter_latitude": position.latitude,
-          "p_reporter_longitude": position.longitude,
-          "p_photo_url": photoUrl,
-          "p_device_id": deviceId,
-          "p_user_id": userId,
-        });
+        final response = await client.rpc(
+          "submit_fuel_price_update",
+          params: {
+            "p_station_id": stationId,
+            "p_fuel_type": entry.key.dbKey,
+            "p_price": entry.value,
+            "p_reporter_latitude": position.latitude,
+            "p_reporter_longitude": position.longitude,
+            "p_photo_url": photoUrl,
+            "p_device_id": deviceId,
+            "p_user_id": userId,
+          },
+        );
 
         if (response is Map<String, dynamic>) {
           final success = response["success"] as bool? ?? false;
@@ -378,30 +440,31 @@ class FuelService {
 
       final userId = _supabaseService.currentUserId;
 
-      final response = await client.rpc("submit_fuel_station", params: {
-        "p_name": submission.name,
-        "p_latitude": submission.latitude,
-        "p_longitude": submission.longitude,
-        "p_brand": submission.brand,
-        "p_province": submission.province,
-        "p_city": submission.city,
-        "p_region": submission.region,
-        "p_photo_url": submission.photoUrl,
-        "p_device_id": deviceId,
-        "p_user_id": userId,
-      });
+      final response = await client.rpc(
+        "submit_fuel_station",
+        params: {
+          "p_name": submission.name,
+          "p_latitude": submission.latitude,
+          "p_longitude": submission.longitude,
+          "p_brand": submission.brand,
+          "p_province": submission.province,
+          "p_city": submission.city,
+          "p_region": submission.region,
+          "p_photo_url": submission.photoUrl,
+          "p_device_id": deviceId,
+          "p_user_id": userId,
+        },
+      );
 
       if (response is Map<String, dynamic>) {
         final success = response["success"] as bool? ?? false;
         if (success) {
           final stationId = response["station_id"] as String?;
-          return FuelSubmissionResult(
-            success: true,
-            stationId: stationId,
-          );
+          return FuelSubmissionResult(success: true, stationId: stationId);
         } else {
           final error = response["error"] as String? ?? "UNKNOWN";
-          final message = response["message"] as String? ?? "Submission failed.";
+          final message =
+              response["message"] as String? ?? "Submission failed.";
           return FuelSubmissionResult(
             success: false,
             error: error,
@@ -493,7 +556,8 @@ class FuelService {
         for (final item in response) {
           if (item is Map<String, dynamic>) {
             final stationData = Map<String, dynamic>.from(item);
-            stationData["prices"] = []; // * Pending stations may not have prices yet
+            stationData["prices"] =
+                []; // * Pending stations may not have prices yet
             stations.add(FuelStation.fromJson(stationData));
           }
         }
@@ -522,9 +586,10 @@ class FuelService {
         );
       }
 
-      final response = await client.rpc("approve_fuel_station", params: {
-        "p_station_id": stationId,
-      });
+      final response = await client.rpc(
+        "approve_fuel_station",
+        params: {"p_station_id": stationId},
+      );
 
       if (response is Map<String, dynamic>) {
         final success = response["success"] as bool? ?? false;
@@ -572,9 +637,10 @@ class FuelService {
         );
       }
 
-      final response = await client.rpc("reject_fuel_station", params: {
-        "p_station_id": stationId,
-      });
+      final response = await client.rpc(
+        "reject_fuel_station",
+        params: {"p_station_id": stationId},
+      );
 
       if (response is Map<String, dynamic>) {
         final success = response["success"] as bool? ?? false;
@@ -708,7 +774,9 @@ class FuelService {
   // * DEMO DATA
   // ============================================================
 
+  /// * Demo stations with prices dated today for consistent "last updated" behavior in development.
   List<FuelStation> _getDemoStations() {
+    final now = DateTime.now();
     return [
       FuelStation(
         id: "demo-1",
@@ -725,7 +793,7 @@ class FuelService {
           FuelPrice(
             fuelType: FuelType.unleaded91,
             price: 58.50,
-            updatedAt: DateTime.now().subtract(const Duration(hours: 2)),
+            updatedAt: now,
             source: "community",
             confidenceScore: 0.9,
             isStale: false,
@@ -733,7 +801,7 @@ class FuelService {
           FuelPrice(
             fuelType: FuelType.unleaded95,
             price: 65.20,
-            updatedAt: DateTime.now().subtract(const Duration(hours: 2)),
+            updatedAt: now,
             source: "community",
             confidenceScore: 0.9,
             isStale: false,
@@ -741,14 +809,14 @@ class FuelService {
           FuelPrice(
             fuelType: FuelType.diesel,
             price: 52.80,
-            updatedAt: DateTime.now().subtract(const Duration(hours: 2)),
+            updatedAt: now,
             source: "community",
             confidenceScore: 0.9,
             isStale: false,
           ),
         ],
-        createdAt: DateTime.now().subtract(const Duration(days: 30)),
-        updatedAt: DateTime.now().subtract(const Duration(hours: 2)),
+        createdAt: now.subtract(const Duration(days: 30)),
+        updatedAt: now,
       ),
       FuelStation(
         id: "demo-2",
@@ -765,7 +833,7 @@ class FuelService {
           FuelPrice(
             fuelType: FuelType.unleaded91,
             price: 59.00,
-            updatedAt: DateTime.now().subtract(const Duration(hours: 5)),
+            updatedAt: now.subtract(const Duration(hours: 2)),
             source: "community",
             confidenceScore: 0.85,
             isStale: false,
@@ -773,14 +841,14 @@ class FuelService {
           FuelPrice(
             fuelType: FuelType.diesel,
             price: 53.50,
-            updatedAt: DateTime.now().subtract(const Duration(hours: 5)),
+            updatedAt: now.subtract(const Duration(hours: 2)),
             source: "community",
             confidenceScore: 0.85,
             isStale: false,
           ),
         ],
-        createdAt: DateTime.now().subtract(const Duration(days: 60)),
-        updatedAt: DateTime.now().subtract(const Duration(hours: 5)),
+        createdAt: now.subtract(const Duration(days: 60)),
+        updatedAt: now.subtract(const Duration(hours: 2)),
       ),
     ];
   }

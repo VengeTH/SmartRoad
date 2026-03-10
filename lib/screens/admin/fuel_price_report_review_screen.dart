@@ -55,16 +55,19 @@ class FuelPriceReportReviewScreen extends ConsumerWidget {
                         children: [
                           Text(
                             report.fuelType.displayName,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 4),
                           Text("Station ID: ${report.stationId}"),
                           const SizedBox(height: 4),
-                          Text("Reported price: ${FuelUtils.formatPrice(report.reportedIncorrectPrice)}"),
+                          Text(
+                            "Reported price: ${FuelUtils.formatPrice(report.reportedIncorrectPrice)}",
+                          ),
                           const SizedBox(height: 4),
-                          Text("Reported ${FuelUtils.formatRelativeTime(report.createdAt)}"),
+                          Text(
+                            "Reported ${FuelUtils.formatRelativeTime(report.createdAt)}",
+                          ),
                           if ((report.reason ?? "").trim().isNotEmpty) ...[
                             const SizedBox(height: 8),
                             Text("Reason: ${report.reason}"),
@@ -75,16 +78,21 @@ class FuelPriceReportReviewScreen extends ConsumerWidget {
                               Expanded(
                                 child: ElevatedButton.icon(
                                   onPressed: () async {
-                                    final result = await fuelService.markPriceReportReviewed(report.id);
+                                    final result = await fuelService
+                                        .markPriceReportReviewed(report.id);
                                     if (!context.mounted) return;
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text(result.success
-                                            ? "Report marked reviewed"
-                                            : (result.message ?? "Action failed")),
-                                        backgroundColor: result.success
-                                            ? AppTheme.successColor
-                                            : AppTheme.errorColor,
+                                        content: Text(
+                                          result.success
+                                              ? "Report marked reviewed"
+                                              : (result.message ??
+                                                  "Action failed"),
+                                        ),
+                                        backgroundColor:
+                                            result.success
+                                                ? AppTheme.successColor
+                                                : AppTheme.errorColor,
                                       ),
                                     );
                                     ref.invalidate(pendingFuelReportsProvider);
@@ -101,16 +109,21 @@ class FuelPriceReportReviewScreen extends ConsumerWidget {
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: () async {
-                                    final result = await fuelService.dismissPriceReport(report.id);
+                                    final result = await fuelService
+                                        .dismissPriceReport(report.id);
                                     if (!context.mounted) return;
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text(result.success
-                                            ? "Report dismissed"
-                                            : (result.message ?? "Action failed")),
-                                        backgroundColor: result.success
-                                            ? AppTheme.warningColor
-                                            : AppTheme.errorColor,
+                                        content: Text(
+                                          result.success
+                                              ? "Report dismissed"
+                                              : (result.message ??
+                                                  "Action failed"),
+                                        ),
+                                        backgroundColor:
+                                            result.success
+                                                ? AppTheme.warningColor
+                                                : AppTheme.errorColor,
                                       ),
                                     );
                                     ref.invalidate(pendingFuelReportsProvider);
@@ -129,21 +142,23 @@ class FuelPriceReportReviewScreen extends ConsumerWidget {
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(AppTheme.spacingXL),
-                child: Text("Failed to load pending reports: $error"),
-              ),
-            ),
+            error:
+                (error, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingXL),
+                    child: Text("Failed to load pending reports: $error"),
+                  ),
+                ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(AppTheme.spacingXL),
-            child: Text("Failed to load profile: $error"),
-          ),
-        ),
+        error:
+            (error, _) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppTheme.spacingXL),
+                child: Text("Failed to load profile: $error"),
+              ),
+            ),
       ),
     );
   }

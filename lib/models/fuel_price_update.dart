@@ -3,6 +3,13 @@ import "fuel_type.dart";
 /// * Payload for submitting fuel price updates.
 /// *
 /// * Used when a user updates one or more fuel prices at a station.
+/// * The client sends a map of fuel types to prices; the server expands each
+/// * into a row in fuel_price_updates with the following shape:
+/// *
+/// * - station_id, fuel_type, price, reporter_latitude, reporter_longitude,
+/// *   photo_url (optional), device_id, user_id (optional)
+/// * - Server sets: timestamp (created_at), source (e.g. 'community'),
+/// *   confidence_score (e.g. 1.0)
 class FuelPriceUpdate {
   final String stationId;
   final Map<FuelType, double> prices; // fuelType -> price

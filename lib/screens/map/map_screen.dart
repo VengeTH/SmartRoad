@@ -48,6 +48,7 @@ import "../../models/recent_location.dart";
 import "../../widgets/distance_indicator_widget.dart";
 import "../../widgets/traffic_layer.dart";
 import "../../config/traffic_config.dart";
+import "../../config/regional_fuel_defaults.dart";
 import "../../widgets/map_filter_panel.dart";
 import "../../widgets/save_route_dialog.dart";
 import "../../widgets/route_creation_dialog.dart";
@@ -1172,7 +1173,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
   }
 
-
   String _buildPoiRequestKey({required double zoom, required LatLng center}) {
     final zoomBucket = zoom.floor(); // * Reduce refresh spam while zooming.
     final latKey = (center.latitude * 1000).round(); // ~100m-ish bucket
@@ -1192,7 +1192,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     _poiDebounceTimer?.cancel();
-    _poiDebounceTimer = Timer(const Duration(milliseconds: 650), () {
+    _poiDebounceTimer = Timer(const Duration(milliseconds: 400), () {
       if (mounted) {
         _loadDynamicPoisForViewport();
       }
@@ -1209,7 +1209,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     final now = DateTime.now();
     if (_lastPoiFetchedAt != null &&
-        now.difference(_lastPoiFetchedAt!).inSeconds < 4) {
+        now.difference(_lastPoiFetchedAt!).inSeconds < 2) {
       return;
     }
 
@@ -1276,7 +1276,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         } else {
           final existingImportance = existing.importance ?? 0;
           final nextImportance = poi.importance ?? 0;
-          if (nextImportance > existingImportance) byNameBucket[dedupeKey] = poi;
+          if (nextImportance > existingImportance)
+            byNameBucket[dedupeKey] = poi;
         }
       }
 
@@ -1284,9 +1285,33 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           byNameBucket.values.toList()
             ..sort((a, b) => (b.importance ?? 0).compareTo(a.importance ?? 0));
 
+      // * If a fuel POI exists, suppress nearby non-fuel POIs so the gas station label wins.
+      final fuels =
+          merged
+              .where(
+                (p) => (p.category ?? p.type ?? "").toLowerCase() == "fuel",
+              )
+              .toList();
+      final suppressed = merged.where((p) {
+        final cat = (p.category ?? p.type ?? "").toLowerCase();
+        if (cat == "fuel") return true;
+        for (final f in fuels) {
+          if (_calculateHaversineDistance(p.location, f.location) < 90) {
+            return false;
+          }
+        }
+        return true;
+      }).toList()
+        ..sort((a, b) => (b.importance ?? 0).compareTo(a.importance ?? 0));
+
       // * Limit POI count to avoid clutter — Overpass already tiers by zoom.
-      final maxCount = zoom >= 15.0 ? 40 : zoom >= 12.0 ? 30 : 20;
-      final limited = merged.take(maxCount).toList();
+      final maxCount =
+          zoom >= 15.0
+              ? 40
+              : zoom >= 12.0
+              ? 38
+              : 20;
+      final limited = suppressed.take(maxCount).toList();
 
       setState(() {
         _dynamicPois = limited;
@@ -1699,6 +1724,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
       final combined = <Map<String, dynamic>>[];
 
+      // * Local-first search: include visible fuel stations + dynamic POIs + known places.
+      // * This ensures queries like "ntn" and "sjr" match what the user already sees on the map.
+      combined.addAll(_buildLocalSearchResults(trimmed));
+
       // * Pass 0: Nearby bounded search (keeps local POIs like "Starmall Alabang" on top).
       if (_hasPreciseLocation) {
         final nearbyBounds = _boundsAround(_currentLocation, radiusKm: 160);
@@ -1727,7 +1756,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       }
 
       // * Optional global fallback: only if we have too few results.
-      final shouldFetchGlobal = combined.length < 10;
+      // ! Avoid global fallback when we already have local matches or a country code.
+      final hasLocalMatches = combined.any((r) => r.containsKey("sr_score"));
+      final shouldFetchGlobal =
+          !hasLocalMatches && (country == null || country.isEmpty) && combined.length < 10;
       if (shouldFetchGlobal) {
         final globalResults = await _nominatimSearch(query: trimmed, limit: 24);
         combined.addAll(globalResults);
@@ -1778,8 +1810,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               return country != null && cc == country;
             }
           }
-          return country != null;
+          // * If there is no explicit country_code, do not assume it matches.
+          return false;
         }
+
+        // * Local results always win (fuel stations + visible POIs).
+        final aLocal = a.containsKey("sr_score") ? 1 : 0;
+        final bLocal = b.containsKey("sr_score") ? 1 : 0;
+        if (aLocal != bLocal) return bLocal - aLocal;
 
         final aInCountry = inCountry(a) ? 1 : 0;
         final bInCountry = inCountry(b) ? 1 : 0;
@@ -1846,6 +1884,101 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         );
       }
     }
+  }
+
+  /// * Build local-first search results from map-visible datasets.
+  /// *
+  /// * This makes POIs and gas stations searchable even if Nominatim returns nothing
+  /// * (or returns out-of-country matches).
+  List<Map<String, dynamic>> _buildLocalSearchResults(String query) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return [];
+
+    final q = trimmed.toLowerCase();
+    final results = <Map<String, dynamic>>[];
+
+    int scoreText(String name) {
+      final n = name.toLowerCase();
+      if (n == q) return 100;
+      if (n.startsWith(q)) return 80;
+      if (n.contains(q)) return 60;
+      return 0;
+    }
+
+    // * Fuel stations already loaded from Supabase (within bounds/viewport).
+    final fuelStations = ref.read(mapFuelStationsProvider).valueOrNull ?? const [];
+    for (final s in fuelStations) {
+      final score = scoreText(s.name);
+      if (score <= 0) continue;
+      results.add({
+        "display_name": s.name,
+        "lat": s.latitude,
+        "lon": s.longitude,
+        "address": null,
+        "type": "fuel",
+        "sr_kind": "fuel_station",
+        "sr_station_id": s.id,
+        "sr_score": score + 30, // * Prefer explicit fuel stations
+      });
+    }
+
+    // * Dynamic POIs from Overpass currently visible on the map.
+    for (final poi in _dynamicPois) {
+      final score = scoreText(poi.name);
+      if (score <= 0) continue;
+      final category = (poi.type ?? poi.category ?? "").trim();
+      final isFuel = category == "fuel";
+      results.add({
+        "display_name": poi.name,
+        "lat": poi.latitude,
+        "lon": poi.longitude,
+        "address": null,
+        "type": category,
+        "sr_kind": "overpass_poi",
+        "sr_poi_id": poi.id,
+        "sr_poi_category": category,
+        "sr_score": score + (isFuel ? 20 : 0),
+      });
+    }
+
+    // * Known places shipped with the app.
+    for (final p in _knownPlaces) {
+      final score = scoreText(p.name);
+      if (score <= 0) continue;
+      results.add({
+        "display_name": p.name,
+        "lat": p.latitude,
+        "lon": p.longitude,
+        "address": null,
+        "type": p.category,
+        "sr_kind": "known_place",
+        "sr_place_id": p.id,
+        "sr_score": score,
+      });
+    }
+
+    // * Sort local results by score then distance
+    results.sort((a, b) {
+      final aScore = (a["sr_score"] is num) ? (a["sr_score"] as num).toInt() : 0;
+      final bScore = (b["sr_score"] is num) ? (b["sr_score"] as num).toInt() : 0;
+      if (aScore != bScore) return bScore.compareTo(aScore);
+
+      final aLat = double.tryParse(a["lat"]?.toString() ?? "");
+      final aLon = double.tryParse(a["lon"]?.toString() ?? "");
+      final bLat = double.tryParse(b["lat"]?.toString() ?? "");
+      final bLon = double.tryParse(b["lon"]?.toString() ?? "");
+      final aDist =
+          (aLat != null && aLon != null)
+              ? _calculateStraightLineDistance(_currentLocation, LatLng(aLat, aLon))
+              : 1e9;
+      final bDist =
+          (bLat != null && bLon != null)
+              ? _calculateStraightLineDistance(_currentLocation, LatLng(bLat, bLon))
+              : 1e9;
+      return aDist.compareTo(bDist);
+    });
+
+    return results.take(12).toList();
   }
 
   /// * Format address from Nominatim result
@@ -2139,6 +2272,69 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     // * Original behavior for normal search
     try {
+      // * Local-first result: fuel station selection should open station UI directly.
+      final srKind = result["sr_kind"]?.toString();
+      if (srKind == "fuel_station") {
+        final stationId = result["sr_station_id"]?.toString();
+        if (stationId != null && stationId.trim().isNotEmpty) {
+          final stations = ref.read(mapFuelStationsProvider).valueOrNull ?? const [];
+          final match =
+              stations.where((s) => s.id == stationId).toList();
+          if (match.isNotEmpty) {
+            final station = match.first;
+            setState(() {
+              _selectedFuelStation = station;
+              _selectedHazard = null;
+              _selectedPlace = null;
+              _pinnedLocation = null;
+              _pinnedLocationLabel = null;
+              _showSearchResults = false;
+              _searchFocusNode.unfocus();
+            });
+            _safeMoveMap(station.location, 16.0);
+            return;
+          }
+        }
+      }
+
+      // * Local-first result: Overpass fuel POI should open fuel station UI.
+      if (srKind == "overpass_poi") {
+        final category = result["sr_poi_category"]?.toString().trim();
+        if (category == "fuel") {
+          final name = (result["display_name"] ?? "Fuel Station").toString().trim();
+          final lat = double.tryParse(result["lat"]?.toString() ?? "");
+          final lon = double.tryParse(result["lon"]?.toString() ?? "");
+          if (lat != null && lon != null) {
+            final station = FuelStation(
+              id: (result["sr_poi_id"] ?? "overpass_fuel").toString(),
+              name: name.isNotEmpty ? name : "Fuel Station",
+              latitude: lat,
+              longitude: lon,
+              brand: null,
+              province: "",
+              city: "",
+              region: null,
+              verified: false,
+              source: "osm",
+              prices: RegionalFuelDefaults.getDefaultPricesForStation("", null),
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            );
+            setState(() {
+              _selectedFuelStation = station;
+              _selectedHazard = null;
+              _selectedPlace = null;
+              _pinnedLocation = null;
+              _pinnedLocationLabel = null;
+              _showSearchResults = false;
+              _searchFocusNode.unfocus();
+            });
+            _safeMoveMap(station.location, 16.0);
+            return;
+          }
+        }
+      }
+
       final lat = double.parse(result['lat'].toString());
       final lon = double.parse(result['lon'].toString());
       final location = LatLng(lat, lon);
@@ -3118,17 +3314,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             children: [
                               Text(
                                 title,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
+                                style: Theme.of(context).textTheme.titleMedium
                                     ?.copyWith(fontWeight: FontWeight.w800),
                               ),
                               const SizedBox(height: AppTheme.spacingXS),
                               Text(
                                 message,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
+                                style: Theme.of(context).textTheme.bodyMedium
                                     ?.copyWith(color: AppTheme.textSecondary),
                               ),
                             ],
@@ -3264,9 +3456,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (!mounted) return;
 
     final kmAhead = worstOffsetMeters / 1000.0;
-    final distanceText = kmAhead < 1.0
-        ? "~${worstOffsetMeters.round()} m"
-        : "~${kmAhead.toStringAsFixed(1)} km";
+    final distanceText =
+        kmAhead < 1.0
+            ? "~${worstOffsetMeters.round()} m"
+            : "~${kmAhead.toStringAsFixed(1)} km";
 
     final weatherLabel = _routeWeatherTitle(worst);
     final suggestion =
@@ -5780,13 +5973,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         );
         if (samplePoint == null) continue;
 
-        final data = await _weatherService.fetchWeatherData(center: samplePoint);
+        final data = await _weatherService.fetchWeatherData(
+          center: samplePoint,
+        );
         if (data == null) continue;
 
         if (_isDangerousRouteWeather(data)) {
-          earliestHit = earliestHit == null
-              ? data
-              : _pickMoreSevereWeather(earliestHit, data);
+          earliestHit =
+              earliestHit == null
+                  ? data
+                  : _pickMoreSevereWeather(earliestHit, data);
           earliestHitOffset ??= offset.toDouble();
 
           // * Prefer earliest (closest) hazard; stop early for rain.
@@ -5836,14 +6032,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   String _routeWeatherSubtitle(WeatherData data, double metersAhead) {
     final kmAhead = metersAhead / 1000.0;
-    final distanceText = kmAhead < 1.0
-        ? "~${metersAhead.round()} m"
-        : "~${kmAhead.toStringAsFixed(1)} km";
+    final distanceText =
+        kmAhead < 1.0
+            ? "~${metersAhead.round()} m"
+            : "~${kmAhead.toStringAsFixed(1)} km";
 
     final tempText = "${data.temperature.toStringAsFixed(0)}°C";
-    final rainText = data.precipitation != null
-        ? "${data.precipitation!.toStringAsFixed(1)} mm/h"
-        : null;
+    final rainText =
+        data.precipitation != null
+            ? "${data.precipitation!.toStringAsFixed(1)} mm/h"
+            : null;
 
     final details = <String>[tempText, if (rainText != null) rainText];
     return "$distanceText ahead • ${details.join(' • ')}";
@@ -5920,9 +6118,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           children: [
                             Text(
                               _routeWeatherTitle(data),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: AppTheme.spacingXS),
@@ -5931,17 +6127,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                 data,
                                 approxDistanceMetersAhead,
                               ),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
+                              style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: AppTheme.textSecondary),
                             ),
                             const SizedBox(height: AppTheme.spacingSM),
                             Text(
                               "Weather can affect traction and visibility. Want to recalculate the route?",
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
+                              style: Theme.of(context).textTheme.bodyMedium
                                   ?.copyWith(color: AppTheme.textPrimary),
                             ),
                           ],
@@ -6298,12 +6490,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _currentLocation.latitude + offset,
         _currentLocation.longitude + offset,
       );
-      ref.read(mapFuelStationsProvider.notifier).loadStationsInBounds(
-        minLat: _currentLocation.latitude - offset,
-        maxLat: _currentLocation.latitude + offset,
-        minLon: _currentLocation.longitude - offset,
-        maxLon: _currentLocation.longitude + offset,
-      );
+
+      // * Fuel stations: use viewport bounds when available so panning shows stations in visible area
+      final bounds = _mapVisibleBounds;
+      if (!_isNavigating && bounds != null) {
+        ref.read(mapFuelStationsProvider.notifier).loadStationsInBounds(
+          minLat: bounds.south,
+          maxLat: bounds.north,
+          minLon: bounds.west,
+          maxLon: bounds.east,
+          includeUnverified: true,
+        );
+      } else {
+        ref.read(mapFuelStationsProvider.notifier).loadStationsInBounds(
+          minLat: _currentLocation.latitude - offset,
+          maxLat: _currentLocation.latitude + offset,
+          minLon: _currentLocation.longitude - offset,
+          maxLon: _currentLocation.longitude + offset,
+          includeUnverified: true,
+        );
+      }
       // * Removed verbose logging to prevent console overflow
     } catch (e, stackTrace) {
       debugPrint("❌ [MapScreen] ERROR in _onMapReady: $e");
@@ -6339,12 +6545,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         _currentLocation.latitude + offset,
         _currentLocation.longitude + offset,
       );
-      ref.read(mapFuelStationsProvider.notifier).loadStationsInBounds(
-        minLat: _currentLocation.latitude - offset,
-        maxLat: _currentLocation.latitude + offset,
-        minLon: _currentLocation.longitude - offset,
-        maxLon: _currentLocation.longitude + offset,
-      );
+
+      // * Fuel stations: use viewport bounds when not navigating so panning shows stations in visible area (e.g. Dolores)
+      final bounds = _mapVisibleBounds;
+      if (!_isNavigating && bounds != null) {
+        ref.read(mapFuelStationsProvider.notifier).loadStationsInBounds(
+          minLat: bounds.south,
+          maxLat: bounds.north,
+          minLon: bounds.west,
+          maxLon: bounds.east,
+          includeUnverified: true,
+        );
+      } else {
+        ref.read(mapFuelStationsProvider.notifier).loadStationsInBounds(
+          minLat: _currentLocation.latitude - offset,
+          maxLat: _currentLocation.latitude + offset,
+          minLon: _currentLocation.longitude - offset,
+          maxLon: _currentLocation.longitude + offset,
+          includeUnverified: true,
+        );
+      }
       _scheduleDynamicPoiRefresh();
       // * Removed verbose logging to prevent console overflow
     } catch (e, stackTrace) {
@@ -6465,11 +6685,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final showRecents =
           _searchController.text.trim().isEmpty &&
           (_recentLocations.isNotEmpty || _isLoadingRecents);
-        final fuelStationsAsync = ref.watch(mapFuelStationsProvider);
-        final fuelStations = fuelStationsAsync.valueOrNull ?? const <FuelStation>[];
+      final fuelStationsAsync = ref.watch(mapFuelStationsProvider);
+      final fuelStations =
+          fuelStationsAsync.valueOrNull ?? const <FuelStation>[];
       final showKnownPlaces = !_isNavigating && mapZoom >= _knownPlacesMinZoom;
       final showDynamicPois = !_isNavigating && mapZoom >= _dynamicPoisMinZoom;
-        final showFuelStations = !_isNavigating && mapZoom >= 12.0;
+      final showFuelStations = !_isNavigating && mapZoom >= 12.0;
       final showHazardMarkers = mapZoom >= _knownPlacesMinZoom;
       final showHoaMarkers = !_isNavigating && mapZoom >= 13.0;
 
@@ -6862,10 +7083,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       return const SizedBox.shrink();
                     }
 
-                    return TrafficLayer(
-                      enabled: true,
-                      opacity: 0.7,
-                    );
+                    return TrafficLayer(enabled: true, opacity: 0.7);
                   },
                 ),
                 // * Weather tile layers (above base map, below routes)
@@ -7076,7 +7294,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         child: Stack(
                           alignment: Alignment.topCenter,
                           children: [
-                            if ((_pinnedLocationLabel?.trim().isNotEmpty ?? false))
+                            if ((_pinnedLocationLabel?.trim().isNotEmpty ??
+                                false))
                               Positioned(
                                 top: 0,
                                 child: Container(
@@ -7100,13 +7319,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   ),
                                   child: Text(
                                     _pinnedLocationLabel!,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelMedium
-                                        ?.copyWith(
-                                          color: AppTheme.textPrimary,
-                                          fontWeight: FontWeight.w700,
-                                        ),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelMedium?.copyWith(
+                                      color: AppTheme.textPrimary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -7225,8 +7443,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             getLocation: (p) => p.location,
                             getWidth: (p) {
                               final originalIndex = _dynamicPois.indexOf(p);
+                              final category =
+                                  (p.category ?? p.type ?? "").toLowerCase();
+                              // * Always show labels for fuel POIs (gas stations) so they are discoverable.
                               final showLabel =
-                                  mapZoom >= 15.0 && originalIndex < 15;
+                                  category == "fuel" ||
+                                  (mapZoom >= 15.0 && originalIndex < 15);
                               return showLabel ? 200.0 : 40.0;
                             },
                             minPixelSpacing:
@@ -7241,9 +7463,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           ); // * Get original index for label logic
                           // * Category is now a clean string from OverpassPoiService
                           // * (e.g. 'hospital', 'school', 'fuel', 'restaurant', etc.)
-                          final category = (poi.category ?? poi.type ?? '').toLowerCase();
+                          final category =
+                              (poi.category ?? poi.type ?? '').toLowerCase();
                           final icon = switch (category) {
-                            'mall' || 'supermarket' || 'shop' => Icons.storefront_outlined,
+                            'mall' ||
+                            'supermarket' ||
+                            'shop' => Icons.storefront_outlined,
                             'terminal' => Icons.directions_bus_filled,
                             'hospital' => Icons.local_hospital_outlined,
                             'school' => Icons.school_outlined,
@@ -7259,7 +7484,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             'sports' => Icons.sports_soccer_outlined,
                             'airport' => Icons.local_airport_outlined,
                             'police' => Icons.local_police_outlined,
-                            'fire_station' => Icons.local_fire_department_outlined,
+                            'fire_station' =>
+                              Icons.local_fire_department_outlined,
                             'library' => Icons.local_library_outlined,
                             'entertainment' => Icons.theaters_outlined,
                             'worship' => Icons.church_outlined,
@@ -7270,7 +7496,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           };
 
                           final accentColor = switch (category) {
-                            'mall' || 'supermarket' || 'shop' || 'market' => AppTheme.primaryColor,
+                            'mall' ||
+                            'supermarket' ||
+                            'shop' ||
+                            'market' => AppTheme.primaryColor,
                             'terminal' || 'airport' => AppTheme.infoColor,
                             'hospital' || 'pharmacy' => AppTheme.errorColor,
                             'school' => AppTheme.secondaryColor,
@@ -7330,7 +7559,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                       region: null,
                                       verified: false,
                                       source: "osm",
-                                      prices: const [],
+                                      prices: RegionalFuelDefaults.getDefaultPricesForStation("", null),
                                       createdAt: DateTime.now(),
                                       updatedAt: DateTime.now(),
                                     );
@@ -7351,39 +7580,51 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   ),
                 if (showFuelStations && fuelStations.isNotEmpty)
                   MarkerLayer(
-                    markers: fuelStations
-                        .map(
-                          (station) => Marker(
-                            point: station.location,
-                            width: 40,
-                            height: 40,
-                            child: GestureDetector(
-                              onTap: () {
-                                if (!mounted) return;
-                                setState(() {
-                                  _selectedFuelStation = station;
-                                  _selectedPlace = null;
-                                  _selectedHazard = null;
-                                  _showSearchResults = false;
-                                });
-                                _searchFocusNode.unfocus();
+                    markers:
+                        fuelStations
+                            .map(
+                              (station) {
+                                final isUnverifiedCommunity = !station.verified &&
+                                    station.source == "community";
+                                return Marker(
+                                  point: station.location,
+                                  width: 40,
+                                  height: 40,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      if (!mounted) return;
+                                      setState(() {
+                                        _selectedFuelStation = station;
+                                        _selectedPlace = null;
+                                        _selectedHazard = null;
+                                        _showSearchResults = false;
+                                      });
+                                      _searchFocusNode.unfocus();
+                                    },
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: isUnverifiedCommunity
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .secondary
+                                            : AppTheme.warningColor,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.local_gas_station,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
+                                );
                               },
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: AppTheme.warningColor,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
-                                ),
-                                child: const Icon(
-                                  Icons.local_gas_station,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
+                            )
+                            .toList(),
                   ),
                 // * Hazard markers
                 if (showHazardMarkers)
@@ -8007,7 +8248,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                                               const SizedBox(
                                                                 width: 12,
                                                                 height: 12,
-                                                             child: CircularProgressIndicator(
+                                                                child: CircularProgressIndicator(
                                                                   strokeWidth:
                                                                       2,
                                                                   valueColor:

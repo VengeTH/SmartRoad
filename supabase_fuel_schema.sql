@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS public.fuel_price_updates (
   CONSTRAINT fuel_type_valid CHECK (fuel_type IN ('unleaded_91', 'unleaded_95', 'unleaded_97', 'diesel')),
   CONSTRAINT price_positive CHECK (price > 0),
   CONSTRAINT confidence_valid CHECK (confidence_score >= 0.0 AND confidence_score <= 1.0),
-  CONSTRAINT source_valid CHECK (source IN ('community', 'official', 'osm'))
+  CONSTRAINT source_valid CHECK (source IN ('community', 'official', 'osm', 'smartroad', 'verified'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_station_id ON public.fuel_price_updates(station_id);
@@ -127,8 +127,13 @@ CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_device_id ON public.fuel_price
 CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_user_id ON public.fuel_price_updates(user_id);
 
 -- * Composite index for latest price queries
-CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_station_fuel_time 
+CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_station_fuel_time
   ON public.fuel_price_updates(station_id, fuel_type, created_at DESC);
+
+-- * Migration: allow source values 'smartroad' and 'verified' (for existing DBs)
+ALTER TABLE public.fuel_price_updates DROP CONSTRAINT IF EXISTS source_valid;
+ALTER TABLE public.fuel_price_updates ADD CONSTRAINT source_valid
+  CHECK (source IN ('community', 'official', 'osm', 'smartroad', 'verified'));
 
 ALTER TABLE public.fuel_price_updates ENABLE ROW LEVEL SECURITY;
 
@@ -206,7 +211,7 @@ BEGIN
   WHERE device_id = p_device_id
     AND fuel_type = p_fuel_type
     AND created_at > NOW() - INTERVAL '10 minutes';
-  
+
   RETURN submission_count < 5;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -226,11 +231,11 @@ BEGIN
   WHERE device_id = p_device_id
     AND station_id = p_station_id
     AND fuel_type = p_fuel_type;
-  
+
   IF last_submission IS NULL THEN
     RETURN TRUE;
   END IF;
-  
+
   RETURN (NOW() - last_submission) > INTERVAL '15 minutes';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -288,7 +293,7 @@ BEGIN
     RETURN json_build_object('success', false, 'error', 'PHOTO_REQUIRED', 'message', 'Photo proof required when more than 50m away.');
   END IF;
 
-  -- * Insert the price update
+  -- * Insert the price update (source and confidence_score set explicitly)
   INSERT INTO public.fuel_price_updates (
     station_id,
     fuel_type,
@@ -297,6 +302,8 @@ BEGIN
     reporter_longitude,
     reporter_distance_meters,
     photo_url,
+    source,
+    confidence_score,
     device_id,
     user_id
   ) VALUES (
@@ -307,6 +314,8 @@ BEGIN
     p_reporter_longitude,
     v_distance_meters,
     p_photo_url,
+    'community',
+    1.0,
     p_device_id,
     p_user_id
   ) RETURNING id INTO v_new_update_id;
@@ -493,7 +502,7 @@ BEGIN
   END IF;
 
   RETURN QUERY
-  SELECT 
+  SELECT
     fs.id,
     fs.name,
     fs.latitude,

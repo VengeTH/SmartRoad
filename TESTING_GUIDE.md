@@ -405,13 +405,13 @@ SupabaseService().enableDemoMode();
    ```sql
    -- Insert sample HOAs
    INSERT INTO public.hoas (name, description, latitude, longitude)
-   VALUES 
+   VALUES
      ('BF Resort', 'BF Resort Village', 14.4244, 120.9883),
      ('BF Homes', 'BF Homes Parañaque', 14.5000, 121.0000);
-   
+
    -- Insert sample sticker (replace USER_ID with actual user ID)
    INSERT INTO public.user_stickers (user_id, hoa_id, issued_at, expires_at)
-   VALUES 
+   VALUES
      ('USER_ID', 'HOA_ID', NOW(), NOW() + INTERVAL '1 year');
    ```
 
@@ -426,7 +426,7 @@ SupabaseService().enableDemoMode();
 ### My Stickers Issues
 
 **Problem**: "Photo rejected. Please take a clear photo of your sticker"
-- **Solution**: 
+- **Solution**:
   - Ensure photo is clear and well-lit
   - Make sure the sticker is fully visible in the photo
   - Try taking photo in better lighting
@@ -439,7 +439,7 @@ SupabaseService().enableDemoMode();
   - Check API key is valid and has quota remaining
 
 **Problem**: Photo upload fails on web
-- **Solution**: 
+- **Solution**:
   - This is expected - web uses different image handling
   - Ensure image is selected properly
   - Check browser console for errors
@@ -468,7 +468,7 @@ SupabaseService().enableDemoMode();
 ### Profile Screen Issues
 
 **Problem**: Profile screen shows "Something went wrong" error
-- **Solution**: 
+- **Solution**:
   - Ensure demo mode is enabled (check console for "Demo mode enabled")
   - Tap "Retry" button to refresh profile
   - If issue persists, restart the app completely (not just hot reload)
@@ -490,7 +490,7 @@ SupabaseService().enableDemoMode();
 ### Guard Scanner Issues
 
 **Problem**: Camera not opening
-- **Solution**: 
+- **Solution**:
   - Check camera permissions in device settings
   - Verify camera permissions in AndroidManifest.xml / Info.plist
   - Restart app after granting permissions
@@ -506,7 +506,7 @@ SupabaseService().enableDemoMode();
 - **Solution**: Ensure QR code is from Gate Pass screen, not a random QR code
 
 **Problem**: "Invalid or expired gate pass" for valid QR
-- **Solution**: 
+- **Solution**:
   - Check if QR code is older than 5 minutes
   - Verify sticker is active and not expired
   - Check database connection (if not in demo mode)
@@ -523,7 +523,7 @@ SupabaseService().enableDemoMode();
 
 ### Emulator/Simulator
 
-- **Limitations**: 
+- **Limitations**:
   - Camera may not work on emulator
   - Guard Scanner requires physical device
 - **Workaround**: Test Gate Pass screen on emulator, Guard Scanner on physical device

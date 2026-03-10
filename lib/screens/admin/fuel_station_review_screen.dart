@@ -54,9 +54,8 @@ class FuelStationReviewScreen extends ConsumerWidget {
                         children: [
                           Text(
                             station.name,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 4),
                           Text("${station.city}, ${station.province}"),
@@ -75,16 +74,21 @@ class FuelStationReviewScreen extends ConsumerWidget {
                               Expanded(
                                 child: ElevatedButton.icon(
                                   onPressed: () async {
-                                    final result = await fuelService.approveStation(station.id);
+                                    final result = await fuelService
+                                        .approveStation(station.id);
                                     if (!context.mounted) return;
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text(result.success
-                                            ? "Station approved"
-                                            : (result.message ?? "Approve failed")),
-                                        backgroundColor: result.success
-                                            ? AppTheme.successColor
-                                            : AppTheme.errorColor,
+                                        content: Text(
+                                          result.success
+                                              ? "Station approved"
+                                              : (result.message ??
+                                                  "Approve failed"),
+                                        ),
+                                        backgroundColor:
+                                            result.success
+                                                ? AppTheme.successColor
+                                                : AppTheme.errorColor,
                                       ),
                                     );
                                     ref.invalidate(pendingFuelStationsProvider);
@@ -101,16 +105,21 @@ class FuelStationReviewScreen extends ConsumerWidget {
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: () async {
-                                    final result = await fuelService.rejectStation(station.id);
+                                    final result = await fuelService
+                                        .rejectStation(station.id);
                                     if (!context.mounted) return;
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text(result.success
-                                            ? "Station rejected"
-                                            : (result.message ?? "Reject failed")),
-                                        backgroundColor: result.success
-                                            ? AppTheme.warningColor
-                                            : AppTheme.errorColor,
+                                        content: Text(
+                                          result.success
+                                              ? "Station rejected"
+                                              : (result.message ??
+                                                  "Reject failed"),
+                                        ),
+                                        backgroundColor:
+                                            result.success
+                                                ? AppTheme.warningColor
+                                                : AppTheme.errorColor,
                                       ),
                                     );
                                     ref.invalidate(pendingFuelStationsProvider);
@@ -129,21 +138,23 @@ class FuelStationReviewScreen extends ConsumerWidget {
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(AppTheme.spacingXL),
-                child: Text("Failed to load pending stations: $error"),
-              ),
-            ),
+            error:
+                (error, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingXL),
+                    child: Text("Failed to load pending stations: $error"),
+                  ),
+                ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(AppTheme.spacingXL),
-            child: Text("Failed to load profile: $error"),
-          ),
-        ),
+        error:
+            (error, _) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppTheme.spacingXL),
+                child: Text("Failed to load profile: $error"),
+              ),
+            ),
       ),
     );
   }

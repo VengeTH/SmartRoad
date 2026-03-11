@@ -1,3 +1,5 @@
+import "dart:math" as math;
+
 import "package:flutter/foundation.dart";
 
 import "../config/regional_fuel_defaults.dart";
@@ -9,6 +11,7 @@ import "../models/fuel_type.dart";
 import "supabase_service.dart";
 import "app_preferences_service.dart";
 import "location_service.dart";
+import "../utils/fuel_utils.dart";
 
 /// * Fuel service for community fuel pricing features.
 /// *
@@ -103,6 +106,53 @@ class FuelService {
       debugPrint("❌ [FuelService] Failed to fetch stations: $e");
       return [];
     }
+  }
+
+  /// * Get fuel stations within [radiusKm] of (lat, lon).
+  /// *
+  /// * Computes a bounding box that contains the circle, fetches via
+  /// * [getStationsInBounds], then filters by Haversine distance.
+  Future<List<FuelStation>> getStationsNearLocation({
+    required double lat,
+    required double lon,
+    required double radiusKm,
+    bool includeUnverified = false,
+  }) async {
+    // * ~111 km per degree latitude; longitude scaled by cos(lat)
+    const kmPerDegLat = 111.0;
+    final kmPerDegLon = 111.0 * _cosDeg(lat);
+    final margin = 1.1; // * Slightly larger box so circle is fully contained
+    final deltaLat = (radiusKm / kmPerDegLat) * margin;
+    final deltaLon = (radiusKm / kmPerDegLon) * margin;
+
+    final stations = await getStationsInBounds(
+      minLat: lat - deltaLat,
+      maxLat: lat + deltaLat,
+      minLon: lon - deltaLon,
+      maxLon: lon + deltaLon,
+      includeUnverified: includeUnverified,
+    );
+
+    final radiusMeters = radiusKm * 1000.0;
+    final filtered = stations.where((s) {
+      final distM = FuelUtils.calculateDistance(
+        lat,
+        lon,
+        s.latitude,
+        s.longitude,
+      );
+      return distM <= radiusMeters;
+    }).toList();
+
+    // * In demo mode, if no stations in radius (e.g. user far from Manila), show all demo stations
+    if (_supabaseService.isDemoMode && filtered.isEmpty) {
+      return stations;
+    }
+    return filtered;
+  }
+
+  static double _cosDeg(double deg) {
+    return math.cos(deg * math.pi / 180.0).clamp(-1.0, 1.0);
   }
 
   /// * Get a single fuel station by ID with latest prices.
@@ -774,9 +824,11 @@ class FuelService {
   // * DEMO DATA
   // ============================================================
 
-  /// * Demo stations with prices dated today for consistent "last updated" behavior in development.
+  /// * Demo stations with March 2026–style Philippines reference prices (NCR).
+  /// * Prices as of 2026-03-11; used when no backend data or in demo mode.
   List<FuelStation> _getDemoStations() {
-    final now = DateTime.now();
+    final asOf = DateTime(2026, 3, 11, 12, 0, 0);
+
     return [
       FuelStation(
         id: "demo-1",
@@ -792,31 +844,39 @@ class FuelService {
         prices: [
           FuelPrice(
             fuelType: FuelType.unleaded91,
-            price: 58.50,
-            updatedAt: now,
+            price: 62.40,
+            updatedAt: asOf,
             source: "community",
             confidenceScore: 0.9,
             isStale: false,
           ),
           FuelPrice(
             fuelType: FuelType.unleaded95,
-            price: 65.20,
-            updatedAt: now,
+            price: 67.20,
+            updatedAt: asOf,
+            source: "community",
+            confidenceScore: 0.9,
+            isStale: false,
+          ),
+          FuelPrice(
+            fuelType: FuelType.unleaded97,
+            price: 71.50,
+            updatedAt: asOf,
             source: "community",
             confidenceScore: 0.9,
             isStale: false,
           ),
           FuelPrice(
             fuelType: FuelType.diesel,
-            price: 52.80,
-            updatedAt: now,
+            price: 60.80,
+            updatedAt: asOf,
             source: "community",
             confidenceScore: 0.9,
             isStale: false,
           ),
         ],
-        createdAt: now.subtract(const Duration(days: 30)),
-        updatedAt: now,
+        createdAt: asOf.subtract(const Duration(days: 30)),
+        updatedAt: asOf,
       ),
       FuelStation(
         id: "demo-2",
@@ -832,23 +892,199 @@ class FuelService {
         prices: [
           FuelPrice(
             fuelType: FuelType.unleaded91,
-            price: 59.00,
-            updatedAt: now.subtract(const Duration(hours: 2)),
+            price: 63.00,
+            updatedAt: asOf.subtract(const Duration(hours: 2)),
+            source: "community",
+            confidenceScore: 0.85,
+            isStale: false,
+          ),
+          FuelPrice(
+            fuelType: FuelType.unleaded95,
+            price: 67.90,
+            updatedAt: asOf.subtract(const Duration(hours: 2)),
             source: "community",
             confidenceScore: 0.85,
             isStale: false,
           ),
           FuelPrice(
             fuelType: FuelType.diesel,
-            price: 53.50,
-            updatedAt: now.subtract(const Duration(hours: 2)),
+            price: 61.50,
+            updatedAt: asOf.subtract(const Duration(hours: 2)),
             source: "community",
             confidenceScore: 0.85,
             isStale: false,
           ),
         ],
-        createdAt: now.subtract(const Duration(days: 60)),
-        updatedAt: now.subtract(const Duration(hours: 2)),
+        createdAt: asOf.subtract(const Duration(days: 60)),
+        updatedAt: asOf.subtract(const Duration(hours: 2)),
+      ),
+      FuelStation(
+        id: "demo-3",
+        name: "Caltex Quezon Ave",
+        latitude: 14.6325,
+        longitude: 121.0382,
+        brand: "Caltex",
+        province: "Metro Manila",
+        city: "Quezon City",
+        region: "NCR",
+        verified: true,
+        source: "community",
+        prices: [
+          FuelPrice(
+            fuelType: FuelType.unleaded91,
+            price: 61.90,
+            updatedAt: asOf,
+            source: "community",
+            confidenceScore: 0.88,
+            isStale: false,
+          ),
+          FuelPrice(
+            fuelType: FuelType.unleaded95,
+            price: 66.50,
+            updatedAt: asOf,
+            source: "community",
+            confidenceScore: 0.88,
+            isStale: false,
+          ),
+          FuelPrice(
+            fuelType: FuelType.diesel,
+            price: 59.90,
+            updatedAt: asOf,
+            source: "community",
+            confidenceScore: 0.88,
+            isStale: false,
+          ),
+        ],
+        createdAt: asOf.subtract(const Duration(days: 45)),
+        updatedAt: asOf,
+      ),
+      FuelStation(
+        id: "demo-4",
+        name: "Unioil BGC",
+        latitude: 14.5504,
+        longitude: 121.0495,
+        brand: "Unioil",
+        province: "Metro Manila",
+        city: "Taguig",
+        region: "NCR",
+        verified: true,
+        source: "community",
+        prices: [
+          FuelPrice(
+            fuelType: FuelType.unleaded91,
+            price: 62.10,
+            updatedAt: asOf.subtract(const Duration(hours: 5)),
+            source: "community",
+            confidenceScore: 0.82,
+            isStale: false,
+          ),
+          FuelPrice(
+            fuelType: FuelType.unleaded95,
+            price: 66.80,
+            updatedAt: asOf.subtract(const Duration(hours: 5)),
+            source: "community",
+            confidenceScore: 0.82,
+            isStale: false,
+          ),
+          FuelPrice(
+            fuelType: FuelType.unleaded97,
+            price: 70.90,
+            updatedAt: asOf.subtract(const Duration(hours: 5)),
+            source: "community",
+            confidenceScore: 0.82,
+            isStale: false,
+          ),
+          FuelPrice(
+            fuelType: FuelType.diesel,
+            price: 60.20,
+            updatedAt: asOf.subtract(const Duration(hours: 5)),
+            source: "community",
+            confidenceScore: 0.82,
+            isStale: false,
+          ),
+        ],
+        createdAt: asOf.subtract(const Duration(days: 20)),
+        updatedAt: asOf.subtract(const Duration(hours: 5)),
+      ),
+      FuelStation(
+        id: "demo-5",
+        name: "Total Mandaluyong",
+        latitude: 14.5832,
+        longitude: 121.0409,
+        brand: "Total",
+        province: "Metro Manila",
+        city: "Mandaluyong",
+        region: "NCR",
+        verified: true,
+        source: "osm",
+        prices: [
+          FuelPrice(
+            fuelType: FuelType.unleaded91,
+            price: 62.70,
+            updatedAt: asOf,
+            source: "community",
+            confidenceScore: 0.9,
+            isStale: false,
+          ),
+          FuelPrice(
+            fuelType: FuelType.unleaded95,
+            price: 67.40,
+            updatedAt: asOf,
+            source: "community",
+            confidenceScore: 0.9,
+            isStale: false,
+          ),
+          FuelPrice(
+            fuelType: FuelType.diesel,
+            price: 61.00,
+            updatedAt: asOf,
+            source: "community",
+            confidenceScore: 0.9,
+            isStale: false,
+          ),
+        ],
+        createdAt: asOf.subtract(const Duration(days: 90)),
+        updatedAt: asOf,
+      ),
+      FuelStation(
+        id: "demo-6",
+        name: "Seaoil Manila",
+        latitude: 14.5995,
+        longitude: 120.9842,
+        brand: "Seaoil",
+        province: "Metro Manila",
+        city: "Manila",
+        region: "NCR",
+        verified: true,
+        source: "community",
+        prices: [
+          FuelPrice(
+            fuelType: FuelType.unleaded91,
+            price: 61.50,
+            updatedAt: asOf.subtract(const Duration(days: 1)),
+            source: "community",
+            confidenceScore: 0.85,
+            isStale: false,
+          ),
+          FuelPrice(
+            fuelType: FuelType.unleaded95,
+            price: 66.20,
+            updatedAt: asOf.subtract(const Duration(days: 1)),
+            source: "community",
+            confidenceScore: 0.85,
+            isStale: false,
+          ),
+          FuelPrice(
+            fuelType: FuelType.diesel,
+            price: 59.50,
+            updatedAt: asOf.subtract(const Duration(days: 1)),
+            source: "community",
+            confidenceScore: 0.85,
+            isStale: false,
+          ),
+        ],
+        createdAt: asOf.subtract(const Duration(days: 120)),
+        updatedAt: asOf.subtract(const Duration(days: 1)),
       ),
     ];
   }

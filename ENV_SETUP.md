@@ -6,7 +6,11 @@
 
 ## Using .env Files with Flutter
 
-Flutter uses `--dart-define` for compile-time environment variables. Here are two ways to use `.env` files:
+Flutter uses `--dart-define` for **compile-time** environment variables. Values are baked in when the app is built, not at runtime.
+
+**Important:** After changing your `.env` file or any `--dart-define` arguments, you must do a **full app restart** (stop the app completely, then run again via `run.bat` or your script). Hot reload and hot restart do **not** pick up new environment values.
+
+### Two ways to use `.env` files:
 
 ### Method 1: Load .env and Pass to Flutter (Recommended)
 
@@ -72,6 +76,9 @@ WEATHER_PROXY_URL=
 # Traffic API Configuration
 TOMTOM_API_KEY=your_tomtom_api_key_here
 
+# Gemini AI (sticker verification, commute guide assistant)
+GEMINI_API_KEY=your_gemini_api_key_here
+
 # Supabase (if needed)
 # SUPABASE_URL=your_supabase_url
 # SUPABASE_ANON_KEY=your_supabase_anon_key
@@ -84,7 +91,7 @@ TOMTOM_API_KEY=your_tomtom_api_key_here
 1. **Run > Edit Configurations**
 2. **Additional run args:**
    ```
-   --dart-define=OPENWEATHERMAP_API_KEY=your_key_here --dart-define=WEATHER_PROXY_URL=http://localhost:3000 --dart-define=TOMTOM_API_KEY=your_tomtom_key_here
+   --dart-define=OPENWEATHERMAP_API_KEY=your_key_here --dart-define=WEATHER_PROXY_URL=http://localhost:3000 --dart-define=TOMTOM_API_KEY=your_tomtom_key_here --dart-define=GEMINI_API_KEY=your_gemini_key_here
    ```
 
 ### VS Code
@@ -102,7 +109,8 @@ Edit `.vscode/launch.json`:
       "args": [
         "--dart-define=OPENWEATHERMAP_API_KEY=your_key_here",
         "--dart-define=WEATHER_PROXY_URL=http://localhost:3000",
-        "--dart-define=TOMTOM_API_KEY=your_tomtom_key_here"
+        "--dart-define=TOMTOM_API_KEY=your_tomtom_key_here",
+        "--dart-define=GEMINI_API_KEY=your_gemini_key_here"
       ]
     }
   ]
@@ -135,7 +143,9 @@ Your project uses:
 - `OPENWEATHERMAP_API_KEY` - For weather tile layers
 - `WEATHER_PROXY_URL` - Optional proxy server URL
 - `TOMTOM_API_KEY` - For live traffic flow visualization
+- `GEMINI_API_KEY` - For sticker verification and commute guide AI (optional)
 
 All are read via `String.fromEnvironment()` in their respective config files:
 - `lib/config/weather_config.dart` - Weather API keys
 - `lib/config/traffic_config.dart` - Traffic API key
+- `lib/core/config/env.dart` - Supabase and Gemini API key

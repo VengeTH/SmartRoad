@@ -22,6 +22,7 @@ class PlaceDetailSheet extends ConsumerStatefulWidget {
   final String? recentSearchMeta;
   final VoidCallback onClose;
   final VoidCallback? onGetDirections;
+  final VoidCallback? onCommuteToLocation;
 
   const PlaceDetailSheet({
     super.key,
@@ -30,6 +31,7 @@ class PlaceDetailSheet extends ConsumerStatefulWidget {
     this.recentSearchMeta,
     required this.onClose,
     this.onGetDirections,
+    this.onCommuteToLocation,
   });
 
   @override
@@ -676,6 +678,37 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
                                             backgroundColor:
                                                 AppTheme.primaryColor,
                                             foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: AppTheme.spacingMD,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                    AppTheme.radiusMD,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                    ],
+                                    if (widget.onCommuteToLocation != null) ...[
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: OutlinedButton.icon(
+                                          onPressed: () {
+                                            HapticFeedback.mediumImpact();
+                                            widget.onCommuteToLocation?.call();
+                                          },
+                                          icon: const Icon(Icons.directions_bus, size: 18),
+                                          label: const Text(
+                                            "Commute to this location",
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          style: OutlinedButton.styleFrom(
                                             padding: const EdgeInsets.symmetric(
                                               vertical: AppTheme.spacingMD,
                                             ),

@@ -4,7 +4,6 @@ import "map/map_screen.dart";
 import "feed/feed_screen.dart";
 import "routes/routes_screen.dart";
 import "profile/profile_screen.dart";
-import "commute/commute_mode_screen.dart";
 import "report/report_hazard_screen.dart";
 import "../../providers/navigation_provider.dart";
 import "../../providers/map_ui_provider.dart";
@@ -23,7 +22,6 @@ class MainNavigationScreen extends ConsumerStatefulWidget {
 class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   final List<Widget> _screens = [
     const MapScreen(),
-    const CommuteModeScreen(),
     const FeedScreen(),
     const RoutesScreen(),
     const ProfileScreen(),
@@ -41,8 +39,8 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: currentIndex,
         onDestinationSelected: (index) {
-          // * Routes tab (now index 3) requires sign-in
-          if (index == 3 && isGuest) {
+          // * Routes tab (index 2) requires sign-in
+          if (index == 2 && isGuest) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Text("Sign in to create or save routes"),
@@ -63,11 +61,6 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
             icon: Icon(Icons.map_outlined),
             selectedIcon: Icon(Icons.map),
             label: "Map",
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.commute_outlined),
-            selectedIcon: Icon(Icons.commute),
-            label: "Commute",
           ),
           NavigationDestination(
             icon: Icon(Icons.feed_outlined),

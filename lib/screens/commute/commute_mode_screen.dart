@@ -2,12 +2,18 @@ import "dart:async";
 
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
+import "package:flutter_map/flutter_map.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:latlong2/latlong.dart";
 
 import "../../core/theme/app_theme.dart";
+import "../../models/commute_guide_data.dart";
 import "../../models/commute_state.dart";
 import "../../providers/commute_provider.dart";
+import "../../providers/location_provider.dart";
+import "../../services/gtfs_service.dart";
+import "../../services/location_search_service.dart";
+import "../../services/planner_local.dart";
 import "../../widgets/commute/countdown_ring_widget.dart";
 import "../../widgets/commute/commute_empty_state.dart";
 import "../../widgets/commute/lagpas_alert_overlay.dart";
@@ -54,8 +60,16 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
   bool _showLagpasAlert = false;
   bool _showSafetyAlert = false;
   bool _showArrivalCelebration = false;
-  bool _showEmptyState = true;
-  
+
+  /// * Expandable "Commute guide" card in active view (collapsed by default for scroll-free layout).
+  bool _commuteGuideExpanded = false;
+
+  /// * Prefilled destination from "Commute to this location" (route arguments).
+  String? _prefilledDestinationName;
+  double? _prefilledLat;
+  double? _prefilledLon;
+  bool _hasReadRouteArgs = false;
+
   @override
   void initState() {
     super.initState();
@@ -69,7 +83,7 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
   }
-  
+
   @override
   void dispose() {
     _destinationController.dispose();
@@ -77,11 +91,33 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
     _pulseController.dispose();
     super.dispose();
   }
-  
+
+  /// * Read route arguments once (destinationName, lat, lon) for "Commute to this location".
+  void _readRouteArguments() {
+    if (_hasReadRouteArgs || !mounted) return;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is! Map<String, dynamic>) return;
+    final name = args["destinationName"]?.toString().trim();
+    final latRaw = args["lat"];
+    final lonRaw = args["lon"];
+    final lat = latRaw is num ? latRaw.toDouble() : double.tryParse(latRaw?.toString() ?? "");
+    final lon = lonRaw is num ? lonRaw.toDouble() : double.tryParse(lonRaw?.toString() ?? "");
+    if (name != null && name.isNotEmpty && lat != null && lon != null &&
+        !lat.isNaN && !lon.isNaN) {
+      _hasReadRouteArgs = true;
+      setState(() {
+        _prefilledDestinationName = name;
+        _prefilledLat = lat;
+        _prefilledLon = lon;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    _readRouteArguments();
     final commuteState = ref.watch(commuteProvider);
-    
+
     // * Show lagpas alert overlay when user passes destination
     if (commuteState.status == CommuteStatus.passed && !_showLagpasAlert) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -105,6 +141,16 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
     
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
+      appBar: AppBar(
+        backgroundColor: AppTheme.backgroundColor,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+          tooltip: "Back",
+        ),
+      ),
       body: Stack(
         children: [
           // * Main content
@@ -157,6 +203,101 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
     );
   }
   
+  /// * Card shown when opened via "Commute to this location" with a prefilled destination.
+  Widget _buildPrefilledDestinationCard() {
+    final name = _prefilledDestinationName ?? "";
+    final lat = _prefilledLat!;
+    final lon = _prefilledLon!;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          await _startCommuteWithDestination(<String, dynamic>{
+            "name": name,
+            "lat": lat,
+            "lng": lon,
+          });
+          if (mounted) {
+            setState(() {
+              _prefilledDestinationName = null;
+              _prefilledLat = null;
+              _prefilledLon = null;
+            });
+          }
+        },
+        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+        child: Container(
+          padding: const EdgeInsets.all(AppTheme.spacingMD),
+          decoration: BoxDecoration(
+            color: AppTheme.primaryColor.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+            border: Border.all(
+              color: AppTheme.primaryColor.withOpacity(0.4),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppTheme.spacingSM),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSM),
+                ),
+                child: const Icon(
+                  Icons.directions_bus,
+                  color: AppTheme.primaryColor,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: AppTheme.spacingMD),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Commute to $name",
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "Tap to start commute",
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.spacingMD,
+                  vertical: AppTheme.spacingSM,
+                ),
+                decoration: BoxDecoration(
+                  color: AppTheme.successColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSM),
+                ),
+                child: const Text(
+                  "GO",
+                  style: TextStyle(
+                    color: AppTheme.successColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// * Build idle state view (set destination)
   Widget _buildIdleView(CommuteState state) {
     return SingleChildScrollView(
@@ -168,14 +309,22 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
           
           // * Header
           _buildHeader(),
-          
+
           const SizedBox(height: AppTheme.spacingXL),
-          
+
+          // * Prefilled "Commute to this location" card
+          if (_prefilledDestinationName != null &&
+              _prefilledLat != null &&
+              _prefilledLon != null) ...[
+            _buildPrefilledDestinationCard(),
+            const SizedBox(height: AppTheme.spacingXL),
+          ],
+
           // * Destination input
           _buildDestinationInput(),
-          
+
           const SizedBox(height: AppTheme.spacingXL),
-          
+
           // * Recent destinations or empty state
           if (_recentDestinations.isNotEmpty) ...[
             _buildSectionHeader("Recent Destinations", Icons.history),
@@ -187,14 +336,9 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
                 _destinationFocusNode.requestFocus();
               },
             ),
-          
+
           const SizedBox(height: AppTheme.spacingXL),
-          
-          // * Vehicle type selector
-          _buildVehicleTypeSelector(state),
-          
-          const SizedBox(height: AppTheme.spacingXL),
-          
+
           // * Settings section
           _buildSettingsSection(state),
           
@@ -202,13 +346,38 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
           
           // * Safety settings
           _buildSafetySettingsCard(state),
-          
+
+          const SizedBox(height: AppTheme.spacingLG),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final gtfs = GTFSService();
+              await gtfs.initializeHive();
+              final res = await gtfs.downloadAndInstallGtfs(
+                "https://github.com/sakayph/gtfs/releases/latest/download/gtfs.zip",
+              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(res.error == null ? "Transit data installed" : "Install failed: ${res.error}"),
+                    backgroundColor: res.error == null ? AppTheme.primaryColor : null,
+                  ),
+                );
+              }
+            },
+            icon: const Icon(Icons.download_rounded, size: 18),
+            label: const Text("Install Transit Data (Developer)"),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppTheme.textSecondary,
+              padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
+            ),
+          ),
+
           const SizedBox(height: AppTheme.spacingXXL),
         ],
       ),
     );
   }
-  
+
   /// * Build header
   Widget _buildHeader() {
     return Row(
@@ -289,6 +458,12 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
           color: AppTheme.textPrimary,
           fontSize: 16,
         ),
+        onSubmitted: (value) {
+          final query = value.trim();
+          if (query.isNotEmpty) {
+            _runDestinationSearch(query);
+          }
+        },
         decoration: InputDecoration(
           hintText: "Where are you going?",
           hintStyle: TextStyle(
@@ -301,12 +476,168 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
           suffixIcon: IconButton(
             icon: const Icon(Icons.search_rounded, color: AppTheme.secondaryColor),
             onPressed: () {
-              // * TODO: Implement location search
               HapticFeedback.lightImpact();
+              final query = _destinationController.text.trim();
+              if (query.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Enter a place name to search")),
+                );
+                return;
+              }
+              _runDestinationSearch(query);
             },
           ),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.all(AppTheme.spacingLG),
+        ),
+      ),
+    );
+  }
+
+  /// * Run location search and show results in a bottom sheet; on tap start commute to selected place.
+  Future<void> _runDestinationSearch(String query) async {
+    if (query.trim().isEmpty) return;
+
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(
+        child: CircularProgressIndicator(color: AppTheme.primaryColor),
+      ),
+    );
+
+    String? countryCode;
+    try {
+      final position = await ref.read(currentLocationProvider.future);
+      if (position != null && mounted) {
+        countryCode = await LocationSearchService().getCountryCodeFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+      }
+    } catch (_) {
+      // * Use global search if location or country code unavailable
+    }
+
+    List<LocationSearchResult> results = [];
+    try {
+      results = await LocationSearchService().searchLocation(
+        query.trim(),
+        countryCode: countryCode,
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Could not search location. Try again."),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pop(); // * Dismiss loading dialog
+
+    if (results.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No results found. Try a different search.")),
+      );
+      return;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppTheme.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.radiusLG)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppTheme.spacingMD),
+              child: Text(
+                "Select destination",
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: results.length,
+                itemBuilder: (ctx, index) {
+                  final result = results[index];
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _startCommuteWithDestination(<String, dynamic>{
+                          "name": result.displayName,
+                          "lat": result.latitude,
+                          "lng": result.longitude,
+                        });
+                        _destinationController.text = result.displayName;
+                      },
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                      child: Container(
+                        padding: const EdgeInsets.all(AppTheme.spacingMD),
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: AppTheme.spacingMD,
+                          vertical: AppTheme.spacingXS,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceColor,
+                          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                          border: Border.all(
+                            color: AppTheme.borderColor.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(AppTheme.spacingSM),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(AppTheme.radiusSM),
+                              ),
+                              child: const Icon(
+                                Icons.place_rounded,
+                                color: AppTheme.primaryColor,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: AppTheme.spacingMD),
+                            Expanded(
+                              child: Text(
+                                result.displayName,
+                                style: Theme.of(ctx).textTheme.bodyLarge?.copyWith(
+                                  color: AppTheme.textPrimary,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const Icon(Icons.arrow_forward_ios_rounded,
+                                size: 14, color: AppTheme.textSecondary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -723,22 +1054,103 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
     );
   }
   
-  /// * Build active commute view
+  /// * Compact map showing current position and destination during commute.
+  static const double _commuteMapHeight = 160.0;
+
+  Widget _buildCommuteMap(LatLng current, LatLng destination) {
+    final midLat = (current.latitude + destination.latitude) / 2.0;
+    final midLng = (current.longitude + destination.longitude) / 2.0;
+    final center = LatLng(midLat, midLng);
+    const zoom = 12.0;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+      child: SizedBox(
+        height: _commuteMapHeight,
+        child: FlutterMap(
+          options: MapOptions(
+            initialCenter: center,
+            initialZoom: zoom,
+            interactionOptions: const InteractionOptions(
+              flags: InteractiveFlag.none,
+            ),
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+              userAgentPackageName: "com.smartroad.app",
+              maxZoom: 19,
+            ),
+            MarkerLayer(
+              markers: [
+                Marker(
+                  point: current,
+                  width: 36,
+                  height: 36,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.blue,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.my_location, color: Colors.white, size: 20),
+                  ),
+                ),
+                Marker(
+                  point: destination,
+                  width: 36,
+                  height: 36,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.place, color: Colors.white, size: 20),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// * Build active commute view (scroll-free: expandable "Commute guide" card).
   Widget _buildActiveCommuteView(CommuteState state) {
     final isApproaching = state.status == CommuteStatus.approaching;
     final isDanger = state.status == CommuteStatus.danger;
-    
+    final current = state.currentPosition ?? state.startPosition;
+    final destination = state.destination;
+
     return Container(
       padding: const EdgeInsets.all(AppTheme.spacingLG),
-      child: Column(
-        children: [
-          const SizedBox(height: AppTheme.spacingMD),
-          
-          // * Header with destination name
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: AppTheme.spacingSM),
+            if (current != null && destination != null) _buildCommuteMap(current, destination),
+          if (current != null && destination != null) const SizedBox(height: AppTheme.spacingSM),
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: AppTheme.spacingLG,
-              vertical: AppTheme.spacingMD,
+              vertical: AppTheme.spacingSM,
             ),
             decoration: BoxDecoration(
               color: AppTheme.surfaceColor,
@@ -748,11 +1160,7 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.place_rounded,
-                  color: AppTheme.primaryColor,
-                  size: 18,
-                ),
+                Icon(Icons.place_rounded, color: AppTheme.primaryColor, size: 18),
                 const SizedBox(width: AppTheme.spacingSM),
                 Flexible(
                   child: Text(
@@ -768,10 +1176,7 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
               ],
             ),
           ),
-          
-          const Spacer(),
-          
-          // * Countdown ring with progress
+          const SizedBox(height: AppTheme.spacingSM),
           ScaleTransition(
             scale: isApproaching || isDanger
                 ? _pulseAnimation
@@ -783,14 +1188,11 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
               eta: state.formattedEta,
             ),
           ),
-          
-          const Spacer(),
-          
-          // * Status badge
+          const SizedBox(height: AppTheme.spacingSM),
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: AppTheme.spacingLG,
-              vertical: AppTheme.spacingMD,
+              vertical: AppTheme.spacingSM,
             ),
             decoration: BoxDecoration(
               color: _getStatusColor(state.status).withOpacity(0.15),
@@ -802,11 +1204,7 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  _getStatusIcon(state.status),
-                  size: 18,
-                  color: _getStatusColor(state.status),
-                ),
+                Icon(_getStatusIcon(state.status), size: 18, color: _getStatusColor(state.status)),
                 const SizedBox(width: AppTheme.spacingSM),
                 Text(
                   state.statusText,
@@ -818,74 +1216,13 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
               ],
             ),
           ),
-          
-          const SizedBox(height: AppTheme.spacingXXL),
-          
-          // * Weather + vehicle info chip
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppTheme.spacingMD,
-              vertical: AppTheme.spacingSM,
-            ),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceColor,
-              borderRadius: BorderRadius.circular(AppTheme.radiusFull),
-              border: Border.all(color: AppTheme.borderColor.withOpacity(0.3)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(state.settings.vehicleType.iconData, size: 16, color: AppTheme.textSecondary),
-                const SizedBox(width: AppTheme.spacingXS),
-                Text(
-                  state.settings.vehicleType.label,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (state.currentWeather != null) ...[
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: AppTheme.spacingSM),
-                    width: 1,
-                    height: 12,
-                    color: AppTheme.borderColor,
-                  ),
-                  Icon(state.currentWeather!.iconData, size: 16, color: AppTheme.textSecondary),
-                  const SizedBox(width: AppTheme.spacingXS),
-                  Text(
-                    state.currentWeather!.displayName,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ],
-                if (state.trafficLightCount != null && state.trafficLightCount! > 0) ...[
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: AppTheme.spacingSM),
-                    width: 1,
-                    height: 12,
-                    color: AppTheme.borderColor,
-                  ),
-                  const Icon(Icons.traffic, size: 16, color: AppTheme.textSecondary),
-                  const SizedBox(width: AppTheme.spacingXS),
-                  Text(
-                    "${state.trafficLightCount} lights",
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          
           const SizedBox(height: AppTheme.spacingMD),
-          
-          // * Bottom buttons
+          _buildTransitItineraryOrFailSafe(state),
+          const SizedBox(height: AppTheme.spacingMD),
+          _buildExpandableCommuteGuide(state),
+          const SizedBox(height: AppTheme.spacingMD),
           Row(
             children: [
-              // * Dismiss alarm button (if approaching)
               if (isApproaching && !state.alarmDismissed)
                 Expanded(
                   child: OutlinedButton.icon(
@@ -905,16 +1242,12 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
                     ),
                   ),
                 ),
-              
-              if (isApproaching && !state.alarmDismissed)
-                const SizedBox(width: AppTheme.spacingMD),
-              
-              // * Stop button
+              if (isApproaching && !state.alarmDismissed) const SizedBox(width: AppTheme.spacingMD),
               Expanded(
                 child: FilledButton.icon(
                   onPressed: () => _stopCommute(),
                   icon: const Icon(Icons.stop_rounded),
-                  label: const Text("Stop"),
+                  label: const Text("Stop commute"),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppTheme.errorColor,
                     padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
@@ -926,100 +1259,179 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
               ),
             ],
           ),
-          
-          const SizedBox(height: AppTheme.spacingLG),
+          const SizedBox(height: 28),
         ],
+        ),
       ),
     );
   }
-  
-  /// * Build vehicle type selector
-  Widget _buildVehicleTypeSelector(CommuteState state) {
-    final selectedType = state.settings.vehicleType;
+
+  /// * Transit itinerary list from state, or fail-safe when no GTFS data.
+  Widget _buildTransitItineraryOrFailSafe(CommuteState state) {
+    final itinerary = state.transitItinerary is PlannerItinerary
+        ? state.transitItinerary as PlannerItinerary
+        : null;
+    final transitMessage = state.transitItinerary is String
+        ? state.transitItinerary as String
+        : null;
+    final hasFeed = GTFSService().hasFeed;
+
+    if (itinerary != null) {
+      return _buildItineraryCard(itinerary);
+    }
+    if (transitMessage != null && transitMessage.isNotEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(AppTheme.spacingMD),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+          border: Border.all(color: AppTheme.borderColor.withOpacity(0.3)),
+        ),
+        child: Text(
+          transitMessage,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppTheme.textSecondary,
+          ),
+        ),
+      );
+    }
+    if (!hasFeed) {
+      return Container(
+        padding: const EdgeInsets.all(AppTheme.spacingMD),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+          border: Border.all(color: AppTheme.borderColor.withOpacity(0.3)),
+        ),
+        child: Text(
+          "Transit data not installed. Tap \"Install Transit Data (Developer)\" when idle to install.",
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppTheme.textSecondary,
+          ),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildItineraryCard(PlannerItinerary itinerary) {
+    final legLines = <Widget>[];
+    for (final leg in itinerary.legs) {
+      if (leg.mode == "walk") {
+        final dist = leg.distanceM.round();
+        legLines.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppTheme.spacingXS),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Walk ${dist}m → ",
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    leg.endName == "Destination" ? "Destination" : "Stop: ${leg.endName}",
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } else if (leg.mode == "transit") {
+        legLines.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppTheme.spacingXS),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Ride ${leg.vehicle ?? "Transit"} → ",
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    "Direction: ${leg.endName}",
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        legLines.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppTheme.spacingXS),
+            child: Text(
+              "Alight → ${leg.endName}",
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+    final confidenceStr = itinerary.legs
+        .where((l) => l.mode == "transit")
+        .map((l) => l.confidence)
+        .fold<TransitConfidence>(TransitConfidence.low, (a, b) {
+      if (a == TransitConfidence.high || b == TransitConfidence.high) return TransitConfidence.high;
+      if (a == TransitConfidence.medium || b == TransitConfidence.medium) return TransitConfidence.medium;
+      return TransitConfidence.low;
+    });
+    final confidenceLabel = confidenceStr == TransitConfidence.high
+        ? "High"
+        : confidenceStr == TransitConfidence.medium
+            ? "Medium"
+            : "Low";
+
     return Container(
-      padding: const EdgeInsets.all(AppTheme.spacingLG),
+      padding: const EdgeInsets.all(AppTheme.spacingMD),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-        border: Border.all(color: AppTheme.borderColor.withOpacity(0.5)),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+        border: Border.all(color: AppTheme.borderColor.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Icon(Icons.directions_rounded, color: AppTheme.primaryColor, size: 18),
-              const SizedBox(width: AppTheme.spacingSM),
-              Text(
-                "Vehicle Type",
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                "Affects ETA accuracy",
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppTheme.spacingMD),
-          Wrap(
-            spacing: AppTheme.spacingSM,
-            runSpacing: AppTheme.spacingSM,
-            children: VehicleType.values.map((type) {
-              final isSelected = type == selectedType;
-              return GestureDetector(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  ref.read(commuteProvider.notifier).setVehicleType(type);
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppTheme.spacingMD,
-                    vertical: AppTheme.spacingSM,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppTheme.primaryColor
-                        : AppTheme.backgroundColor,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusFull),
-                    border: Border.all(
-                      color: isSelected
-                          ? AppTheme.primaryColor
-                          : AppTheme.borderColor,
-                      width: isSelected ? 1.5 : 1.0,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        type.iconData,
-                        size: 16,
-                        color: isSelected ? Colors.white : AppTheme.textPrimary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        type.label,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: isSelected ? Colors.white : AppTheme.textPrimary,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: AppTheme.spacingSM),
+          ...legLines,
+          const Divider(height: AppTheme.spacingLG),
           Text(
-            "Base speed: ${selectedType.baseSpeedKmh.toStringAsFixed(0)} km/h · Max: ${selectedType.maxSpeedKmh.toStringAsFixed(0)} km/h",
+            "Total Time: ${itinerary.totalTimeMin} minutes",
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Transfers: ${itinerary.transfers}",
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Estimated Fare: ₱${itinerary.fareEstimatePhp.toStringAsFixed(0)}",
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Confidence: $confidenceLabel",
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AppTheme.textSecondary,
             ),
@@ -1028,7 +1440,191 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
       ),
     );
   }
-  
+
+  /// * Section label + content for the expanded Commute guide.
+  Widget _buildGuideSection(String title, Widget content) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        content,
+      ],
+    );
+  }
+
+  /// * Renders the expanded guide sections from [CommuteGuideData].
+  Widget _buildGuideContentFromData(CommuteGuideData guide) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildGuideSection(
+          "Where to board (Sasakay)",
+          Text(
+            guide.whereToBoard,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppTheme.spacingSM),
+        _buildGuideSection(
+          "What to take",
+          Text(
+            guide.whatToTake,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppTheme.spacingSM),
+        _buildGuideSection(
+          "Estimated fare",
+          Text(
+            guide.estimatedFareText,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppTheme.spacingSM),
+        _buildGuideSection(
+          "Distance and time",
+          Text(
+            guide.distanceAndTime,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppTheme.spacingSM),
+        _buildGuideSection(
+          "Notes",
+          Text(
+            guide.notes,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// * Renders guide content from memoized provider (keyed by destination, vehicle, itinerary) to avoid rebuild on every state tick.
+  Widget _buildMemoizedGuideContent() {
+    final guideAsync = ref.watch(commuteGuideProvider);
+    return guideAsync.when(
+      data: (CommuteGuideData? guide) {
+        if (guide == null) {
+          return _buildGuideSection(
+            "Unavailable",
+            Text(
+              "Could not load guide. Check your connection.",
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          );
+        }
+        return _buildGuideContentFromData(guide);
+      },
+      loading: () => _buildGuideSection(
+        "Loading…",
+        Row(
+          children: [
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppTheme.primaryColor,
+              ),
+            ),
+            const SizedBox(width: AppTheme.spacingSM),
+            Text(
+              "Checking transit options…",
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+      error: (Object err, StackTrace _) => _buildGuideSection(
+        "Unavailable",
+        Text(
+          "Could not load guide. Check your connection.",
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppTheme.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// * Expandable card: guide from CommuteGuideService (GTFS or heuristic).
+  Widget _buildExpandableCommuteGuide(CommuteState state) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          setState(() => _commuteGuideExpanded = !_commuteGuideExpanded);
+        },
+        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppTheme.spacingMD,
+            vertical: AppTheme.spacingSM,
+          ),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceColor,
+            borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+            border: Border.all(color: AppTheme.borderColor.withOpacity(0.3)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 18, color: AppTheme.primaryColor),
+                  const SizedBox(width: AppTheme.spacingSM),
+                  Text(
+                    "Commute guide",
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    _commuteGuideExpanded ? Icons.expand_less : Icons.expand_more,
+                    color: AppTheme.textSecondary,
+                    size: 24,
+                  ),
+                ],
+              ),
+              if (_commuteGuideExpanded) ...[
+                const SizedBox(height: AppTheme.spacingMD),
+                _buildMemoizedGuideContent(),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // * Get status color
   Color _getStatusColor(CommuteStatus status) {
     switch (status) {
@@ -1068,16 +1664,34 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
   /// * Start commute with selected destination
   Future<void> _startCommuteWithDestination(Map<String, dynamic> destination) async {
     HapticFeedback.mediumImpact();
-    
+
     final name = destination["name"] as String;
     final lat = destination["lat"] as double;
     final lng = destination["lng"] as double;
-    
-    final success = await ref.read(commuteProvider.notifier).startCommute(
-      destination: LatLng(lat, lng),
-      destinationName: name,
-    );
-    
+
+    // * Show loading overlay so the user sees that the tap was registered
+    if (mounted) {
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const Center(
+          child: CircularProgressIndicator(color: AppTheme.primaryColor),
+        ),
+      );
+    }
+
+    bool success = false;
+    try {
+      success = await ref.read(commuteProvider.notifier).startCommute(
+        destination: LatLng(lat, lng),
+        destinationName: name,
+      );
+    } finally {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    }
+
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

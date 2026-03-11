@@ -98,9 +98,10 @@ nwr["aeroway"="aerodrome"](BBOX);
       }
 
       if (response.statusCode != 200) {
-        debugPrint(
-          '⚠️ [OverpassPoiService] HTTP ${response.statusCode}: ${response.body.substring(0, response.body.length.clamp(0, 200))}',
-        );
+        if (kDebugMode) {
+          final body = response.body.length > 400 ? "${response.body.substring(0, 400)}…" : response.body;
+          debugPrint("[OverpassPoiService] Overpass error: status=${response.statusCode} body=$body");
+        }
         return [];
       }
 
@@ -179,34 +180,23 @@ nwr["aeroway"="aerodrome"](BBOX);
   }
 
   Future<http.Response?> _firstSuccessfulResponse(String query) async {
-    final completer = Completer<http.Response?>();
-    var completed = 0;
-
+    http.Response? firstNonNull;
     for (final endpoint in _endpoints) {
-      _postToEndpoint(endpoint, query).then((response) {
-        if (!completer.isCompleted &&
-            response != null &&
-            response.statusCode == 200) {
-          completer.complete(response);
-          return;
+      final response = await _postToEndpoint(endpoint, query);
+      if (response != null) {
+        firstNonNull ??= response;
+        if (response.statusCode == 200) {
+          return response;
         }
-
-        completed += 1;
-        if (completed == _endpoints.length && !completer.isCompleted) {
-          completer.complete(null);
-        }
-      });
+      }
     }
 
-    return completer.future.timeout(
-      const Duration(seconds: 8),
-      onTimeout: () => null,
-    );
+    return firstNonNull;
   }
 
   Future<http.Response?> _postToEndpoint(String endpoint, String query) async {
     try {
-      return await http
+      final response = await http
           .post(
             Uri.parse(endpoint),
             headers:
@@ -219,6 +209,7 @@ nwr["aeroway"="aerodrome"](BBOX);
             body: 'data=${Uri.encodeComponent(query)}',
           )
           .timeout(const Duration(seconds: 7));
+      return response;
     } catch (_) {
       return null;
     }

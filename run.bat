@@ -12,23 +12,33 @@ if not exist .env (
     exit /b 1
 )
 
-REM Load OPENWEATHERMAP_API_KEY from .env
+REM Load OPENWEATHERMAP_API_KEY from .env (trim leading/trailing spaces)
 set OPENWEATHERMAP_API_KEY=
 for /f "tokens=1,* delims==" %%a in ('findstr /b "OPENWEATHERMAP_API_KEY" .env') do (
     set OPENWEATHERMAP_API_KEY=%%b
 )
+for /f "tokens=* delims= " %%t in ("%OPENWEATHERMAP_API_KEY%") do set OPENWEATHERMAP_API_KEY=%%t
 
-REM Load WEATHER_PROXY_URL from .env (optional)
+REM Load WEATHER_PROXY_URL from .env (optional; trim spaces)
 set WEATHER_PROXY_URL=
 for /f "tokens=1,* delims==" %%a in ('findstr /b "WEATHER_PROXY_URL" .env') do (
     set WEATHER_PROXY_URL=%%b
 )
+for /f "tokens=* delims= " %%t in ("%WEATHER_PROXY_URL%") do set WEATHER_PROXY_URL=%%t
 
-REM Load TOMTOM_API_KEY from .env (optional)
+REM Load TOMTOM_API_KEY from .env (optional; trim spaces)
 set TOMTOM_API_KEY=
 for /f "tokens=1,* delims==" %%a in ('findstr /b "TOMTOM_API_KEY" .env') do (
     set TOMTOM_API_KEY=%%b
 )
+for /f "tokens=* delims= " %%t in ("%TOMTOM_API_KEY%") do set TOMTOM_API_KEY=%%t
+
+REM Load GEMINI_API_KEY from .env (optional; for sticker verification and commute AI; trim spaces)
+set GEMINI_API_KEY=
+for /f "tokens=1,* delims==" %%a in ('findstr /b "GEMINI_API_KEY" .env') do (
+    set GEMINI_API_KEY=%%b
+)
+for /f "tokens=* delims= " %%t in ("%GEMINI_API_KEY%") do set GEMINI_API_KEY=%%t
 
 REM Check if API key is set
 if "%OPENWEATHERMAP_API_KEY%"=="" (
@@ -49,6 +59,10 @@ if not "%TOMTOM_API_KEY%"=="" (
     set DART_DEFINES=%DART_DEFINES% --dart-define=TOMTOM_API_KEY=%TOMTOM_API_KEY%
 )
 
+if not "%GEMINI_API_KEY%"=="" (
+    set DART_DEFINES=%DART_DEFINES% --dart-define=GEMINI_API_KEY=%GEMINI_API_KEY%
+)
+
 REM Show what we're doing
 echo.
 echo Running Flutter with API key from .env...
@@ -58,6 +72,9 @@ if not "%WEATHER_PROXY_URL%"=="" (
 )
 if not "%TOMTOM_API_KEY%"=="" (
     echo TomTom API Key: %TOMTOM_API_KEY:~0,10%... (hidden)
+)
+if not "%GEMINI_API_KEY%"=="" (
+    echo Gemini API Key: %GEMINI_API_KEY:~0,10%... (hidden)
 )
 echo.
 

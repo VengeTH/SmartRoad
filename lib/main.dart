@@ -1,5 +1,6 @@
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
+import "package:hive_flutter/hive_flutter.dart";
 import "core/theme/app_theme.dart";
 import "providers/navigation_provider.dart";
 import "services/supabase_service.dart";
@@ -8,6 +9,7 @@ import "services/offline_cache_service.dart";
 import "services/notification_service.dart";
 import "services/route_service.dart";
 import "services/music_app_launcher_service.dart";
+import "services/gtfs_service.dart";
 import "providers/auth_provider.dart";
 import "screens/auth/login_screen.dart";
 import "screens/auth/signup_screen.dart";
@@ -17,17 +19,19 @@ import "widgets/music_app_picker_sheet.dart";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // * Initialize services
+  await Hive.initFlutter();
+
   try {
     await SupabaseService().initialize();
     await RouteService().initialize();
     await OfflineCacheService().initialize();
     await NotificationService().initialize();
+    await GTFSService().initializeHive();
+    debugPrint("GTFS Hive initialized");
   } catch (e) {
     debugPrint("Initialization error: $e");
   }
-  
+
   runApp(
     const ProviderScope(
       child: SmartRoadApp(),

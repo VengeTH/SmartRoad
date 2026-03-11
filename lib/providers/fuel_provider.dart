@@ -109,6 +109,54 @@ class MapFuelStationsNotifier
 }
 
 // ============================================================
+// * NEARBY FUEL STATIONS PROVIDER (FUEL PRICES SCREEN)
+// ============================================================
+
+/// * Fuel stations near a location within a given radius (km).
+/// * Used by the Fuel Prices screen; call [load] with current position and radius.
+final nearbyFuelStationsProvider = StateNotifierProvider<
+  NearbyFuelStationsNotifier,
+  AsyncValue<List<FuelStation>>
+>((ref) {
+  return NearbyFuelStationsNotifier(fuelService: ref.watch(fuelServiceProvider));
+});
+
+class NearbyFuelStationsNotifier
+    extends StateNotifier<AsyncValue<List<FuelStation>>> {
+  final FuelService _fuelService;
+
+  NearbyFuelStationsNotifier({required FuelService fuelService})
+    : _fuelService = fuelService,
+      super(const AsyncValue.data([]));
+
+  /// * Load stations within [radiusKm] of (lat, lon).
+  Future<void> load({
+    required double lat,
+    required double lon,
+    required double radiusKm,
+    bool includeUnverified = true,
+  }) async {
+    try {
+      state = const AsyncValue.loading();
+      final stations = await _fuelService.getStationsNearLocation(
+        lat: lat,
+        lon: lon,
+        radiusKm: radiusKm,
+        includeUnverified: includeUnverified,
+      );
+      state = AsyncValue.data(stations);
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+    }
+  }
+
+  /// * Clear list (e.g. when location is unavailable).
+  void clear() {
+    state = const AsyncValue.data([]);
+  }
+}
+
+// ============================================================
 // * SELECTED FUEL STATION PROVIDER
 // ============================================================
 

@@ -1,0 +1,13 @@
+{
+  "defaults": {
+    "jeepney": { "first_km": 4.0, "first_fare_php": 15, "per_km_after_php": 2.5 },
+    "bus": { "first_km": 5.0, "first_fare_php": 25, "per_km_after_php": 3.0 },
+    "tricycle": { "base_fare_php": 10, "per_km_php": 2.0 },
+    "lrt": { "flat_fare_php": 15 },
+    "mrt": { "flat_fare_php": 15 },
+    "pnr": { "flat_fare_php": 15 },
+    "taxi": { "flagdown_php": 40, "per_km_php": 14 },
+    "angkas": { "base_php": 25, "per_km_php": 8 }
+  },
+  "route_overrides": {}
+}

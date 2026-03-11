@@ -525,7 +525,10 @@ class CommuteState {
   
   /// Estimated number of traffic lights along the route (from OSM Overpass)
   final int? trafficLightCount;
-  
+
+  /// * Top transit itinerary from GTFS planner (PlannerItinerary, stored as Object to avoid service import).
+  final Object? transitItinerary;
+
   const CommuteState({
     this.destination,
     this.destinationName,
@@ -556,6 +559,7 @@ class CommuteState {
     this.previousPosition,
     this.currentWeather,
     this.trafficLightCount,
+    this.transitItinerary,
   });
   
   /// Check if commute is currently active
@@ -762,6 +766,7 @@ class CommuteState {
     LatLng? previousPosition,
     WeatherData? currentWeather,
     int? trafficLightCount,
+    Object? transitItinerary,
     bool clearDestination = false,
     bool clearEta = false,
     bool clearDistance = false,
@@ -778,6 +783,7 @@ class CommuteState {
     bool clearPreviousPosition = false,
     bool clearWeather = false,
     bool clearTrafficLights = false,
+    bool clearTransitItinerary = false,
   }) {
     return CommuteState(
       destination: clearDestination ? null : (destination ?? this.destination),
@@ -809,6 +815,7 @@ class CommuteState {
       previousPosition: clearPreviousPosition ? null : (previousPosition ?? this.previousPosition),
       currentWeather: clearWeather ? null : (currentWeather ?? this.currentWeather),
       trafficLightCount: clearTrafficLights ? null : (trafficLightCount ?? this.trafficLightCount),
+      transitItinerary: clearTransitItinerary ? null : (transitItinerary ?? this.transitItinerary),
     );
   }
   

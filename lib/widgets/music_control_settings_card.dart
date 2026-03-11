@@ -1,6 +1,8 @@
-import "dart:io";
-
+import "package:flutter/foundation.dart" show kIsWeb;
 import "package:flutter/material.dart";
+
+// * dart:io Platform is not available on web; guard usage.
+import "dart:io" show Platform;
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "../core/theme/app_theme.dart";
 import "../models/music_app.dart";
@@ -32,8 +34,12 @@ class _MusicControlSettingsCardState
   }
 
   Future<void> _checkPlatform() async {
-    // * Only show this feature on Android
-    _isAndroid = Platform.isAndroid;
+    // * Only show this feature on Android; on web Platform is unavailable or throws
+    try {
+      _isAndroid = !kIsWeb && Platform.isAndroid;
+    } catch (_) {
+      _isAndroid = false;
+    }
     if (mounted) setState(() {});
   }
 

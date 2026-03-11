@@ -14,6 +14,9 @@ import "location_service.dart";
 import "notification_service.dart";
 import "emergency_sms_service.dart";
 import "weather_service.dart";
+import "supabase_service.dart";
+import "planner_local.dart";
+import "planner_service.dart";
 
 /// * Commute Mode Service
 /// * Handles background location tracking, distance calculations,
@@ -34,6 +37,9 @@ class CommuteService {
   
   // * State change callback
   void Function(CommuteState)? onStateChanged;
+
+  /// * Called when a transit plan is ready (itinerary or null). Notifier sets this to update state.
+  void Function(Object? itinerary)? onTransitPlanReady;
   
   // * Current state
   CommuteState _state = const CommuteState();
@@ -77,29 +83,39 @@ class CommuteService {
         return false;
       }
       
-      // * Get initial position
+      // * Get initial position; on web/demo use fallback when location is unavailable
       final initialPosition = await _locationService.getCurrentPosition();
-      if (initialPosition == null) {
-        debugPrint("[CommuteService] ERROR: Could not get initial position");
-        return false;
+      final LatLng currentLocation;
+      final double? speedMs;
+
+      if (initialPosition != null) {
+        currentLocation = LatLng(
+          initialPosition.latitude,
+          initialPosition.longitude,
+        );
+        speedMs = initialPosition.speed > 0 ? initialPosition.speed : null;
+      } else {
+        final useFallback = kIsWeb || SupabaseService().isDemoMode;
+        if (!useFallback) {
+          debugPrint("[CommuteService] ERROR: Could not get initial position");
+          return false;
+        }
+        debugPrint("[CommuteService] Using fallback position (web/demo).");
+        currentLocation = const LatLng(14.5995, 120.9842); // NCR center
+        speedMs = null;
       }
-      
-      final currentLocation = LatLng(
-        initialPosition.latitude,
-        initialPosition.longitude,
-      );
-      
+
       // * Calculate initial distance
       final initialDistance = _calculateDistanceMeters(
         currentLocation,
         destination,
       );
-      
+
       // * Calculate initial ETA
       final initialEta = _estimateEta(initialDistance);
-      
+
       final commuteSettings = settings ?? const CommuteSettings();
-      
+
       // * Update state
       _state = CommuteState(
         destination: destination,
@@ -113,12 +129,39 @@ class CommuteService {
         startPosition: currentLocation, // * Track starting position
         minDistanceReached: initialDistance,
         currentPosition: currentLocation,
-        currentSpeedMs: initialPosition.speed > 0 ? initialPosition.speed : null,
+        currentSpeedMs: speedMs,
         isLowPowerActive: commuteSettings.ultraLowPowerMode,
       );
       
       _notifyStateChanged();
-      
+
+      // * Run GTFS planner and notify with top itinerary; print debug
+      final planResult = await PlannerService.instance.plan(
+        fromLat: currentLocation.latitude,
+        fromLon: currentLocation.longitude,
+        toLat: destination.latitude,
+        toLon: destination.longitude,
+        datetime: DateTime.now(),
+        mode: "transit",
+      );
+      final topItinerary = planResult.itineraries != null && planResult.itineraries!.isNotEmpty
+          ? planResult.itineraries!.first
+          : null;
+      _printPlanDebug(
+        fromLat: currentLocation.latitude,
+        fromLon: currentLocation.longitude,
+        toLat: destination.latitude,
+        toLon: destination.longitude,
+        itinerary: topItinerary,
+        planResult: planResult,
+      );
+      final transitPlannerPayload = topItinerary ??
+          planResult.error ??
+          (planResult.fallback == "no-transit"
+              ? "No transit itinerary available for this trip."
+              : null);
+      onTransitPlanReady?.call(transitPlannerPayload);
+
       // * Fetch initial weather data (non-blocking)
       _fetchAndUpdateWeather(currentLocation);
       
@@ -185,6 +228,35 @@ class CommuteService {
     debugPrint("[CommuteService] OK: Commute stopped");
   }
   
+  void _printPlanDebug({
+    required double fromLat,
+    required double fromLon,
+    required double toLat,
+    required double toLon,
+    PlannerItinerary? itinerary,
+    required PlannerServiceResult planResult,
+  }) {
+    debugPrint("SMARTROAD COMMUTE PLAN");
+    debugPrint("Origin: $fromLat, $fromLon");
+    debugPrint("Destination: $toLat, $toLon");
+    if (itinerary != null) {
+      debugPrint("Total travel time: ${itinerary.totalTimeMin} minutes");
+      debugPrint("Transfers: ${itinerary.transfers}");
+      debugPrint("Estimated fare: ₱${itinerary.fareEstimatePhp.toStringAsFixed(0)}");
+      for (var i = 0; i < itinerary.legs.length; i++) {
+        final leg = itinerary.legs[i];
+        final dest = leg.endName;
+        if (leg.mode == "walk") {
+          debugPrint("Step ${i + 1}: WALK → $dest");
+        } else {
+          debugPrint("Step ${i + 1}: RIDE → ${leg.vehicle ?? dest}");
+        }
+      }
+    } else {
+      debugPrint("No itinerary (${planResult.error ?? planResult.fallback ?? "no result"})");
+    }
+  }
+
   /// * Cancel all alarm timers
   void _cancelAllAlarmTimers() {
     _alarmRepeatTimer?.cancel();
@@ -932,46 +1004,56 @@ class CommuteService {
     return Duration(seconds: seconds);
   }
   
-  /// * Fetch traffic light count from OSM Overpass API
-  /// * Counts traffic signals within the bounding box of the route
+  /// * Max bbox span in degrees to avoid Overpass 400 (query too large).
+  static const double _maxBboxSpanDeg = 0.5;
+  /// * Max nodes to request from Overpass to stay under server limits.
+  static const int _maxTrafficLightNodes = 500;
+
+  /// * Fetch traffic light count from OSM Overpass API.
+  /// * Uses a node limit to avoid 400 Bad Request; logs error body on failure.
   Future<void> _fetchTrafficLightCount(LatLng from, LatLng to) async {
     try {
-      // * Build bounding box with 0.005° padding (~500m)
       const double pad = 0.005;
-      final minLat = math.min(from.latitude, to.latitude) - pad;
-      final maxLat = math.max(from.latitude, to.latitude) + pad;
-      final minLon = math.min(from.longitude, to.longitude) - pad;
-      final maxLon = math.max(from.longitude, to.longitude) + pad;
-      
-      // * OSM Overpass QL query: count traffic signals in bounding box
+      var minLat = math.min(from.latitude, to.latitude) - pad;
+      var maxLat = math.max(from.latitude, to.latitude) + pad;
+      var minLon = math.min(from.longitude, to.longitude) - pad;
+      var maxLon = math.max(from.longitude, to.longitude) + pad;
+      final spanLat = maxLat - minLat;
+      final spanLon = maxLon - minLon;
+      if (spanLat > _maxBboxSpanDeg || spanLon > _maxBboxSpanDeg) {
+        final midLat = (minLat + maxLat) / 2;
+        final midLon = (minLon + maxLon) / 2;
+        final half = _maxBboxSpanDeg / 2;
+        minLat = midLat - half;
+        maxLat = midLat + half;
+        minLon = midLon - half;
+        maxLon = midLon + half;
+      }
       final query = '[out:json][timeout:10];'
-          'node["highway"="traffic_signals"]'
-          '($minLat,$minLon,$maxLat,$maxLon);'
-          'out count;';
-      
+          'node["highway"="traffic_signals"]($minLat,$minLon,$maxLat,$maxLon);'
+          'out $_maxTrafficLightNodes;';
       final url = Uri.parse('https://overpass-api.de/api/interpreter');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: 'data=${Uri.encodeComponent(query)}',
       ).timeout(const Duration(seconds: 15));
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final elements = data['elements'] as List?;
-        if (elements != null && elements.isNotEmpty) {
-          final countTag = (elements.first as Map<String, dynamic>)['tags'] as Map<String, dynamic>?;
-          final count = int.tryParse(countTag?['total']?.toString() ?? '0') ?? 0;
-          if (_state.isActive) {
-            _state = _state.copyWith(trafficLightCount: count);
-            _notifyStateChanged();
-            debugPrint('[CommuteService] Traffic lights found: $count in route bounding box');
-          }
+        final count = elements?.length ?? 0;
+        if (_state.isActive) {
+          _state = _state.copyWith(trafficLightCount: count);
+          _notifyStateChanged();
+        }
+      } else {
+        if (kDebugMode) {
+          debugPrint('[CommuteService] Overpass traffic lights: status=${response.statusCode} body=${response.body.length > 300 ? response.body.substring(0, 300) + "…" : response.body}');
         }
       }
     } catch (e) {
-      debugPrint('[CommuteService] WARNING: Could not fetch traffic lights: $e');
-      // * Non-fatal: ETA will just not include traffic light penalty
+      if (kDebugMode) debugPrint('[CommuteService] Traffic lights fetch failed: $e');
     }
   }
   

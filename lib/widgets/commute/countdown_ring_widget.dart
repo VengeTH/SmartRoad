@@ -219,7 +219,7 @@ class CountdownRingWidget extends StatelessWidget {
       case CommuteStatus.idle:
         return Icons.place_outlined;
       case CommuteStatus.active:
-        return Icons.directions_bus_rounded;
+        return Icons.commute;
       case CommuteStatus.approaching:
         return Icons.notifications_active_rounded;
       case CommuteStatus.arrived:

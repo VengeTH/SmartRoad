@@ -61,6 +61,9 @@ import "../../widgets/fuel_station_detail_sheet.dart";
 import "../../widgets/multi_fuel_update_dialog.dart";
 import "../../widgets/add_fuel_station_dialog.dart";
 import "../../widgets/navigation_hazard_warning_banner.dart";
+import "../commute/commute_mode_screen.dart";
+import "../fuel/fuel_prices_screen.dart";
+import "../../providers/commute_provider.dart";
 import "../../widgets/navigation_speed_hud.dart";
 import "../../widgets/music_control_widget.dart";
 import "../../utils/polyline_smoothing.dart";
@@ -769,7 +772,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   );
   // * Persistent dropped pin.
   LatLng? _pinnedLocation;
-  String? _pinnedLocationLabel;
   double? _currentHeadingDegrees;
   Hazard? _selectedHazard;
   Place? _selectedPlace;
@@ -828,6 +830,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   DateTime? _routeWeatherAlertsMutedUntil;
   bool _isShowingRouteWeatherAlert = false;
 
+  // * Draggable commute ball position (null = use default left: 16, bottom: 180)
+  double? _commuteBallLeft;
+  double? _commuteBallBottom;
+  bool _showCommuteOverlay = false;
+  // * Auto-dim commute ball when active (after 3s no interaction)
+  bool _commuteBallDimmed = false;
+  Timer? _commuteBallDimTimer;
+  static const Duration _commuteBallDimDelay = Duration(seconds: 3);
+
   @override
   void initState() {
     super.initState();
@@ -878,6 +889,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _positionSubscription?.cancel();
     _zoomLimitTimer?.cancel();
     _poiDebounceTimer?.cancel();
+    _commuteBallDimTimer?.cancel();
     _mapController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -1171,11 +1183,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   void _setPinnedLocation({required LatLng location, String? label}) {
     if (!mounted) return;
-    final trimmed = label?.trim();
     setState(() {
       _pinnedLocation = location;
-      _pinnedLocationLabel =
-          (trimmed != null && trimmed.isNotEmpty) ? trimmed : null;
     });
   }
 
@@ -2541,7 +2550,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             _selectedHazard = null;
             _selectedPlace = null;
             _pinnedLocation = null;
-            _pinnedLocationLabel = null;
             _showSearchResults = false;
             _searchFocusNode.unfocus();
           });
@@ -2560,7 +2568,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               _selectedHazard = null;
               _selectedPlace = null;
               _pinnedLocation = null;
-              _pinnedLocationLabel = null;
               _showSearchResults = false;
               _searchFocusNode.unfocus();
             });
@@ -2593,7 +2600,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               _selectedHazard = null;
               _selectedPlace = null;
               _pinnedLocation = null;
-              _pinnedLocationLabel = null;
               _showSearchResults = false;
               _searchFocusNode.unfocus();
             });
@@ -2612,7 +2618,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             _selectedHazard = null;
             _selectedPlace = null;
             _pinnedLocation = null;
-            _pinnedLocationLabel = null;
             _showSearchResults = false;
             _searchFocusNode.unfocus();
           });
@@ -6936,6 +6941,159 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
+  static const double _commuteBallSize = 56.0;
+  static const double _commuteBallDefaultLeft = 16.0;
+  static const double _commuteBallDefaultBottom = 180.0;
+
+  Widget _buildCommuteBall(BuildContext context) {
+    final isActive = ref.watch(isCommuteActiveProvider);
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final left = (_commuteBallLeft ?? _commuteBallDefaultLeft)
+        .clamp(0.0, screenWidth - _commuteBallSize);
+    final bottom = (_commuteBallBottom ?? _commuteBallDefaultBottom)
+        .clamp(80.0, screenHeight - 220.0);
+
+    // * Start 3s dim timer when visible and not dimmed (active or inactive)
+    if (!_commuteBallDimmed && _commuteBallDimTimer == null) {
+      _commuteBallDimTimer = Timer(_commuteBallDimDelay, () {
+        if (mounted) {
+          setState(() {
+            _commuteBallDimmed = true;
+            _commuteBallDimTimer = null;
+          });
+        }
+      });
+    }
+
+    void onCommuteBallInteraction() {
+      _commuteBallDimTimer?.cancel();
+      _commuteBallDimTimer = null;
+      if (_commuteBallDimmed && mounted) {
+        setState(() => _commuteBallDimmed = false);
+      }
+    }
+
+    Widget ball = GestureDetector(
+      onTap: () {
+        onCommuteBallInteraction();
+        setState(() => _showCommuteOverlay = !_showCommuteOverlay);
+      },
+      onPanUpdate: (DragUpdateDetails d) {
+        onCommuteBallInteraction();
+        setState(() {
+          _commuteBallLeft = (_commuteBallLeft ?? _commuteBallDefaultLeft) + d.delta.dx;
+          _commuteBallBottom = (_commuteBallBottom ?? _commuteBallDefaultBottom) - d.delta.dy;
+          _commuteBallLeft = _commuteBallLeft!.clamp(0.0, screenWidth - _commuteBallSize);
+          _commuteBallBottom = _commuteBallBottom!.clamp(80.0, screenHeight - 220.0);
+        });
+      },
+      child: Tooltip(
+        message: isActive ? "Commute (active)" : "Commute",
+        child: Material(
+          color: isActive ? AppTheme.primaryColor : AppTheme.secondaryColor,
+          borderRadius: BorderRadius.circular(_commuteBallSize / 2),
+          elevation: 4,
+          shadowColor: Colors.black.withOpacity(0.3),
+          child: SizedBox(
+            width: _commuteBallSize,
+            height: _commuteBallSize,
+            child: Icon(
+              isActive ? Icons.directions_bus : Icons.commute,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (_commuteBallDimmed) {
+      ball = Opacity(opacity: 0.45, child: ball);
+    }
+
+    return Positioned(
+      left: left,
+      bottom: bottom,
+      child: ball,
+    );
+  }
+
+  Widget _buildCommuteOverlay(BuildContext context) {
+    final commuteState = ref.watch(commuteProvider);
+    final theme = Theme.of(context);
+
+    return GestureDetector(
+      onTap: () => setState(() => _showCommuteOverlay = false),
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        children: [
+          Positioned(
+            left: _commuteBallLeft ?? _commuteBallDefaultLeft,
+            bottom: (_commuteBallBottom ?? _commuteBallDefaultBottom) + _commuteBallSize + 8,
+            child: SizedBox(
+              width: 260,
+              child: GestureDetector(
+                onTap: () {},
+                child: Material(
+                  elevation: 8,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                  color: theme.colorScheme.surface,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingMD),
+                    child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        commuteState.isActive
+                            ? "Commuting to ${commuteState.destinationName ?? "destination"}"
+                            : "Commute",
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingSM),
+                      if (commuteState.isActive) ...[
+                        TextButton.icon(
+                          onPressed: () async {
+                            await ref.read(commuteProvider.notifier).stopCommute();
+                            if (mounted) setState(() => _showCommuteOverlay = false);
+                          },
+                          icon: const Icon(Icons.stop_circle_outlined, size: 20),
+                          label: const Text("Stop commute"),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      TextButton.icon(
+                        onPressed: () {
+                          setState(() => _showCommuteOverlay = false);
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CommuteModeScreen(),
+                            ),
+                          );
+                        },
+                        icon: Icon(
+                          commuteState.isActive ? Icons.open_in_new : Icons.directions_bus,
+                          size: 20,
+                        ),
+                        label: Text(
+                          commuteState.isActive ? "Open commute" : "Start commute",
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // * Removed verbose build logging to prevent console overflow
@@ -6951,6 +7109,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     // * Removed verbose build logging to prevent console overflow
+
+    // * When another tab (e.g. Fuel) selects a station for directions, show the sheet
+    ref.listen<FuelStation?>(selectedFuelStationProvider, (prev, next) {
+      if (next != null && mounted && !_isNavigating) {
+        setState(() => _selectedFuelStation = next);
+      }
+    });
 
     // * Watch for route editing - load route when set
     final routeToEdit = ref.watch(routeEditingProvider);
@@ -7368,7 +7533,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         _selectedPlace = null;
                         _selectedFuelStation = null;
                         _pinnedLocation = null;
-                        _pinnedLocationLabel = null;
                         _showSearchResults = false;
                         _searchFocusNode.unfocus();
                       });
@@ -8094,6 +8258,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                 ? AppTheme.warningColor
                                 : AppTheme.primaryColor)
                             : AppTheme.textSecondary,
+                  ),
+                  const SizedBox(height: AppTheme.spacingMD),
+                  _MapControlButton(
+                    icon: Icons.local_gas_station_outlined,
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const FuelPricesScreen(),
+                        ),
+                      );
+                    },
+                    tooltip: "Fuel prices",
                   ),
                 ],
               ),
@@ -8923,6 +9099,27 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     }
                     _openDirections(destination);
                   },
+                  onCommuteToLocation: _selectedPlace!.latitude.isNaN ||
+                          _selectedPlace!.longitude.isNaN
+                      ? null
+                      : () {
+                          final place = _selectedPlace!;
+                          if (mounted) {
+                            setState(() => _selectedPlace = null);
+                          }
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const CommuteModeScreen(),
+                              settings: RouteSettings(
+                                arguments: <String, dynamic>{
+                                  "destinationName": place.name,
+                                  "lat": place.latitude,
+                                  "lon": place.longitude,
+                                },
+                              ),
+                            ),
+                          );
+                        },
                   onClose: () {
                     if (mounted) {
                       setState(() => _selectedPlace = null);
@@ -8942,9 +9139,29 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     }
                     _openDirections(destination);
                   },
+                  onCommuteToLocation: () {
+                    final station = _selectedFuelStation!;
+                    if (mounted) {
+                      setState(() => _selectedFuelStation = null);
+                      ref.read(selectedFuelStationProvider.notifier).clearSelection();
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const CommuteModeScreen(),
+                        settings: RouteSettings(
+                          arguments: <String, dynamic>{
+                            "destinationName": station.name,
+                            "lat": station.latitude,
+                            "lon": station.longitude,
+                          },
+                        ),
+                      ),
+                    );
+                  },
                   onClose: () {
                     if (mounted) {
                       setState(() => _selectedFuelStation = null);
+                      ref.read(selectedFuelStationProvider.notifier).clearSelection();
                     }
                   },
                   onUpdatePrices: () {
@@ -9146,6 +9363,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   },
                 ),
               ),
+            // * Draggable commute ball with active state and minimal overlay
+            if (!_isNavigating) _buildCommuteBall(context),
+            if (_showCommuteOverlay) _buildCommuteOverlay(context),
             // * Music Control Widget (compact mini-player)
             Positioned(
               bottom: 110, // * Above bottom navigation

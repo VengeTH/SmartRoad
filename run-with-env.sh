@@ -18,6 +18,9 @@ TOMTOM_API_KEY=your_tomtom_api_key_here
 # Supabase (if needed)
 # SUPABASE_URL=your_supabase_url
 # SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Gemini AI (sticker verification, commute guide assistant)
+GEMINI_API_KEY=your_gemini_api_key_here
 EOF
     echo "✅ Created .env.example"
     echo "📝 Copy .env.example to .env and fill in your API keys"
@@ -45,6 +48,10 @@ if [ ! -z "$TOMTOM_API_KEY" ]; then
     DART_DEFINES="$DART_DEFINES --dart-define=TOMTOM_API_KEY=$TOMTOM_API_KEY"
 fi
 
+if [ ! -z "$GEMINI_API_KEY" ]; then
+    DART_DEFINES="$DART_DEFINES --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY"
+fi
+
 # Run Flutter
 echo "🚀 Running Flutter with environment variables from .env"
 echo "📋 API Key: ${OPENWEATHERMAP_API_KEY:0:10}... (hidden)"
@@ -53,6 +60,9 @@ if [ ! -z "$WEATHER_PROXY_URL" ]; then
 fi
 if [ ! -z "$TOMTOM_API_KEY" ]; then
     echo "📋 TomTom API Key: ${TOMTOM_API_KEY:0:10}... (hidden)"
+fi
+if [ ! -z "$GEMINI_API_KEY" ]; then
+    echo "📋 Gemini API Key: ${GEMINI_API_KEY:0:10}... (hidden)"
 fi
 echo ""
 

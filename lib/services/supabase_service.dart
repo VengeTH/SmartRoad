@@ -1274,4 +1274,59 @@ class SupabaseService {
       'rating': rating,
     });
   }
+
+  // ============================================================
+  // * COMMUTE AI CACHE (L2 shared)
+  // ============================================================
+
+  /// * Returns cached commute AI payload for [cacheKey] if not expired, else null.
+  Future<Map<String, dynamic>?> getCommuteAiCache(String cacheKey) async {
+    final c = client;
+    if (c == null) return null;
+    try {
+      final res = await c
+          .from("commute_ai_cache")
+          .select("payload, expires_at, hit_count")
+          .eq("cache_key", cacheKey)
+          .maybeSingle();
+      if (res == null) return null;
+      final expiresAt = res["expires_at"] != null
+          ? DateTime.tryParse(res["expires_at"] as String)
+          : null;
+      if (expiresAt == null || DateTime.now().isAfter(expiresAt)) return null;
+      final payload = res["payload"];
+      if (payload is! Map<String, dynamic>) return null;
+      final hitCount = (res["hit_count"] as int?) ?? 0;
+      await c
+          .from("commute_ai_cache")
+          .update({"hit_count": hitCount + 1, "updated_at": DateTime.now().toIso8601String()})
+          .eq("cache_key", cacheKey);
+      return payload;
+    } catch (e) {
+      if (kDebugMode) debugPrint("[SupabaseService] getCommuteAiCache error: $e");
+      return null;
+    }
+  }
+
+  /// * Stores or updates commute AI cache entry. [ttlMinutes] from now.
+  Future<void> upsertCommuteAiCache(
+    String cacheKey,
+    Map<String, dynamic> payload, {
+    int ttlMinutes = 60 * 24,
+  }) async {
+    final c = client;
+    if (c == null) return;
+    try {
+      final expiresAt = DateTime.now().add(Duration(minutes: ttlMinutes));
+      await c.from("commute_ai_cache").upsert({
+        "cache_key": cacheKey,
+        "payload": payload,
+        "expires_at": expiresAt.toIso8601String(),
+        "hit_count": 0,
+        "updated_at": DateTime.now().toIso8601String(),
+      }, onConflict: "cache_key");
+    } catch (e) {
+      if (kDebugMode) debugPrint("[SupabaseService] upsertCommuteAiCache error: $e");
+    }
+  }
 }

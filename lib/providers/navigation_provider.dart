@@ -16,19 +16,15 @@ class NavigationTabNotifier extends StateNotifier<int> {
     state = 0;
   }
 
-  void switchToCommute() {
+  void switchToFeed() {
     state = 1;
   }
-  
-  void switchToFeed() {
+
+  void switchToRoutes() {
     state = 2;
   }
-  
-  void switchToRoutes() {
-    state = 3;
-  }
-  
+
   void switchToProfile() {
-    state = 4;
+    state = 3;
   }
 }

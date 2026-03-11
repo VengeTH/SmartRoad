@@ -303,6 +303,74 @@ class AppPreferencesService {
   }
 
   // ============================================================
+  // * COMMUTE AI CACHE (L1 local)
+  // ============================================================
+
+  static const String _keyCommuteAiCachePrefix = "commute_ai_cache_";
+  static const int _commuteAiCacheMaxEntries = 50;
+
+  /// * Returns cached payload for [cacheKey] if not expired, else null.
+  Future<Map<String, dynamic>?> getCommuteAiCacheEntry(String cacheKey) async {
+    final box = await _ensureBox();
+    final safeKey = _safeCommuteAiCacheKey(cacheKey);
+    final raw = box.get(_keyCommuteAiCachePrefix + safeKey);
+    if (raw == null || raw is! String) return null;
+    try {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>?;
+      if (decoded == null) return null;
+      final expiresAtStr = decoded["expiresAt"] as String?;
+      if (expiresAtStr == null) return null;
+      final expiresAt = DateTime.tryParse(expiresAtStr);
+      if (expiresAt == null || DateTime.now().isAfter(expiresAt)) return null;
+      final payload = decoded["payload"];
+      return payload is Map<String, dynamic> ? payload : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// * Stores payload until [expiresAt]. Evicts expired entries if over [_commuteAiCacheMaxEntries].
+  Future<void> setCommuteAiCacheEntry(
+    String cacheKey,
+    Map<String, dynamic> payload,
+    DateTime expiresAt,
+  ) async {
+    final box = await _ensureBox();
+    final safeKey = _safeCommuteAiCacheKey(cacheKey);
+    await box.put(
+      _keyCommuteAiCachePrefix + safeKey,
+      jsonEncode({"payload": payload, "expiresAt": expiresAt.toIso8601String()}),
+    );
+    final prefix = _keyCommuteAiCachePrefix;
+    final keys = box.keys.where((k) => k is String && k.startsWith(prefix)).cast<String>().toList();
+    if (keys.length <= _commuteAiCacheMaxEntries) return;
+    final now = DateTime.now();
+    final withExpiry = <String, DateTime>{};
+    for (final k in keys) {
+      final raw = box.get(k);
+      if (raw is! String) continue;
+      try {
+        final decoded = jsonDecode(raw) as Map<String, dynamic>?;
+        final expiresAtStr = decoded?["expiresAt"] as String?;
+        if (expiresAtStr != null) {
+          final expiresAt = DateTime.tryParse(expiresAtStr);
+          if (expiresAt != null) withExpiry[k] = expiresAt;
+        }
+      } catch (_) {}
+    }
+    withExpiry.removeWhere((_, exp) => now.isAfter(exp));
+    if (withExpiry.length <= _commuteAiCacheMaxEntries) return;
+    final sorted = withExpiry.entries.toList()..sort((a, b) => a.value.compareTo(b.value));
+    for (var i = 0; i < sorted.length - _commuteAiCacheMaxEntries; i++) {
+      await box.delete(sorted[i].key);
+    }
+  }
+
+  String _safeCommuteAiCacheKey(String cacheKey) {
+    return cacheKey.replaceAll(RegExp(r"[^a-zA-Z0-9_]"), "_");
+  }
+
+  // ============================================================
   // * FUEL COMMUNITY SETTINGS (ANONYMOUS DEVICE ID + RATE LIMITING)
   // ============================================================
 

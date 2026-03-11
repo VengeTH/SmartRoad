@@ -158,7 +158,11 @@ out tags center 25;
       );
 
       if (response.statusCode != 200) {
-        throw Exception("Overpass error: ${response.statusCode}");
+        if (kDebugMode) {
+          final body = response.body.length > 400 ? "${response.body.substring(0, 400)}…" : response.body;
+          debugPrint("[SpeedLimitService] Overpass error: status=${response.statusCode} body=$body");
+        }
+        return null;
       }
 
       final decoded = jsonDecode(response.body);

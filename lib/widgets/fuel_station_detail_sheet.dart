@@ -21,6 +21,7 @@ class FuelStationDetailSheet extends ConsumerStatefulWidget {
   final FuelStation station;
   final VoidCallback onClose;
   final VoidCallback? onGetDirections;
+  final VoidCallback? onCommuteToLocation;
   final VoidCallback? onUpdatePrices;
 
   const FuelStationDetailSheet({
@@ -28,6 +29,7 @@ class FuelStationDetailSheet extends ConsumerStatefulWidget {
     required this.station,
     required this.onClose,
     this.onGetDirections,
+    this.onCommuteToLocation,
     this.onUpdatePrices,
   });
 
@@ -325,6 +327,22 @@ class _FuelStationDetailSheetState
                                           icon: const Icon(Icons.directions),
                                           label: const Text("Get Directions"),
                                           style: ElevatedButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 10,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    if (widget.onCommuteToLocation != null) ...[
+                                      const SizedBox(height: 8),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: OutlinedButton.icon(
+                                          onPressed: widget.onCommuteToLocation,
+                                          icon: const Icon(Icons.directions_bus, size: 18),
+                                          label: const Text("Commute to this location"),
+                                          style: OutlinedButton.styleFrom(
                                             padding: const EdgeInsets.symmetric(
                                               vertical: 10,
                                             ),

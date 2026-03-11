@@ -164,7 +164,7 @@ class AppTheme {
         foregroundColor: textPrimary,
         surfaceTintColor: Colors.transparent,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: surfaceColor,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
@@ -234,7 +234,7 @@ class AppTheme {
           );
         }),
       ),
-      tabBarTheme: const TabBarTheme(
+      tabBarTheme: const TabBarThemeData(
         labelColor: textPrimary,
         unselectedLabelColor: textSecondary,
         indicatorColor: primaryColor,

@@ -1,7 +1,9 @@
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:latlong2/latlong.dart";
 
+import "../models/commute_guide_data.dart";
 import "../models/commute_state.dart";
+import "../services/commute_guide_service.dart";
 import "../services/commute_service.dart";
 
 /// * Commute mode state provider
@@ -34,6 +36,59 @@ final isLowPowerActiveProvider = Provider<bool>((ref) {
   return ref.watch(commuteProvider).isLowPowerActive;
 });
 
+/// * Stable key for commute guide so the guide is not rebuilt on every state tick (e.g. ETA/location updates).
+class CommuteGuideKey {
+  final double? destLat;
+  final double? destLon;
+  final String vehicleTypeName;
+  final String? destinationName;
+  final bool hasTransitItinerary;
+
+  const CommuteGuideKey({
+    this.destLat,
+    this.destLon,
+    required this.vehicleTypeName,
+    this.destinationName,
+    required this.hasTransitItinerary,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CommuteGuideKey &&
+          destLat == other.destLat &&
+          destLon == other.destLon &&
+          vehicleTypeName == other.vehicleTypeName &&
+          destinationName == other.destinationName &&
+          hasTransitItinerary == other.hasTransitItinerary;
+
+  @override
+  int get hashCode =>
+      Object.hash(destLat, destLon, vehicleTypeName, destinationName, hasTransitItinerary);
+}
+
+/// * Derives a stable key from commute state so the guide future only reruns when destination/vehicle/itinerary change.
+final commuteGuideKeyProvider = Provider<CommuteGuideKey?>((ref) {
+  final state = ref.watch(commuteProvider);
+  final dest = state.destination;
+  if (dest == null) return null;
+  return CommuteGuideKey(
+    destLat: dest.latitude,
+    destLon: dest.longitude,
+    vehicleTypeName: state.settings.vehicleType.name,
+    destinationName: state.destinationName,
+    hasTransitItinerary: state.transitItinerary != null,
+  );
+});
+
+/// * Memoized commute guide; only refetches when [commuteGuideKeyProvider] changes (destination, vehicle, or itinerary).
+final commuteGuideProvider = FutureProvider<CommuteGuideData?>((ref) async {
+  final key = ref.watch(commuteGuideKeyProvider);
+  if (key == null) return null;
+  final state = ref.read(commuteProvider);
+  return CommuteGuideService.instance.buildGuide(state);
+});
+
 /// * Commute state notifier
 class CommuteNotifier extends StateNotifier<CommuteState> {
   CommuteNotifier() : super(const CommuteState()) {
@@ -46,9 +101,11 @@ class CommuteNotifier extends StateNotifier<CommuteState> {
   Future<void> _initialize() async {
     await _service.initialize();
     
-    // * Wire up state change callbacks
     _service.onStateChanged = (newState) {
       state = newState;
+    };
+    _service.onTransitPlanReady = (itinerary) {
+      state = state.copyWith(transitItinerary: itinerary);
     };
   }
   

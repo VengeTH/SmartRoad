@@ -40,6 +40,9 @@ final isLowPowerActiveProvider = Provider<bool>((ref) {
 class CommuteGuideKey {
   final double? destLat;
   final double? destLon;
+  final int? startLatBucket;
+  final int? startLonBucket;
+  final int refresh5MinBucket;
   final String vehicleTypeName;
   final String? destinationName;
   final bool hasTransitItinerary;
@@ -47,6 +50,9 @@ class CommuteGuideKey {
   const CommuteGuideKey({
     this.destLat,
     this.destLon,
+    this.startLatBucket,
+    this.startLonBucket,
+    required this.refresh5MinBucket,
     required this.vehicleTypeName,
     this.destinationName,
     required this.hasTransitItinerary,
@@ -58,13 +64,24 @@ class CommuteGuideKey {
       other is CommuteGuideKey &&
           destLat == other.destLat &&
           destLon == other.destLon &&
+          startLatBucket == other.startLatBucket &&
+          startLonBucket == other.startLonBucket &&
+          refresh5MinBucket == other.refresh5MinBucket &&
           vehicleTypeName == other.vehicleTypeName &&
           destinationName == other.destinationName &&
           hasTransitItinerary == other.hasTransitItinerary;
 
   @override
-  int get hashCode =>
-      Object.hash(destLat, destLon, vehicleTypeName, destinationName, hasTransitItinerary);
+  int get hashCode => Object.hash(
+    destLat,
+    destLon,
+    startLatBucket,
+    startLonBucket,
+    refresh5MinBucket,
+    vehicleTypeName,
+    destinationName,
+    hasTransitItinerary,
+  );
 }
 
 /// * Derives a stable key from commute state so the guide future only reruns when destination/vehicle/itinerary change.
@@ -72,9 +89,21 @@ final commuteGuideKeyProvider = Provider<CommuteGuideKey?>((ref) {
   final state = ref.watch(commuteProvider);
   final dest = state.destination;
   if (dest == null) return null;
+  final start = state.currentPosition ?? state.startPosition;
+  const locationBucket = 0.005; // * ~500m at PH latitudes
+  final startLatBucket =
+      start == null ? null : (start.latitude / locationBucket).round();
+  final startLonBucket =
+      start == null ? null : (start.longitude / locationBucket).round();
+  final refresh5MinBucket =
+      DateTime.now().millisecondsSinceEpoch ~/
+      const Duration(minutes: 5).inMilliseconds;
   return CommuteGuideKey(
     destLat: dest.latitude,
     destLon: dest.longitude,
+    startLatBucket: startLatBucket,
+    startLonBucket: startLonBucket,
+    refresh5MinBucket: refresh5MinBucket,
     vehicleTypeName: state.settings.vehicleType.name,
     destinationName: state.destinationName,
     hasTransitItinerary: state.transitItinerary != null,

@@ -95,7 +95,7 @@ class CommuteService {
         );
         speedMs = initialPosition.speed > 0 ? initialPosition.speed : null;
       } else {
-        final useFallback = kIsWeb || SupabaseService().isDemoMode;
+        final useFallback = SupabaseService().isDemoMode && !kIsWeb;
         if (!useFallback) {
           debugPrint("[CommuteService] ERROR: Could not get initial position");
           return false;
@@ -135,33 +135,6 @@ class CommuteService {
       
       _notifyStateChanged();
 
-      // * Run GTFS planner and notify with top itinerary; print debug
-      final planResult = await PlannerService.instance.plan(
-        fromLat: currentLocation.latitude,
-        fromLon: currentLocation.longitude,
-        toLat: destination.latitude,
-        toLon: destination.longitude,
-        datetime: DateTime.now(),
-        mode: "transit",
-      );
-      final topItinerary = planResult.itineraries != null && planResult.itineraries!.isNotEmpty
-          ? planResult.itineraries!.first
-          : null;
-      _printPlanDebug(
-        fromLat: currentLocation.latitude,
-        fromLon: currentLocation.longitude,
-        toLat: destination.latitude,
-        toLon: destination.longitude,
-        itinerary: topItinerary,
-        planResult: planResult,
-      );
-      final transitPlannerPayload = topItinerary ??
-          planResult.error ??
-          (planResult.fallback == "no-transit"
-              ? "No transit itinerary available for this trip."
-              : null);
-      onTransitPlanReady?.call(transitPlannerPayload);
-
       // * Fetch initial weather data (non-blocking)
       _fetchAndUpdateWeather(currentLocation);
       
@@ -190,6 +163,14 @@ class CommuteService {
       
       // * Start location stream
       _startLocationStream();
+
+      // * Plan transit in background so Commute Mode activates immediately.
+      unawaited(
+        _loadTransitPlanInBackground(
+          currentLocation: currentLocation,
+          destination: destination,
+        ),
+      );
       
       debugPrint("[CommuteService] OK: Commute started: ${initialDistance.round()}m to destination");
       debugPrint("[CommuteService] Smart alarm: ${_state.smartAlarmDistanceMeters.round()}m, Multi-stage: ${commuteSettings.useMultiStageAlarm}");
@@ -197,6 +178,44 @@ class CommuteService {
     } catch (e) {
       debugPrint("[CommuteService] ERROR: Error starting commute: $e");
       return false;
+    }
+  }
+
+  Future<void> _loadTransitPlanInBackground({
+    required LatLng currentLocation,
+    required LatLng destination,
+  }) async {
+    try {
+      final planResult = await PlannerService.instance.plan(
+        fromLat: currentLocation.latitude,
+        fromLon: currentLocation.longitude,
+        toLat: destination.latitude,
+        toLon: destination.longitude,
+        datetime: DateTime.now(),
+        mode: "transit",
+      );
+      final topItinerary =
+          planResult.itineraries != null && planResult.itineraries!.isNotEmpty
+          ? planResult.itineraries!.first
+          : null;
+      _printPlanDebug(
+        fromLat: currentLocation.latitude,
+        fromLon: currentLocation.longitude,
+        toLat: destination.latitude,
+        toLon: destination.longitude,
+        itinerary: topItinerary,
+        planResult: planResult,
+      );
+      final transitPlannerPayload =
+          topItinerary ??
+          planResult.error ??
+          (planResult.fallback == "no-transit"
+              ? "No transit itinerary available for this trip."
+              : null);
+      onTransitPlanReady?.call(transitPlannerPayload);
+    } catch (e) {
+      debugPrint("[CommuteService] Transit planning failed in background: $e");
+      onTransitPlanReady?.call(null);
     }
   }
   

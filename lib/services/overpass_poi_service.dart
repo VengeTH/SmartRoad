@@ -24,9 +24,21 @@ class OverpassPoiService {
     'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
   ];
+  static const bool _enableWebOverpassPoi = bool.fromEnvironment(
+    'ENABLE_OVERPASS_WEB_POI',
+    defaultValue: false,
+  );
+  static const bool _enableWebOverpassFuel = bool.fromEnvironment(
+    'ENABLE_OVERPASS_WEB_FUEL',
+    defaultValue: true,
+  );
   static const Duration _cacheTtl = Duration(seconds: 45);
+  static const Duration _minNetworkGap = Duration(milliseconds: 1200);
+  static const Duration _fallbackRateLimitCooldown = Duration(seconds: 45);
   static const int _maxCacheEntries = 36;
   final Map<String, _CachedPoiResponse> _responseCache = {};
+  DateTime? _cooldownUntil;
+  DateTime? _lastNetworkAttemptAt;
 
   // ---------------------------------------------------------------------------
   // * Zoom-tiered tag filters — mirrors Google Maps landmark density.
@@ -69,6 +81,10 @@ nwr["aeroway"="aerodrome"](BBOX);
     required double zoom,
     int limit = 60,
   }) async {
+    if (kIsWeb && !_enableWebOverpassPoi) {
+      return [];
+    }
+
     final cacheKey = _buildCacheKey(bounds: bounds, zoom: zoom, limit: limit);
     final cached = _responseCache[cacheKey];
     if (cached != null &&
@@ -83,12 +99,60 @@ nwr["aeroway"="aerodrome"](BBOX);
             ? _tierMid
             : _tierMajor;
 
+    return _fetchByTagLines(
+      bounds: bounds,
+      tagLines: tier,
+      cacheKey: _buildCacheKey(bounds: bounds, zoom: zoom, limit: limit),
+      limit: limit,
+      debugLabel: 'POIs at zoom $zoom',
+      fuelBoostByCategory: true,
+    );
+  }
+
+  /// * Fetches only fuel POIs within [bounds].
+  /// * Used by the fuel list screen to avoid broad POI queries dropping stations.
+  Future<List<MapPoi>> fetchFuelInBounds({
+    required LatLngBounds bounds,
+    int limit = 200,
+  }) async {
+    if (kIsWeb && !_enableWebOverpassFuel) {
+      return [];
+    }
+
+    const fuelOnly = r'''
+nwr["amenity"="fuel"](BBOX);
+''';
+
+    return _fetchByTagLines(
+      bounds: bounds,
+      tagLines: fuelOnly,
+      cacheKey: '${_buildCacheKey(bounds: bounds, zoom: 99, limit: limit)}:fuel',
+      limit: limit,
+      debugLabel: 'fuel POIs',
+      fuelBoostByCategory: false,
+    );
+  }
+
+  Future<List<MapPoi>> _fetchByTagLines({
+    required LatLngBounds bounds,
+    required String tagLines,
+    required String cacheKey,
+    required int limit,
+    required String debugLabel,
+    required bool fuelBoostByCategory,
+  }) async {
+    final cached = _responseCache[cacheKey];
+    if (cached != null &&
+        DateTime.now().difference(cached.fetchedAt) <= _cacheTtl) {
+      return cached.items;
+    }
+
     // * Overpass bounding box convention: south,west,north,east
     final bbox =
         '${bounds.south},${bounds.west},${bounds.north},${bounds.east}';
-    final tagLines = tier.replaceAll('BBOX', bbox);
+    final renderedTagLines = tagLines.replaceAll('BBOX', bbox);
     final query =
-        '[out:json][timeout:10];\n(\n${tagLines});\nout center $limit;';
+      '[out:json][timeout:10];\n(\n$renderedTagLines);\nout center $limit;';
 
     try {
       final response = await _firstSuccessfulResponse(query);
@@ -100,7 +164,7 @@ nwr["aeroway"="aerodrome"](BBOX);
       if (response.statusCode != 200) {
         if (kDebugMode) {
           final body = response.body.length > 400 ? "${response.body.substring(0, 400)}…" : response.body;
-          debugPrint("[OverpassPoiService] Overpass error: status=${response.statusCode} body=$body");
+          debugPrint("[OverpassPoiService] Overpass error: status=$response.statusCode body=$body");
         }
         return [];
       }
@@ -134,17 +198,15 @@ nwr["aeroway"="aerodrome"](BBOX);
         if (name.isEmpty) continue;
 
         final id = 'overpass:${el['type']}:${el['id']}';
+        final addressLine = _buildAddressLine(tags);
 
         // * Assign importance proxy based on zoom tier (major = higher priority).
         // * Fuel POIs get a boost so gas stations win over nearby malls/shops.
-        final baseImportance =
-            zoom >= 14.0
-                ? 0.4
-                : zoom >= 12.0
-                ? 0.6
-                : 0.8;
+        const baseImportance = 0.6;
         final importance =
-            category == "fuel" ? (baseImportance + 0.25) : baseImportance;
+          fuelBoostByCategory && category == "fuel"
+            ? (baseImportance + 0.25)
+            : baseImportance;
 
         results.add(
           MapPoi(
@@ -155,12 +217,13 @@ nwr["aeroway"="aerodrome"](BBOX);
             type: category,
             category: category,
             importance: importance,
+            addressLine: addressLine,
           ),
         );
       }
 
       debugPrint(
-        '✅ [OverpassPoiService] Fetched ${results.length} POIs at zoom $zoom',
+        '✅ [OverpassPoiService] Fetched ${results.length} $debugLabel',
       );
 
       if (results.isNotEmpty) {
@@ -180,12 +243,36 @@ nwr["aeroway"="aerodrome"](BBOX);
   }
 
   Future<http.Response?> _firstSuccessfulResponse(String query) async {
+    final now = DateTime.now();
+    if (_cooldownUntil != null && now.isBefore(_cooldownUntil!)) {
+      return null;
+    }
+
     http.Response? firstNonNull;
     for (final endpoint in _endpoints) {
+      if (_lastNetworkAttemptAt != null) {
+        final elapsed = DateTime.now().difference(_lastNetworkAttemptAt!);
+        if (elapsed < _minNetworkGap) {
+          await Future<void>.delayed(_minNetworkGap - elapsed);
+        }
+      }
+
       final response = await _postToEndpoint(endpoint, query);
+      _lastNetworkAttemptAt = DateTime.now();
       if (response != null) {
+        if (response.statusCode == 429) {
+          final retryAfterSeconds =
+              int.tryParse(response.headers['retry-after'] ?? '');
+          final cooldown =
+              retryAfterSeconds != null && retryAfterSeconds > 0
+                  ? Duration(seconds: retryAfterSeconds)
+                  : _fallbackRateLimitCooldown;
+          _cooldownUntil = DateTime.now().add(cooldown);
+          continue;
+        }
         firstNonNull ??= response;
         if (response.statusCode == 200) {
+          _cooldownUntil = null;
           return response;
         }
       }
@@ -287,6 +374,84 @@ nwr["aeroway"="aerodrome"](BBOX);
     if (leisure == 'park') return 'park';
     if (leisure == 'stadium' || leisure == 'sports_centre') return 'sports';
     return 'landmark';
+  }
+
+  String? _buildAddressLine(Map tags) {
+    final houseNumber = tags['addr:housenumber']?.toString().trim() ?? '';
+    final streetBase =
+        tags['addr:street']?.toString().trim() ??
+        tags['addr:road']?.toString().trim() ??
+        tags['addr:place']?.toString().trim() ??
+        tags['addr:hamlet']?.toString().trim() ??
+        tags['addr:quarter']?.toString().trim() ??
+        '';
+
+    final street =
+        houseNumber.isNotEmpty && streetBase.isNotEmpty
+            ? '$houseNumber $streetBase'
+            : streetBase;
+
+    final locality =
+        tags['addr:barangay']?.toString().trim() ??
+        tags['addr:suburb']?.toString().trim() ??
+        tags['addr:neighbourhood']?.toString().trim() ??
+        tags['addr:village']?.toString().trim() ??
+        tags['addr:city_district']?.toString().trim() ??
+        tags['addr:city']?.toString().trim() ??
+        tags['addr:town']?.toString().trim() ??
+        tags['addr:municipality']?.toString().trim() ??
+        '';
+
+    final province =
+        tags['addr:state']?.toString().trim() ??
+        tags['addr:province']?.toString().trim() ??
+        tags['addr:county']?.toString().trim() ??
+        '';
+
+    final parts = <String>[];
+    if (street.isNotEmpty) {
+      parts.add(street);
+    }
+    if (locality.isNotEmpty) {
+      parts.add(locality);
+    }
+    if (province.isNotEmpty && province.toLowerCase() != locality.toLowerCase()) {
+      parts.add(province);
+    }
+
+    final fallbackPlace =
+        tags['addr:full']?.toString().trim() ??
+        tags['addr:district']?.toString().trim() ??
+        tags['addr:city']?.toString().trim() ??
+        tags['addr:town']?.toString().trim() ??
+        tags['addr:municipality']?.toString().trim() ??
+        tags['is_in']?.toString().trim() ??
+        '';
+
+    if (parts.isEmpty) {
+      return fallbackPlace.isNotEmpty ? fallbackPlace : null;
+    }
+
+    final line = parts.join(', ');
+    if (_isImpreciseRoadOnly(line) && fallbackPlace.isNotEmpty) {
+      final lineLower = line.toLowerCase();
+      final fallbackLower = fallbackPlace.toLowerCase();
+      if (!lineLower.contains(fallbackLower)) {
+        return '$line, $fallbackPlace';
+      }
+    }
+    return line;
+  }
+
+  bool _isImpreciseRoadOnly(String text) {
+    final normalized = text.trim().toLowerCase();
+    final hasComma = normalized.contains(',');
+    if (hasComma) return false;
+    return normalized.contains('highway') ||
+        normalized.contains('road') ||
+        normalized.contains('street') ||
+        normalized.contains('ave') ||
+        normalized.contains('avenue');
   }
 }
 

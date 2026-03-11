@@ -744,7 +744,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   static const double _knownPlacesMinZoom =
       9.0; // * Show curated places earlier as instant POI fallback
   static const double _dynamicPoisMinZoom =
-      7.0; // * Show dynamic POIs earlier for better context
+    10.0; // * Reduce low-zoom Overpass load while keeping useful context
   static const double _navigationFollowZoom = 16.8;
   static const Duration _navigationCameraThrottle = Duration(milliseconds: 250);
 
@@ -1301,7 +1301,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     _poiDebounceTimer?.cancel();
-    _poiDebounceTimer = Timer(const Duration(milliseconds: 40), () {
+    _poiDebounceTimer = Timer(const Duration(milliseconds: 320), () {
       if (mounted) {
         _loadDynamicPoisForViewport();
       }
@@ -1322,7 +1322,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     final now = DateTime.now();
     if (_lastPoiFetchedAt != null &&
-        now.difference(_lastPoiFetchedAt!).inMilliseconds < 120) {
+        now.difference(_lastPoiFetchedAt!).inMilliseconds < 900) {
       return;
     }
 

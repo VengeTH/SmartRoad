@@ -11,7 +11,7 @@ import "../../models/commute_guide_data.dart";
 import "../../models/commute_state.dart";
 import "../../providers/commute_provider.dart";
 import "../../providers/location_provider.dart";
-import "../../services/gtfs_service.dart";
+import "../../services/app_preferences_service.dart";
 import "../../services/location_search_service.dart";
 import "../../services/planner_local.dart";
 import "../../widgets/commute/countdown_ring_widget.dart";
@@ -34,25 +34,11 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
     with SingleTickerProviderStateMixin {
   final TextEditingController _destinationController = TextEditingController();
   final FocusNode _destinationFocusNode = FocusNode();
+  final AppPreferencesService _preferences = AppPreferencesService();
+  final LocationSearchService _locationSearchService = LocationSearchService();
   
-  // * Sample recent destinations for demo
-  final List<Map<String, dynamic>> _recentDestinations = [
-    {
-      "name": "SM Mall of Asia",
-      "lat": 14.5351,
-      "lng": 120.9840,
-    },
-    {
-      "name": "Ayala Malls Manila Bay",
-      "lat": 14.5307,
-      "lng": 120.9795,
-    },
-    {
-      "name": "Robinsons Ermita",
-      "lat": 14.5766,
-      "lng": 120.9867,
-    },
-  ];
+  // * Persisted recent commute destinations.
+  final List<Map<String, dynamic>> _recentDestinations = [];
   
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -60,6 +46,10 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
   bool _showLagpasAlert = false;
   bool _showSafetyAlert = false;
   bool _showArrivalCelebration = false;
+  bool _isInlineSearching = false;
+  String _detectedCountryCode = "ph";
+  Timer? _searchDebounce;
+  final List<LocationSearchResult> _inlineSearchResults = [];
 
   /// * Expandable "Commute guide" card in active view (collapsed by default for scroll-free layout).
   bool _commuteGuideExpanded = false;
@@ -82,10 +72,14 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    unawaited(_loadRecentDestinations());
+    unawaited(_detectSearchCountryCode());
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _destinationController.dispose();
     _destinationFocusNode.dispose();
     _pulseController.dispose();
@@ -111,6 +105,96 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
         _prefilledLon = lon;
       });
     }
+  }
+
+  Future<void> _loadRecentDestinations() async {
+    final items = await _preferences.loadRecentCommuteDestinations();
+    if (!mounted) return;
+    setState(() {
+      _recentDestinations
+        ..clear()
+        ..addAll(items);
+    });
+  }
+
+  Future<void> _rememberRecentDestination({
+    required String name,
+    required double lat,
+    required double lng,
+  }) async {
+    final updated = await _preferences.addRecentCommuteDestination(
+      name: name,
+      latitude: lat,
+      longitude: lng,
+    );
+    if (!mounted) return;
+    setState(() {
+      _recentDestinations
+        ..clear()
+        ..addAll(updated);
+    });
+  }
+
+  Future<void> _detectSearchCountryCode() async {
+    if (_detectedCountryCode.isNotEmpty && _detectedCountryCode != "ph") {
+      return;
+    }
+    try {
+      final position = await ref
+          .read(currentLocationProvider.future)
+          .timeout(const Duration(seconds: 2));
+      if (position == null) return;
+      final countryCode = await _locationSearchService
+          .getCountryCodeFromCoordinates(position.latitude, position.longitude)
+          .timeout(const Duration(seconds: 2));
+      if (!mounted || countryCode == null || countryCode.isEmpty) return;
+      setState(() {
+        _detectedCountryCode = countryCode;
+      });
+    } catch (_) {
+      // * Keep search usable even if country detection fails.
+    }
+  }
+
+  void _onDestinationTextChanged(String value) {
+    _searchDebounce?.cancel();
+    final query = value.trim();
+
+    if (query.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _isInlineSearching = false;
+        _inlineSearchResults.clear();
+      });
+      return;
+    }
+
+    _searchDebounce = Timer(const Duration(milliseconds: 280), () {
+      unawaited(_runInlineSearch(query));
+    });
+  }
+
+  Future<void> _runInlineSearch(String query) async {
+    if (!mounted) return;
+    setState(() {
+      _isInlineSearching = true;
+    });
+
+    await _detectSearchCountryCode();
+
+    final results = await _locationSearchService.searchLocationRespectCountry(
+      query,
+      preferredCountryCode: _detectedCountryCode,
+      allowOutsideWhenNoLocal: false,
+    );
+
+    if (!mounted || _destinationController.text.trim() != query.trim()) return;
+    setState(() {
+      _isInlineSearching = false;
+      _inlineSearchResults
+        ..clear()
+        ..addAll(results.take(4));
+    });
   }
 
   @override
@@ -325,8 +409,11 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
 
           const SizedBox(height: AppTheme.spacingXL),
 
-          // * Recent destinations or empty state
-          if (_recentDestinations.isNotEmpty) ...[
+          // * Typeahead suggestions when typing
+          if (_destinationController.text.trim().isNotEmpty) ...[
+            _buildInlineSearchSection(),
+          ] else if (_recentDestinations.isNotEmpty) ...[
+            // * Recent destinations when search box is idle
             _buildSectionHeader("Recent Destinations", Icons.history),
             const SizedBox(height: AppTheme.spacingMD),
             ..._recentDestinations.map((dest) => _buildRecentDestinationTile(dest)),
@@ -346,31 +433,6 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
           
           // * Safety settings
           _buildSafetySettingsCard(state),
-
-          const SizedBox(height: AppTheme.spacingLG),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final gtfs = GTFSService();
-              await gtfs.initializeHive();
-              final res = await gtfs.downloadAndInstallGtfs(
-                "https://github.com/sakayph/gtfs/releases/latest/download/gtfs.zip",
-              );
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(res.error == null ? "Transit data installed" : "Install failed: ${res.error}"),
-                    backgroundColor: res.error == null ? AppTheme.primaryColor : null,
-                  ),
-                );
-              }
-            },
-            icon: const Icon(Icons.download_rounded, size: 18),
-            label: const Text("Install Transit Data (Developer)"),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.textSecondary,
-              padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMD),
-            ),
-          ),
 
           const SizedBox(height: AppTheme.spacingXXL),
         ],
@@ -458,6 +520,7 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
           color: AppTheme.textPrimary,
           fontSize: 16,
         ),
+        onChanged: _onDestinationTextChanged,
         onSubmitted: (value) {
           final query = value.trim();
           if (query.isNotEmpty) {
@@ -498,49 +561,16 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
   Future<void> _runDestinationSearch(String query) async {
     if (query.trim().isEmpty) return;
 
-    if (!mounted) return;
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const Center(
-        child: CircularProgressIndicator(color: AppTheme.primaryColor),
-      ),
-    );
+    await _detectSearchCountryCode();
 
-    String? countryCode;
-    try {
-      final position = await ref.read(currentLocationProvider.future);
-      if (position != null && mounted) {
-        countryCode = await LocationSearchService().getCountryCodeFromCoordinates(
-          position.latitude,
-          position.longitude,
-        );
-      }
-    } catch (_) {
-      // * Use global search if location or country code unavailable
-    }
-
-    List<LocationSearchResult> results = [];
-    try {
-      results = await LocationSearchService().searchLocation(
+    List<LocationSearchResult> results = _inlineSearchResults;
+    if (results.isEmpty) {
+      results = await _locationSearchService.searchLocationRespectCountry(
         query.trim(),
-        countryCode: countryCode,
+        preferredCountryCode: _detectedCountryCode,
+        allowOutsideWhenNoLocal: false,
       );
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Could not search location. Try again."),
-            backgroundColor: AppTheme.errorColor,
-          ),
-        );
-      }
-      return;
     }
-
-    if (!mounted) return;
-    Navigator.of(context).pop(); // * Dismiss loading dialog
 
     if (results.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -654,6 +684,77 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w600,
             color: AppTheme.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// * Inline search suggestions that appear while typing.
+  Widget _buildInlineSearchSection() {
+    if (_isInlineSearching) {
+      return Container(
+        padding: const EdgeInsets.all(AppTheme.spacingMD),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+          border: Border.all(color: AppTheme.borderColor.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: AppTheme.spacingSM),
+            Text(
+              "Searching...",
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_inlineSearchResults.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(AppTheme.spacingMD),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+          border: Border.all(color: AppTheme.borderColor.withOpacity(0.3)),
+        ),
+        child: Text(
+          "No nearby matches yet. Add a country name to search outside your country.",
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppTheme.textSecondary,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader("Suggestions", Icons.place),
+        const SizedBox(height: AppTheme.spacingMD),
+        ..._inlineSearchResults.map(
+          (result) => _buildRecentDestinationTile(<String, dynamic>{
+            "name": result.displayName,
+            "lat": result.latitude,
+            "lng": result.longitude,
+          }),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            "Press Enter to expand all results",
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTheme.textSecondary,
+            ),
           ),
         ),
       ],
@@ -1274,7 +1375,6 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
     final transitMessage = state.transitItinerary is String
         ? state.transitItinerary as String
         : null;
-    final hasFeed = GTFSService().hasFeed;
 
     if (itinerary != null) {
       return _buildItineraryCard(itinerary);
@@ -1289,22 +1389,6 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
         ),
         child: Text(
           transitMessage,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppTheme.textSecondary,
-          ),
-        ),
-      );
-    }
-    if (!hasFeed) {
-      return Container(
-        padding: const EdgeInsets.all(AppTheme.spacingMD),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceColor,
-          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-          border: Border.all(color: AppTheme.borderColor.withOpacity(0.3)),
-        ),
-        child: Text(
-          "Transit data not installed. Tap \"Install Transit Data (Developer)\" when idle to install.",
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: AppTheme.textSecondary,
           ),
@@ -1666,8 +1750,8 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
     HapticFeedback.mediumImpact();
 
     final name = destination["name"] as String;
-    final lat = destination["lat"] as double;
-    final lng = destination["lng"] as double;
+    final lat = (destination["lat"] as num).toDouble();
+    final lng = (destination["lng"] as num).toDouble();
 
     // * Show loading overlay so the user sees that the tap was registered
     if (mounted) {
@@ -1695,11 +1779,14 @@ class _CommuteModeScreenState extends ConsumerState<CommuteModeScreen>
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Could not start commute. Please check location permissions."),
+          content: Text("Could not start commute. Enable location and wait for GPS lock, then try again."),
           backgroundColor: AppTheme.errorColor,
         ),
       );
+      return;
     }
+
+    await _rememberRecentDestination(name: name, lat: lat, lng: lng);
   }
   
   /// * Stop commute

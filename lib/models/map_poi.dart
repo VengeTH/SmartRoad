@@ -12,6 +12,7 @@ class MapPoi {
   final String? type;
   final String? category;
   final double? importance;
+  final String? addressLine;
 
   const MapPoi({
     required this.id,
@@ -21,6 +22,7 @@ class MapPoi {
     this.type,
     this.category,
     this.importance,
+    this.addressLine,
   });
 
   LatLng get location => LatLng(latitude, longitude);

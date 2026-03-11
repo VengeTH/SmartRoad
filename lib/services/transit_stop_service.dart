@@ -26,7 +26,7 @@ class TransitStopService {
   static final TransitStopService instance = TransitStopService._();
 
   static const String _overpassUrl = "https://overpass-api.de/api/interpreter";
-  static const Duration _timeout = Duration(seconds: 12);
+  static const Duration _timeout = Duration(seconds: 4);
 
   /// * Cache by rounded position to avoid repeated Overpass calls.
   final Map<String, _CachedResult> _cache = {};
@@ -64,9 +64,11 @@ class TransitStopService {
 [out:json][timeout:10];
 (
   node["highway"="bus_stop"]($bbox);
+  node["amenity"="bus_stop"]($bbox);
   node["amenity"="bus_station"]($bbox);
   node["public_transport"="stop_position"]($bbox);
   node["public_transport"="stop_area"]($bbox);
+  node["public_transport"="platform"]($bbox);
 );
 out body;
 ''';

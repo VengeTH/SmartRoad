@@ -22,6 +22,7 @@ class FuelStation {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String? photoUrl;
+  final String? addressLine;
 
   const FuelStation({
     required this.id,
@@ -38,6 +39,7 @@ class FuelStation {
     required this.createdAt,
     required this.updatedAt,
     this.photoUrl,
+    this.addressLine,
   });
 
   LatLng get location => LatLng(latitude, longitude);
@@ -83,6 +85,7 @@ class FuelStation {
             : DateTime.now();
 
     final photoUrl = json["photo_url"] as String?;
+    final addressLine = json["address_line"] as String?;
 
     // Parse embedded prices array
     final pricesRaw = json["prices"];
@@ -110,6 +113,7 @@ class FuelStation {
       createdAt: createdAt,
       updatedAt: updatedAt,
       photoUrl: photoUrl,
+      addressLine: addressLine,
     );
   }
 
@@ -129,6 +133,7 @@ class FuelStation {
       "created_at": createdAt.toIso8601String(),
       "updated_at": updatedAt.toIso8601String(),
       if (photoUrl != null) "photo_url": photoUrl,
+      if (addressLine != null) "address_line": addressLine,
     };
   }
 
@@ -148,6 +153,7 @@ class FuelStation {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? photoUrl,
+    String? addressLine,
   }) {
     return FuelStation(
       id: id ?? this.id,
@@ -164,6 +170,7 @@ class FuelStation {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       photoUrl: photoUrl ?? this.photoUrl,
+      addressLine: addressLine ?? this.addressLine,
     );
   }
 }

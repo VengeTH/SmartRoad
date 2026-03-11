@@ -1,3 +1,5 @@
+import "dart:async";
+
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:hive_flutter/hive_flutter.dart";
@@ -10,6 +12,7 @@ import "services/notification_service.dart";
 import "services/route_service.dart";
 import "services/music_app_launcher_service.dart";
 import "services/gtfs_service.dart";
+import "services/location_service.dart";
 import "providers/auth_provider.dart";
 import "screens/auth/login_screen.dart";
 import "screens/auth/signup_screen.dart";
@@ -28,6 +31,8 @@ void main() async {
     await NotificationService().initialize();
     await GTFSService().initializeHive();
     debugPrint("GTFS Hive initialized");
+    // * Warm location cache early so location-driven screens render faster.
+    unawaited(LocationService().warmUpLocation());
   } catch (e) {
     debugPrint("Initialization error: $e");
   }

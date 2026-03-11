@@ -1,6 +1,8 @@
 import "dart:math" as math;
 
 import "package:flutter/foundation.dart";
+import "package:flutter_map/flutter_map.dart";
+import "package:latlong2/latlong.dart";
 
 import "../config/regional_fuel_defaults.dart";
 import "../models/fuel_station.dart";
@@ -11,6 +13,7 @@ import "../models/fuel_type.dart";
 import "supabase_service.dart";
 import "app_preferences_service.dart";
 import "location_service.dart";
+import "overpass_poi_service.dart";
 import "../utils/fuel_utils.dart";
 
 /// * Fuel service for community fuel pricing features.
@@ -36,6 +39,16 @@ class FuelService {
   final SupabaseService _supabaseService;
   final AppPreferencesService _prefsService;
   final LocationService _locationService;
+  static const bool _enableWebOverpassFuel = bool.fromEnvironment(
+    'ENABLE_OVERPASS_WEB_FUEL',
+    defaultValue: true,
+  );
+  static const Duration _demoFuelCacheTtl = Duration(minutes: 3);
+  List<FuelStation> _demoFuelStationsCache = const [];
+  DateTime? _demoFuelCacheAt;
+  double? _demoFuelCacheCenterLat;
+  double? _demoFuelCacheCenterLon;
+  double _demoFuelCacheRadiusKm = 0.0;
 
   FuelService({
     required SupabaseService supabaseService,
@@ -118,6 +131,14 @@ class FuelService {
     required double radiusKm,
     bool includeUnverified = false,
   }) async {
+    if (_supabaseService.isDemoMode) {
+      return await _getDemoNearbyStations(
+        lat: lat,
+        lon: lon,
+        radiusKm: radiusKm,
+      );
+    }
+
     // * ~111 km per degree latitude; longitude scaled by cos(lat)
     const kmPerDegLat = 111.0;
     final kmPerDegLon = 111.0 * _cosDeg(lat);
@@ -144,10 +165,6 @@ class FuelService {
       return distM <= radiusMeters;
     }).toList();
 
-    // * In demo mode, if no stations in radius (e.g. user far from Manila), show all demo stations
-    if (_supabaseService.isDemoMode && filtered.isEmpty) {
-      return stations;
-    }
     return filtered;
   }
 
@@ -158,10 +175,12 @@ class FuelService {
   /// * Get a single fuel station by ID with latest prices.
   Future<FuelStation?> getStationById(String stationId) async {
     if (_supabaseService.isDemoMode) {
-      return _getDemoStations().firstWhere(
-        (s) => s.id == stationId,
-        orElse: () => _getDemoStations().first,
-      );
+      for (final station in _getDemoStations()) {
+        if (station.id == stationId) {
+          return station;
+        }
+      }
+      return null;
     }
 
     final client = _supabaseService.client;
@@ -1087,6 +1106,344 @@ class FuelService {
         updatedAt: asOf.subtract(const Duration(days: 1)),
       ),
     ];
+  }
+
+  Future<List<FuelStation>> _getDemoNearbyStations({
+    required double lat,
+    required double lon,
+    required double radiusKm,
+  }) async {
+    if (kIsWeb && !_enableWebOverpassFuel) {
+      return _buildWebFallbackNearbyStations(
+        lat: lat,
+        lon: lon,
+        radiusKm: radiusKm,
+      );
+    }
+
+    if (_canReuseDemoFuelCache(lat: lat, lon: lon, radiusKm: radiusKm)) {
+      return _filterStationsByRadius(
+        stations: _demoFuelStationsCache,
+        lat: lat,
+        lon: lon,
+        radiusKm: radiusKm,
+      );
+    }
+
+    final queryRadiusKm = math.max(radiusKm, 30.0);
+
+    final bounds = _boundsForRadius(lat: lat, lon: lon, radiusKm: queryRadiusKm);
+    final pois = await OverpassPoiService().fetchFuelInBounds(
+      bounds: bounds,
+      limit: queryRadiusKm <= 10 ? 90 : 160,
+    );
+
+    if (pois.isEmpty && _demoFuelStationsCache.isNotEmpty) {
+      return _filterStationsByRadius(
+        stations: _demoFuelStationsCache,
+        lat: lat,
+        lon: lon,
+        radiusKm: radiusKm,
+      );
+    }
+
+    final seen = <String>{};
+    final results = <FuelStation>[];
+
+    for (final poi in pois) {
+      final category = (poi.category ?? poi.type ?? '').trim().toLowerCase();
+      if (category != 'fuel') continue;
+
+      final distM = FuelUtils.calculateDistance(
+        lat,
+        lon,
+        poi.latitude,
+        poi.longitude,
+      );
+      if (distM > queryRadiusKm * 1000.0) continue;
+
+      final dedupeKey =
+          '${poi.name.trim().toLowerCase()}:${poi.latitude.toStringAsFixed(5)}:${poi.longitude.toStringAsFixed(5)}';
+      if (!seen.add(dedupeKey)) continue;
+
+      results.add(
+        FuelStation(
+          id: poi.id,
+          name: poi.name,
+          latitude: poi.latitude,
+          longitude: poi.longitude,
+          brand: poi.name,
+          province: '',
+          city: '',
+          region: null,
+          verified: false,
+          source: 'osm',
+          prices: RegionalFuelDefaults.getDefaultPricesForStation('', null),
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+          addressLine: poi.addressLine,
+        ),
+      );
+    }
+
+    results.sort((a, b) {
+      final da = FuelUtils.calculateDistance(lat, lon, a.latitude, a.longitude);
+      final db = FuelUtils.calculateDistance(lat, lon, b.latitude, b.longitude);
+      return da.compareTo(db);
+    });
+
+    if (results.isNotEmpty) {
+      _demoFuelStationsCache = results;
+      _demoFuelCacheAt = DateTime.now();
+      _demoFuelCacheCenterLat = lat;
+      _demoFuelCacheCenterLon = lon;
+      _demoFuelCacheRadiusKm = queryRadiusKm;
+    }
+
+    return _filterStationsByRadius(
+      stations: results,
+      lat: lat,
+      lon: lon,
+      radiusKm: radiusKm,
+    );
+  }
+
+  bool _canReuseDemoFuelCache({
+    required double lat,
+    required double lon,
+    required double radiusKm,
+  }) {
+    final cacheAt = _demoFuelCacheAt;
+    final centerLat = _demoFuelCacheCenterLat;
+    final centerLon = _demoFuelCacheCenterLon;
+    if (cacheAt == null || centerLat == null || centerLon == null) {
+      return false;
+    }
+    if (_demoFuelStationsCache.isEmpty) return false;
+    if (DateTime.now().difference(cacheAt) > _demoFuelCacheTtl) return false;
+    if (_demoFuelCacheRadiusKm + 0.001 < radiusKm) return false;
+
+    final centerDriftMeters = FuelUtils.calculateDistance(
+      centerLat,
+      centerLon,
+      lat,
+      lon,
+    );
+    return centerDriftMeters <= 2500.0;
+  }
+
+  List<FuelStation> _filterStationsByRadius({
+    required List<FuelStation> stations,
+    required double lat,
+    required double lon,
+    required double radiusKm,
+  }) {
+    final radiusMeters = radiusKm * 1000.0;
+    final filtered =
+        stations.where((station) {
+          final distM = FuelUtils.calculateDistance(
+            lat,
+            lon,
+            station.latitude,
+            station.longitude,
+          );
+          return distM <= radiusMeters;
+        }).toList();
+
+    filtered.sort((a, b) {
+      final da = FuelUtils.calculateDistance(lat, lon, a.latitude, a.longitude);
+      final db = FuelUtils.calculateDistance(lat, lon, b.latitude, b.longitude);
+      return da.compareTo(db);
+    });
+    return filtered;
+  }
+
+  List<FuelStation> _buildWebFallbackNearbyStations({
+    required double lat,
+    required double lon,
+    required double radiusKm,
+  }) {
+    final asOf = DateTime.now();
+    final defaults = RegionalFuelDefaults.getDefaultPricesForStation('', null);
+
+    final templates = <({
+      String name,
+      String brand,
+      String address,
+      double latOffset,
+      double lonOffset,
+    })>[
+      (
+        name: 'Shell Nearby',
+        brand: 'Shell',
+        address: 'Maharlika Highway',
+        latOffset: 0.008,
+        lonOffset: 0.004,
+      ),
+      (
+        name: 'Petron Junction',
+        brand: 'Petron',
+        address: 'Rizal Avenue',
+        latOffset: -0.007,
+        lonOffset: 0.005,
+      ),
+      (
+        name: 'Caltex Town Center',
+        brand: 'Caltex',
+        address: 'Quezon Avenue',
+        latOffset: 0.006,
+        lonOffset: -0.006,
+      ),
+      (
+        name: 'Seaoil Highway Stop',
+        brand: 'Seaoil',
+        address: 'Diversion Road',
+        latOffset: -0.005,
+        lonOffset: -0.004,
+      ),
+    ];
+
+    final kmPerDegLat = 111.0;
+    final kmPerDegLon = math.max(111.0 * _cosDeg(lat), 0.0001);
+
+    final stations = <FuelStation>[];
+    for (int i = 0; i < templates.length; i++) {
+      final t = templates[i];
+      final stationLat = lat + t.latOffset;
+      final stationLon = lon + t.lonOffset;
+      final distanceMeters = FuelUtils.calculateDistance(
+        lat,
+        lon,
+        stationLat,
+        stationLon,
+      );
+      if (distanceMeters > radiusKm * 1000.0) {
+        continue;
+      }
+
+      final approxCity = _deriveApproxCity(lat, lon);
+      final approxProvince = _deriveApproxProvince(lat, lon);
+
+      stations.add(
+        FuelStation(
+          id: 'web-fallback-${i + 1}',
+          name: t.name,
+          latitude: stationLat,
+          longitude: stationLon,
+          brand: t.brand,
+          province: approxProvince,
+          city: approxCity,
+          region: null,
+          verified: false,
+          source: 'community',
+          prices:
+              defaults
+                  .map(
+                    (p) => FuelPrice(
+                      fuelType: p.fuelType,
+                      price: p.price,
+                      updatedAt: asOf.subtract(Duration(hours: i + 2)),
+                      source: p.source,
+                      confidenceScore: p.confidenceScore,
+                      isStale: false,
+                    ),
+                  )
+                  .toList(),
+          createdAt: asOf.subtract(const Duration(days: 10)),
+          updatedAt: asOf.subtract(Duration(hours: i + 2)),
+          addressLine: '${t.address}, $approxCity',
+        ),
+      );
+    }
+
+    stations.sort((a, b) {
+      final da = FuelUtils.calculateDistance(lat, lon, a.latitude, a.longitude);
+      final db = FuelUtils.calculateDistance(lat, lon, b.latitude, b.longitude);
+      return da.compareTo(db);
+    });
+
+    if (stations.isNotEmpty) {
+      return stations;
+    }
+
+    final fallbackLat = lat + (radiusKm / kmPerDegLat) * 0.20;
+    final fallbackLon = lon + (radiusKm / kmPerDegLon) * 0.15;
+    final approxCity = _deriveApproxCity(lat, lon);
+    final approxProvince = _deriveApproxProvince(lat, lon);
+
+    return [
+      FuelStation(
+        id: 'web-fallback-single',
+        name: 'Fuel Station Nearby',
+        latitude: fallbackLat,
+        longitude: fallbackLon,
+        brand: 'Fuel',
+        province: approxProvince,
+        city: approxCity,
+        region: null,
+        verified: false,
+        source: 'community',
+        prices:
+            defaults
+                .map(
+                  (p) => FuelPrice(
+                    fuelType: p.fuelType,
+                    price: p.price,
+                    updatedAt: asOf.subtract(const Duration(hours: 3)),
+                    source: p.source,
+                    confidenceScore: p.confidenceScore,
+                    isStale: false,
+                  ),
+                )
+                .toList(),
+        createdAt: asOf.subtract(const Duration(days: 5)),
+        updatedAt: asOf.subtract(const Duration(hours: 3)),
+        addressLine: 'National Highway, $approxCity',
+      ),
+    ];
+  }
+
+  String _deriveApproxCity(double lat, double lon) {
+    if (lat >= 14.40 && lat <= 14.85 && lon >= 120.90 && lon <= 121.20) {
+      return 'Metro Manila';
+    }
+    if (lat >= 13.80 && lat <= 14.30 && lon >= 120.90 && lon <= 121.40) {
+      return 'Laguna';
+    }
+    if (lat >= 13.60 && lat <= 14.20 && lon >= 121.20 && lon <= 122.00) {
+      return 'Quezon';
+    }
+    return 'Nearby Area';
+  }
+
+  String _deriveApproxProvince(double lat, double lon) {
+    if (lat >= 14.40 && lat <= 14.85 && lon >= 120.90 && lon <= 121.20) {
+      return 'NCR';
+    }
+    if (lat >= 13.80 && lat <= 14.30 && lon >= 120.90 && lon <= 121.40) {
+      return 'Laguna';
+    }
+    if (lat >= 13.60 && lat <= 14.20 && lon >= 121.20 && lon <= 122.00) {
+      return 'Quezon';
+    }
+    return 'Philippines';
+  }
+
+  LatLngBounds _boundsForRadius({
+    required double lat,
+    required double lon,
+    required double radiusKm,
+  }) {
+    const kmPerDegLat = 111.0;
+    final kmPerDegLon = math.max(111.0 * _cosDeg(lat), 0.0001);
+    final margin = 1.15;
+    final deltaLat = (radiusKm / kmPerDegLat) * margin;
+    final deltaLon = (radiusKm / kmPerDegLon) * margin;
+
+    return LatLngBounds.fromPoints([
+      LatLng(lat - deltaLat, lon - deltaLon),
+      LatLng(lat + deltaLat, lon + deltaLon),
+    ]);
   }
 }
 

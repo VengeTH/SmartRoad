@@ -7,8 +7,31 @@ import "package:permission_handler/permission_handler.dart";
 /// * Location service for getting user's current position
 class LocationService {
   static final LocationService _instance = LocationService._internal();
+  static Position? _memoryCachedPosition;
   factory LocationService() => _instance;
   LocationService._internal();
+
+  /// * Fast in-memory location cache for immediate UI bootstrap.
+  Position? get memoryCachedPosition => _memoryCachedPosition;
+
+  /// * Warm location cache in the background during app startup.
+  Future<void> warmUpLocation() async {
+    try {
+      final hasPermission = await isPermissionGranted();
+      if (!hasPermission) return;
+
+      final pos = await getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 4),
+        preferCached: true,
+      );
+      if (pos != null) {
+        _memoryCachedPosition = pos;
+      }
+    } catch (_) {
+      // * Best-effort warmup only.
+    }
+  }
 
   /// * Check and request location permissions
   Future<bool> requestPermission() async {
@@ -67,6 +90,7 @@ class LocationService {
         try {
           cachedPosition = await Geolocator.getLastKnownPosition();
           if (cachedPosition != null) {
+            _memoryCachedPosition = cachedPosition;
             debugPrint(
               "[LocationService] Using cached position for fast response",
             );
@@ -93,6 +117,8 @@ class LocationService {
         timeLimit: timeout,
       );
 
+      _memoryCachedPosition = position;
+
       debugPrint(
         "[LocationService] OK: Got position: ${position.latitude}, ${position.longitude}",
       );
@@ -102,7 +128,10 @@ class LocationService {
       if (!kIsWeb) {
         try {
           final fallback = await Geolocator.getLastKnownPosition();
-          if (fallback != null) return fallback;
+          if (fallback != null) {
+            _memoryCachedPosition = fallback;
+            return fallback;
+          }
         } catch (_) {
           // * Ignore and fall through to null.
         }
@@ -124,6 +153,7 @@ class LocationService {
     try {
       final position = await Geolocator.getLastKnownPosition();
       if (position != null) {
+        _memoryCachedPosition = position;
         debugPrint(
           "[LocationService] Got last known position: ${position.latitude}, ${position.longitude}",
         );

@@ -243,8 +243,10 @@ class AppPreferencesService {
     // * Remove duplicate by coordinates
     final filtered =
         existing.where((item) {
-          final lat = item["lat"] as double?;
-          final lng = item["lng"] as double?;
+          final latRaw = item["lat"];
+          final lngRaw = item["lng"];
+          final lat = latRaw is num ? latRaw.toDouble() : null;
+          final lng = lngRaw is num ? lngRaw.toDouble() : null;
           if (lat == null || lng == null) return true;
           return (lat - latitude).abs() > 0.0001 ||
               (lng - longitude).abs() > 0.0001;

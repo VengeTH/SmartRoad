@@ -65,8 +65,8 @@ class _FuelStationDetailSheetState
       duration: AppTheme.animationFast,
       curve: AppTheme.animationCurve,
       child: DraggableScrollableSheet(
-        initialChildSize: _isExpanded ? 0.80 : 0.45,
-        minChildSize: 0.24,
+        initialChildSize: _isExpanded ? 0.80 : 0.50,
+        minChildSize: 0.30,
         maxChildSize: 0.95,
         expand: false,
         controller: _sheetController,
@@ -173,7 +173,7 @@ class _FuelStationDetailSheetState
                                                   : "Expand",
                                           onPressed: () {
                                             final target =
-                                                _isExpanded ? 0.45 : 0.80;
+                                                _isExpanded ? 0.50 : 0.80;
                                             _sheetController.animateTo(
                                               target,
                                               duration: const Duration(
@@ -269,7 +269,7 @@ class _FuelStationDetailSheetState
                               ),
                             ),
                             // * Action buttons — hidden when sheet is too small to prevent overflow
-                            if (constraints.maxHeight > 220)
+                            if (constraints.maxHeight > 340)
                               Padding(
                                 padding: const EdgeInsets.fromLTRB(
                                   12,

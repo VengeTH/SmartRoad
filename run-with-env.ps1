@@ -11,6 +11,10 @@ if (-not (Test-Path .env)) {
 OPENWEATHERMAP_API_KEY=your_openweathermap_api_key_here
 WEATHER_PROXY_URL=
 
+# Overpass web toggles
+# ENABLE_OVERPASS_WEB_POI=false
+# ENABLE_OVERPASS_WEB_FUEL=true
+
 # Traffic API Configuration
 TOMTOM_API_KEY=your_tomtom_api_key_here
 
@@ -56,6 +60,14 @@ if ($env:TOMTOM_API_KEY) {
 
 if ($env:GEMINI_API_KEY) {
     $dartDefines += " --dart-define=GEMINI_API_KEY=$env:GEMINI_API_KEY"
+}
+
+if ($env:ENABLE_OVERPASS_WEB_POI) {
+    $dartDefines += " --dart-define=ENABLE_OVERPASS_WEB_POI=$env:ENABLE_OVERPASS_WEB_POI"
+}
+
+if ($env:ENABLE_OVERPASS_WEB_FUEL) {
+    $dartDefines += " --dart-define=ENABLE_OVERPASS_WEB_FUEL=$env:ENABLE_OVERPASS_WEB_FUEL"
 }
 
 # Run Flutter

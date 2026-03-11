@@ -62,6 +62,10 @@ class CommuteAiAssistantService {
     required String currentWhereToBoard,
     required String currentWhatToTake,
     required String currentNotes,
+    double? originLat,
+    double? originLon,
+    double? destinationLat,
+    double? destinationLon,
   }) async {
     final cacheKey = _normalizeCacheKey(destinationName, vehicleType, distanceKm);
 
@@ -109,6 +113,10 @@ class CommuteAiAssistantService {
       currentWhereToBoard: currentWhereToBoard,
       currentWhatToTake: currentWhatToTake,
       currentNotes: currentNotes,
+      originLat: originLat,
+      originLon: originLon,
+      destinationLat: destinationLat,
+      destinationLon: destinationLon,
     );
 
     try {
@@ -280,13 +288,20 @@ class CommuteAiAssistantService {
     required String currentWhereToBoard,
     required String currentWhatToTake,
     required String currentNotes,
+    double? originLat,
+    double? originLon,
+    double? destinationLat,
+    double? destinationLon,
   }) {
-    const rules = "You are SmartRoad commute assistant. "
-        "Do NOT do routing, GTFS, fare calculation, or map geometry. "
-        "Only suggest clearer, shorter wording for commute guidance in the Philippines. ";
-    final context = "Destination: $destinationName. Vehicle: ${vehicleType.label}. Distance: ~${distanceKm.toStringAsFixed(0)} km. ";
+    const rules = "You are SmartRoad commute assistant for Philippine commuting. "
+      "Give practical and concrete suggestions for where to board and what to take. "
+      "Do not invent exact signboards or exact route numbers if uncertain. "
+      "If uncertain, use likely terminals/transfer strategy and say 'verify with driver/conductor'. ";
+    final context = "Destination: $destinationName. Vehicle: ${vehicleType.label}. Distance: ~${distanceKm.toStringAsFixed(0)} km. "
+      "OriginCoord: ${originLat?.toStringAsFixed(5) ?? "unknown"}, ${originLon?.toStringAsFixed(5) ?? "unknown"}. "
+      "DestinationCoord: ${destinationLat?.toStringAsFixed(5) ?? "unknown"}, ${destinationLon?.toStringAsFixed(5) ?? "unknown"}. ";
     const output = "Reply with JSON only, no markdown: {\"whereToBoard\":\"...\", \"whatToTake\":\"...\", \"notes\":\"...\"}. "
-        "Keep each field to 1-2 sentences. If you have no improvement, repeat the current text.";
+      "Keep each field 1-2 short sentences. Include transfer sequence when distance is long. Mention cost-saving walking tip when safe.";
     return "$rules$context Current suggestions: board=\"$currentWhereToBoard\", take=\"$currentWhatToTake\", notes=\"$currentNotes\". $output";
   }
 

@@ -48,7 +48,8 @@ class TransitStopService {
     final clampedRadius = radiusMeters.clamp(100.0, 3000.0);
     final key = _cacheKey(position, clampedRadius);
     final cached = _cache[key];
-    if (cached != null && DateTime.now().difference(cached.fetchedAt) < _cacheTtl) {
+    if (cached != null &&
+        DateTime.now().difference(cached.fetchedAt) < _cacheTtl) {
       return cached.stop;
     }
 
@@ -76,23 +77,31 @@ out body;
         return _cacheAndReturn(key, null);
       }
 
-      final response = await http.post(
-        Uri.parse(_overpassUrl),
-        headers: {"Content-Type": "application/x-www-form-urlencoded"},
-        body: "data=${Uri.encodeComponent(q)}",
-      ).timeout(_timeout);
+      final response = await http
+          .post(
+            Uri.parse(_overpassUrl),
+            headers: {"Content-Type": "application/x-www-form-urlencoded"},
+            body: "data=${Uri.encodeComponent(q)}",
+          )
+          .timeout(_timeout);
 
       if (response.statusCode != 200) {
         if (kDebugMode) {
-          final body = response.body.length > 400 ? "${response.body.substring(0, 400)}…" : response.body;
-          debugPrint("[TransitStopService] Overpass error: status=${response.statusCode} body=$body");
+          final body =
+              response.body.length > 400
+                  ? "${response.body.substring(0, 400)}…"
+                  : response.body;
+          debugPrint(
+            "[TransitStopService] Overpass error: status=${response.statusCode} body=$body",
+          );
         }
         return _cacheAndReturn(key, null);
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final elements = data["elements"] as List<dynamic>?;
-      if (elements == null || elements.isEmpty) return _cacheAndReturn(key, null);
+      if (elements == null || elements.isEmpty)
+        return _cacheAndReturn(key, null);
 
       TransitStopInfo? nearest;
       double minDist = double.infinity;

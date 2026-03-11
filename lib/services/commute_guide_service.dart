@@ -22,13 +22,15 @@ class CommuteGuideService {
 
   /// * Builds guide for [state]. Reuses [state.transitItinerary] when present; otherwise fetches plan or heuristic.
   Future<CommuteGuideData> buildGuide(CommuteState state) async {
-    final distanceMeters = state.distanceToDestinationMeters ?? state.initialDistanceMeters ?? 0;
+    final distanceMeters =
+        state.distanceToDestinationMeters ?? state.initialDistanceMeters ?? 0;
     final distanceKm = distanceMeters / 1000.0;
     final vehicle = state.settings.vehicleType;
     final hasFare = CommuteFareReference.hasFareEstimate(vehicle);
     final start = state.currentPosition ?? state.startPosition;
     final dest = state.destination;
-    final isPt = vehicle == VehicleType.jeepney ||
+    final isPt =
+        vehicle == VehicleType.jeepney ||
         vehicle == VehicleType.bus ||
         vehicle == VehicleType.tricycle;
     final isLongDistance = distanceKm >= kLongDistanceKm && isPt;
@@ -36,10 +38,7 @@ class CommuteGuideService {
     // * Reuse stored transit itinerary from state so we do not replan on every refresh.
     final stored = state.transitItinerary;
     if (stored is PlannerItinerary) {
-      return _fromGtfsItinerary(
-        stored,
-        destinationName: state.destinationName,
-      );
+      return _fromGtfsItinerary(stored, destinationName: state.destinationName);
     }
 
     if (start != null && dest != null && !isLongDistance) {
@@ -125,7 +124,8 @@ class CommuteGuideService {
     PlannerItinerary itinerary, {
     String? destinationName,
   }) {
-    final transitLegs = itinerary.legs.where((l) => l.mode == "transit").toList();
+    final transitLegs =
+        itinerary.legs.where((l) => l.mode == "transit").toList();
     final firstTransitLeg = transitLegs.isEmpty ? null : transitLegs.first;
     final walkLegs = itinerary.legs.where((l) => l.mode == "walk").toList();
     final firstWalkLeg = walkLegs.isEmpty ? null : walkLegs.first;
@@ -133,9 +133,10 @@ class CommuteGuideService {
     final boardWalkM = firstWalkLeg?.distanceM ?? 0.0;
     final totalWalkM = itinerary.totalWalkM;
     final totalTime = itinerary.totalTimeMin;
-    final destName = destinationName?.trim().isNotEmpty == true
-        ? destinationName!.trim()
-        : "your destination";
+    final destName =
+        destinationName?.trim().isNotEmpty == true
+            ? destinationName!.trim()
+            : "your destination";
 
     final whereToBoard = _formatWhereToBoardFromGtfs(
       firstTransitLeg: firstTransitLeg,
@@ -153,11 +154,13 @@ class CommuteGuideService {
     final fare = itinerary.fareEstimatePhp;
     final minFare = (fare * 0.9).floor().clamp(1.0, fare);
     final maxFare = (fare * 1.15).ceil().clamp(fare, 9999.0);
-    final estimatedFareText = minFare >= maxFare
-        ? "~₱${fare.toStringAsFixed(0)}. Fares may vary."
-        : "~₱${minFare.toStringAsFixed(0)}–₱${maxFare.toStringAsFixed(0)}. Fares may vary.";
+    final estimatedFareText =
+        minFare >= maxFare
+            ? "~₱${fare.toStringAsFixed(0)}. Fares may vary."
+            : "~₱${minFare.toStringAsFixed(0)}–₱${maxFare.toStringAsFixed(0)}. Fares may vary.";
 
-    final distanceAndTime = "~$totalTime min total, ~${(totalWalkM / 1000).toStringAsFixed(1)} km walk.";
+    final distanceAndTime =
+        "~$totalTime min total, ~${(totalWalkM / 1000).toStringAsFixed(1)} km walk.";
 
     final notes = _gtfsNotes(itinerary, boardWalkM: boardWalkM);
 
@@ -198,9 +201,10 @@ class CommuteGuideService {
     final boardSpot = firstTransitLeg.startName;
     final routeLabel = _compactVehicleName(firstTransitLeg.vehicle);
     final finalDrop = lastTransitLeg?.endName ?? destinationName;
-    final walkPrefix = boardWalkM >= 120
-        ? "Walk to $boardSpot (~${boardWalkM.round()} m), "
-        : "Board at $boardSpot, ";
+    final walkPrefix =
+        boardWalkM >= 120
+            ? "Walk to $boardSpot (~${boardWalkM.round()} m), "
+            : "Board at $boardSpot, ";
     return "${walkPrefix}ride $routeLabel bound for ${_formatBoardingTarget(finalDrop)}. Alight near $destinationName.";
   }
 
@@ -250,12 +254,16 @@ class CommuteGuideService {
   String _gtfsNotes(PlannerItinerary itinerary, {required double boardWalkM}) {
     final parts = <String>["Fares may vary. Have exact change when possible."];
     if (boardWalkM >= 300) {
-      parts.add(" You may walk to save money if the weather and road conditions are safe.");
+      parts.add(
+        " You may walk to save money if the weather and road conditions are safe.",
+      );
     }
     if (itinerary.transfers > 0) {
       parts.insert(0, "${itinerary.transfers} transfer(s). ");
     }
-    final hasLowConfidence = itinerary.legs.any((l) => l.confidence == TransitConfidence.low);
+    final hasLowConfidence = itinerary.legs.any(
+      (l) => l.confidence == TransitConfidence.low,
+    );
     if (hasLowConfidence) {
       parts.add(" Route data may be incomplete.");
     }
@@ -281,15 +289,27 @@ class CommuteGuideService {
       destName: destName,
     );
 
-    final whatToTake = _heuristicWhatToTake(destName, distanceKm, vehicle, isLongDistance);
+    final whatToTake = _heuristicWhatToTake(
+      destName,
+      distanceKm,
+      vehicle,
+      isLongDistance,
+    );
 
-    final estimatedFareText = _heuristicFareText(distanceKm, vehicle, hasFare, isLongDistance);
+    final estimatedFareText = _heuristicFareText(
+      distanceKm,
+      vehicle,
+      hasFare,
+      isLongDistance,
+    );
 
-    final distanceAndTime = "About ${state.formattedDistance} to go, ~${state.formattedEta}.";
+    final distanceAndTime =
+        "About ${state.formattedDistance} to go, ~${state.formattedEta}.";
 
-    final notes = nearestStop != null
-      ? "Fares may vary. Have exact change when possible. You may walk to ${nearestStop.name} to save money."
-      : "Fares may vary. Have exact change when possible. You may walk to save money when the route is safe.";
+    final notes =
+        nearestStop != null
+            ? "Fares may vary. Have exact change when possible. You may walk to ${nearestStop.name} to save money."
+            : "Fares may vary. Have exact change when possible. You may walk to save money when the route is safe.";
 
     /// * Quality high only when non-PT or we have route-grounded evidence; a random nearby OSM stop is not high-confidence.
     final qualityHigh = !isPt || (nearestStop != null && !isLongDistance);

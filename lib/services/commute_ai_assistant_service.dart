@@ -33,11 +33,13 @@ class CommuteGuideAugmentation {
 class CommuteAiAssistantService {
   CommuteAiAssistantService._();
 
-  static final CommuteAiAssistantService _instance = CommuteAiAssistantService._();
+  static final CommuteAiAssistantService _instance =
+      CommuteAiAssistantService._();
   static CommuteAiAssistantService get instance => _instance;
 
   static const String _modelName = "gemini-2.5-flash";
-  static const String _baseUrl = "https://generativelanguage.googleapis.com/v1beta";
+  static const String _baseUrl =
+      "https://generativelanguage.googleapis.com/v1beta";
   static const Duration _timeout = Duration(seconds: 15);
 
   /// * Circuit breaker: skip AI for this duration after [failureThreshold] consecutive failures.
@@ -67,7 +69,11 @@ class CommuteAiAssistantService {
     double? destinationLat,
     double? destinationLon,
   }) async {
-    final cacheKey = _normalizeCacheKey(destinationName, vehicleType, distanceKm);
+    final cacheKey = _normalizeCacheKey(
+      destinationName,
+      vehicleType,
+      distanceKm,
+    );
 
     final l1 = await AppPreferencesService().getCommuteAiCacheEntry(cacheKey);
     if (l1 != null) {
@@ -90,19 +96,26 @@ class CommuteAiAssistantService {
 
     final apiKey = Env.geminiApiKey;
     if (apiKey.isEmpty) {
-      if (kDebugMode) debugPrint("[CommuteAiAssistant] GEMINI_API_KEY not set; skipping AI.");
+      if (kDebugMode)
+        debugPrint("[CommuteAiAssistant] GEMINI_API_KEY not set; skipping AI.");
       return null;
     }
     if (kDebugMode && apiKey.length >= 4) {
-      debugPrint("[CommuteAiAssistant] GEMINI_API_KEY present (${apiKey.substring(0, 4)}...); using AI.");
+      debugPrint(
+        "[CommuteAiAssistant] GEMINI_API_KEY present (${apiKey.substring(0, 4)}...); using AI.",
+      );
     }
 
     if (_isCircuitOpen()) {
-      if (kDebugMode) debugPrint("[CommuteAiAssistant] Circuit open; skipping AI.");
+      if (kDebugMode)
+        debugPrint("[CommuteAiAssistant] Circuit open; skipping AI.");
       return null;
     }
     if (_isKeyInFailureCooldown(cacheKey)) {
-      if (kDebugMode) debugPrint("[CommuteAiAssistant] Recent failure for this guide key; skipping to avoid spam.");
+      if (kDebugMode)
+        debugPrint(
+          "[CommuteAiAssistant] Recent failure for this guide key; skipping to avoid spam.",
+        );
       return null;
     }
 
@@ -120,18 +133,21 @@ class CommuteAiAssistantService {
     );
 
     try {
-      final dio = Dio(BaseOptions(connectTimeout: _timeout, receiveTimeout: _timeout));
+      final dio = Dio(
+        BaseOptions(connectTimeout: _timeout, receiveTimeout: _timeout),
+      );
       final url = "$_baseUrl/models/$_modelName:generateContent?key=$apiKey";
       final response = await dio.post(
         url,
         data: {
           "contents": [
-            {"parts": [{"text": prompt}]}
+            {
+              "parts": [
+                {"text": prompt},
+              ],
+            },
           ],
-          "generationConfig": {
-            "maxOutputTokens": 512,
-            "temperature": 0.3,
-          },
+          "generationConfig": {"maxOutputTokens": 512, "temperature": 0.3},
         },
         options: Options(
           headers: {"Content-Type": "application/json"},
@@ -145,8 +161,11 @@ class CommuteAiAssistantService {
         _recordKeyFailure(cacheKey);
         if (kDebugMode) {
           final body = response.data;
-          final bodyStr = body is Map ? body.toString() : (body?.toString() ?? "null");
-          debugPrint("[CommuteAiAssistant] API error: status=${response.statusCode} body=$bodyStr");
+          final bodyStr =
+              body is Map ? body.toString() : (body?.toString() ?? "null");
+          debugPrint(
+            "[CommuteAiAssistant] API error: status=${response.statusCode} body=$bodyStr",
+          );
         }
         final code = response.statusCode;
         if (code != null && code >= 400 && code < 500) {
@@ -162,7 +181,9 @@ class CommuteAiAssistantService {
         return null;
       }
 
-      final content = (candidates.first as Map<String, dynamic>)["content"] as Map<String, dynamic>?;
+      final content =
+          (candidates.first as Map<String, dynamic>)["content"]
+              as Map<String, dynamic>?;
       final parts = content?["parts"] as List<dynamic>?;
       if (parts == null || parts.isEmpty) {
         _recordFailure();
@@ -176,17 +197,25 @@ class CommuteAiAssistantService {
       }
 
       if (kDebugMode) {
-        debugPrint("[CommuteAiAssistant] Raw AI response (${text.length} chars): ${text.length > 300 ? "${text.substring(0, 300)}…" : text}");
+        debugPrint(
+          "[CommuteAiAssistant] Raw AI response (${text.length} chars): ${text.length > 300 ? "${text.substring(0, 300)}…" : text}",
+        );
       }
 
       final aug = _parseAugmentation(text);
       if (aug != null && !aug.isEmpty) {
         if (kDebugMode) {
-          debugPrint("[CommuteAiAssistant] AI augmentation applied — board=${aug.whereToBoard?.substring(0, (aug.whereToBoard?.length ?? 0).clamp(0, 60))}");
+          debugPrint(
+            "[CommuteAiAssistant] AI augmentation applied — board=${aug.whereToBoard?.substring(0, (aug.whereToBoard?.length ?? 0).clamp(0, 60))}",
+          );
         }
         _consecutiveFailures = 0;
         final payload = _augmentationToPayload(aug);
-        await SupabaseService().upsertCommuteAiCache(cacheKey, payload, ttlMinutes: _cacheTtlMinutes);
+        await SupabaseService().upsertCommuteAiCache(
+          cacheKey,
+          payload,
+          ttlMinutes: _cacheTtlMinutes,
+        );
         await AppPreferencesService().setCommuteAiCacheEntry(
           cacheKey,
           payload,
@@ -195,7 +224,9 @@ class CommuteAiAssistantService {
         return aug;
       }
       if (kDebugMode) {
-        debugPrint("[CommuteAiAssistant] AI returned 200 but augmentation was empty or unparseable.");
+        debugPrint(
+          "[CommuteAiAssistant] AI returned 200 but augmentation was empty or unparseable.",
+        );
       }
       return null;
     } on DioException catch (e) {
@@ -204,8 +235,11 @@ class CommuteAiAssistantService {
       if (kDebugMode) {
         final status = e.response?.statusCode;
         final data = e.response?.data;
-        final dataStr = data is Map ? data.toString() : (data?.toString() ?? "null");
-        debugPrint("[CommuteAiAssistant] DioException: status=$status response.data=$dataStr message=${e.message}");
+        final dataStr =
+            data is Map ? data.toString() : (data?.toString() ?? "null");
+        debugPrint(
+          "[CommuteAiAssistant] DioException: status=$status response.data=$dataStr message=${e.message}",
+        );
       }
       final status = e.response?.statusCode;
       if (status != null && status >= 400 && status < 500) {
@@ -234,9 +268,23 @@ class CommuteAiAssistantService {
     _keyFailureUntil[cacheKey] = DateTime.now().add(_keyFailureCooldown);
   }
 
-  String _normalizeCacheKey(String destinationName, VehicleType vehicleType, double distanceKm) {
-    final dest = destinationName.trim().toLowerCase().replaceAll(RegExp(r"\s+"), " ");
-    final band = distanceKm < 10 ? "0_10" : distanceKm < 25 ? "10_25" : distanceKm < 50 ? "25_50" : "50_";
+  String _normalizeCacheKey(
+    String destinationName,
+    VehicleType vehicleType,
+    double distanceKm,
+  ) {
+    final dest = destinationName.trim().toLowerCase().replaceAll(
+      RegExp(r"\s+"),
+      " ",
+    );
+    final band =
+        distanceKm < 10
+            ? "0_10"
+            : distanceKm < 25
+            ? "10_25"
+            : distanceKm < 50
+            ? "25_50"
+            : "50_";
     return "dest:${dest.isEmpty ? "unknown" : dest}:vehicle:${vehicleType.name}:band:$band";
   }
 
@@ -248,7 +296,9 @@ class CommuteAiAssistantService {
     };
   }
 
-  CommuteGuideAugmentation? _payloadToAugmentation(Map<String, dynamic> payload) {
+  CommuteGuideAugmentation? _payloadToAugmentation(
+    Map<String, dynamic> payload,
+  ) {
     try {
       return CommuteGuideAugmentation(
         whereToBoard: payload["whereToBoard"] as String?,
@@ -276,7 +326,9 @@ class CommuteAiAssistantService {
     if (_consecutiveFailures >= failureThreshold) {
       _circuitOpenUntil = DateTime.now().add(_circuitCooldown);
       if (kDebugMode) {
-        debugPrint("[CommuteAiAssistant] Circuit open until $_circuitOpenUntil");
+        debugPrint(
+          "[CommuteAiAssistant] Circuit open until $_circuitOpenUntil",
+        );
       }
     }
   }
@@ -293,15 +345,18 @@ class CommuteAiAssistantService {
     double? destinationLat,
     double? destinationLon,
   }) {
-    const rules = "You are SmartRoad commute assistant for Philippine commuting. "
-      "Give practical and concrete suggestions for where to board and what to take. "
-      "Do not invent exact signboards or exact route numbers if uncertain. "
-      "If uncertain, use likely terminals/transfer strategy and say 'verify with driver/conductor'. ";
-    final context = "Destination: $destinationName. Vehicle: ${vehicleType.label}. Distance: ~${distanceKm.toStringAsFixed(0)} km. "
-      "OriginCoord: ${originLat?.toStringAsFixed(5) ?? "unknown"}, ${originLon?.toStringAsFixed(5) ?? "unknown"}. "
-      "DestinationCoord: ${destinationLat?.toStringAsFixed(5) ?? "unknown"}, ${destinationLon?.toStringAsFixed(5) ?? "unknown"}. ";
-    const output = "Reply with JSON only, no markdown: {\"whereToBoard\":\"...\", \"whatToTake\":\"...\", \"notes\":\"...\"}. "
-      "Keep each field 1-2 short sentences. Include transfer sequence when distance is long. Mention cost-saving walking tip when safe.";
+    const rules =
+        "You are SmartRoad commute assistant for Philippine commuting. "
+        "Give practical and concrete suggestions for where to board and what to take. "
+        "Do not invent exact signboards or exact route numbers if uncertain. "
+        "If uncertain, use likely terminals/transfer strategy and say 'verify with driver/conductor'. ";
+    final context =
+        "Destination: $destinationName. Vehicle: ${vehicleType.label}. Distance: ~${distanceKm.toStringAsFixed(0)} km. "
+        "OriginCoord: ${originLat?.toStringAsFixed(5) ?? "unknown"}, ${originLon?.toStringAsFixed(5) ?? "unknown"}. "
+        "DestinationCoord: ${destinationLat?.toStringAsFixed(5) ?? "unknown"}, ${destinationLon?.toStringAsFixed(5) ?? "unknown"}. ";
+    const output =
+        "Reply with JSON only, no markdown: {\"whereToBoard\":\"...\", \"whatToTake\":\"...\", \"notes\":\"...\"}. "
+        "Keep each field 1-2 short sentences. Include transfer sequence when distance is long. Mention cost-saving walking tip when safe.";
     return "$rules$context Current suggestions: board=\"$currentWhereToBoard\", take=\"$currentWhatToTake\", notes=\"$currentNotes\". $output";
   }
 
@@ -317,8 +372,10 @@ class CommuteAiAssistantService {
       final whatToTake = map["whatToTake"] as String?;
       final notes = map["notes"] as String?;
       return CommuteGuideAugmentation(
-        whereToBoard: whereToBoard?.trim().isEmpty == true ? null : whereToBoard?.trim(),
-        whatToTake: whatToTake?.trim().isEmpty == true ? null : whatToTake?.trim(),
+        whereToBoard:
+            whereToBoard?.trim().isEmpty == true ? null : whereToBoard?.trim(),
+        whatToTake:
+            whatToTake?.trim().isEmpty == true ? null : whatToTake?.trim(),
         notes: notes?.trim().isEmpty == true ? null : notes?.trim(),
       );
     } catch (_) {

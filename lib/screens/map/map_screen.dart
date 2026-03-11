@@ -744,7 +744,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   static const double _knownPlacesMinZoom =
       9.0; // * Show curated places earlier as instant POI fallback
   static const double _dynamicPoisMinZoom =
-    10.0; // * Reduce low-zoom Overpass load while keeping useful context
+      10.0; // * Reduce low-zoom Overpass load while keeping useful context
   static const double _navigationFollowZoom = 16.8;
   static const Duration _navigationCameraThrottle = Duration(milliseconds: 250);
 
@@ -6949,10 +6949,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final isActive = ref.watch(isCommuteActiveProvider);
     final screenWidth = MediaQuery.sizeOf(context).width;
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final left = (_commuteBallLeft ?? _commuteBallDefaultLeft)
-        .clamp(0.0, screenWidth - _commuteBallSize);
-    final bottom = (_commuteBallBottom ?? _commuteBallDefaultBottom)
-        .clamp(80.0, screenHeight - 220.0);
+    final left = (_commuteBallLeft ?? _commuteBallDefaultLeft).clamp(
+      0.0,
+      screenWidth - _commuteBallSize,
+    );
+    final bottom = (_commuteBallBottom ?? _commuteBallDefaultBottom).clamp(
+      80.0,
+      screenHeight - 220.0,
+    );
 
     // * Start 3s dim timer when visible and not dimmed (active or inactive)
     if (!_commuteBallDimmed && _commuteBallDimTimer == null) {
@@ -6982,10 +6986,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       onPanUpdate: (DragUpdateDetails d) {
         onCommuteBallInteraction();
         setState(() {
-          _commuteBallLeft = (_commuteBallLeft ?? _commuteBallDefaultLeft) + d.delta.dx;
-          _commuteBallBottom = (_commuteBallBottom ?? _commuteBallDefaultBottom) - d.delta.dy;
-          _commuteBallLeft = _commuteBallLeft!.clamp(0.0, screenWidth - _commuteBallSize);
-          _commuteBallBottom = _commuteBallBottom!.clamp(80.0, screenHeight - 220.0);
+          _commuteBallLeft =
+              (_commuteBallLeft ?? _commuteBallDefaultLeft) + d.delta.dx;
+          _commuteBallBottom =
+              (_commuteBallBottom ?? _commuteBallDefaultBottom) - d.delta.dy;
+          _commuteBallLeft = _commuteBallLeft!.clamp(
+            0.0,
+            screenWidth - _commuteBallSize,
+          );
+          _commuteBallBottom = _commuteBallBottom!.clamp(
+            80.0,
+            screenHeight - 220.0,
+          );
         });
       },
       child: Tooltip(
@@ -7012,11 +7024,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       ball = Opacity(opacity: 0.45, child: ball);
     }
 
-    return Positioned(
-      left: left,
-      bottom: bottom,
-      child: ball,
-    );
+    return Positioned(left: left, bottom: bottom, child: ball);
   }
 
   Widget _buildCommuteOverlay(BuildContext context) {
@@ -7030,7 +7038,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         children: [
           Positioned(
             left: _commuteBallLeft ?? _commuteBallDefaultLeft,
-            bottom: (_commuteBallBottom ?? _commuteBallDefaultBottom) + _commuteBallSize + 8,
+            bottom:
+                (_commuteBallBottom ?? _commuteBallDefaultBottom) +
+                _commuteBallSize +
+                8,
             child: SizedBox(
               width: 260,
               child: GestureDetector(
@@ -7042,53 +7053,63 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(AppTheme.spacingMD),
                     child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        commuteState.isActive
-                            ? "Commuting to ${commuteState.destinationName ?? "destination"}"
-                            : "Commute",
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          commuteState.isActive
+                              ? "Commuting to ${commuteState.destinationName ?? "destination"}"
+                              : "Commute",
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: AppTheme.spacingSM),
-                      if (commuteState.isActive) ...[
-                        TextButton.icon(
-                          onPressed: () async {
-                            await ref.read(commuteProvider.notifier).stopCommute();
-                            if (mounted) setState(() => _showCommuteOverlay = false);
-                          },
-                          icon: const Icon(Icons.stop_circle_outlined, size: 20),
-                          label: const Text("Stop commute"),
-                        ),
-                        const SizedBox(height: 4),
-                      ],
-                      TextButton.icon(
-                        onPressed: () {
-                          setState(() => _showCommuteOverlay = false);
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const CommuteModeScreen(),
+                        const SizedBox(height: AppTheme.spacingSM),
+                        if (commuteState.isActive) ...[
+                          TextButton.icon(
+                            onPressed: () async {
+                              await ref
+                                  .read(commuteProvider.notifier)
+                                  .stopCommute();
+                              if (mounted)
+                                setState(() => _showCommuteOverlay = false);
+                            },
+                            icon: const Icon(
+                              Icons.stop_circle_outlined,
+                              size: 20,
                             ),
-                          );
-                        },
-                        icon: Icon(
-                          commuteState.isActive ? Icons.open_in_new : Icons.directions_bus,
-                          size: 20,
+                            label: const Text("Stop commute"),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                        TextButton.icon(
+                          onPressed: () {
+                            setState(() => _showCommuteOverlay = false);
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const CommuteModeScreen(),
+                              ),
+                            );
+                          },
+                          icon: Icon(
+                            commuteState.isActive
+                                ? Icons.open_in_new
+                                : Icons.directions_bus,
+                            size: 20,
+                          ),
+                          label: Text(
+                            commuteState.isActive
+                                ? "Open commute"
+                                : "Start commute",
+                          ),
                         ),
-                        label: Text(
-                          commuteState.isActive ? "Open commute" : "Start commute",
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
         ],
       ),
     );
@@ -9099,27 +9120,28 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     }
                     _openDirections(destination);
                   },
-                  onCommuteToLocation: _selectedPlace!.latitude.isNaN ||
-                          _selectedPlace!.longitude.isNaN
-                      ? null
-                      : () {
-                          final place = _selectedPlace!;
-                          if (mounted) {
-                            setState(() => _selectedPlace = null);
-                          }
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const CommuteModeScreen(),
-                              settings: RouteSettings(
-                                arguments: <String, dynamic>{
-                                  "destinationName": place.name,
-                                  "lat": place.latitude,
-                                  "lon": place.longitude,
-                                },
+                  onCommuteToLocation:
+                      _selectedPlace!.latitude.isNaN ||
+                              _selectedPlace!.longitude.isNaN
+                          ? null
+                          : () {
+                            final place = _selectedPlace!;
+                            if (mounted) {
+                              setState(() => _selectedPlace = null);
+                            }
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const CommuteModeScreen(),
+                                settings: RouteSettings(
+                                  arguments: <String, dynamic>{
+                                    "destinationName": place.name,
+                                    "lat": place.latitude,
+                                    "lon": place.longitude,
+                                  },
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
                   onClose: () {
                     if (mounted) {
                       setState(() => _selectedPlace = null);
@@ -9143,7 +9165,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     final station = _selectedFuelStation!;
                     if (mounted) {
                       setState(() => _selectedFuelStation = null);
-                      ref.read(selectedFuelStationProvider.notifier).clearSelection();
+                      ref
+                          .read(selectedFuelStationProvider.notifier)
+                          .clearSelection();
                     }
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -9161,7 +9185,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   onClose: () {
                     if (mounted) {
                       setState(() => _selectedFuelStation = null);
-                      ref.read(selectedFuelStationProvider.notifier).clearSelection();
+                      ref
+                          .read(selectedFuelStationProvider.notifier)
+                          .clearSelection();
                     }
                   },
                   onUpdatePrices: () {

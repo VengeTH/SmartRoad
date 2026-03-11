@@ -27,4 +27,3 @@ class MapPoi {
 
   LatLng get location => LatLng(latitude, longitude);
 }
-

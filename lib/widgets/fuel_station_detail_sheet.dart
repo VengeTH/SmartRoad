@@ -340,8 +340,13 @@ class _FuelStationDetailSheetState
                                         width: double.infinity,
                                         child: OutlinedButton.icon(
                                           onPressed: widget.onCommuteToLocation,
-                                          icon: const Icon(Icons.directions_bus, size: 18),
-                                          label: const Text("Commute to this location"),
+                                          icon: const Icon(
+                                            Icons.directions_bus,
+                                            size: 18,
+                                          ),
+                                          label: const Text(
+                                            "Commute to this location",
+                                          ),
                                           style: OutlinedButton.styleFrom(
                                             padding: const EdgeInsets.symmetric(
                                               vertical: 10,

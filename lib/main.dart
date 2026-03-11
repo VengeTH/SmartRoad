@@ -37,16 +37,12 @@ void main() async {
     debugPrint("Initialization error: $e");
   }
 
-  runApp(
-    const ProviderScope(
-      child: SmartRoadApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: SmartRoadApp()));
 }
 
 class SmartRoadApp extends ConsumerStatefulWidget {
   const SmartRoadApp({super.key});
-  
+
   @override
   ConsumerState<SmartRoadApp> createState() => _SmartRoadAppState();
 }
@@ -55,7 +51,7 @@ class _SmartRoadAppState extends ConsumerState<SmartRoadApp> {
   bool _showSplash = true;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   Uri? _pendingDeepLink;
-  
+
   @override
   void initState() {
     super.initState();
@@ -103,10 +99,12 @@ class _SmartRoadAppState extends ConsumerState<SmartRoadApp> {
       final segments =
           uri.pathSegments.map((s) => s.trim().toLowerCase()).toList();
 
-      final primary = host.isNotEmpty ? host : (segments.isNotEmpty ? segments[0] : "");
-      final secondary = host.isNotEmpty
-          ? (segments.isNotEmpty ? segments[0] : "")
-          : (segments.length > 1 ? segments[1] : "");
+      final primary =
+          host.isNotEmpty ? host : (segments.isNotEmpty ? segments[0] : "");
+      final secondary =
+          host.isNotEmpty
+              ? (segments.isNotEmpty ? segments[0] : "")
+              : (segments.length > 1 ? segments[1] : "");
 
       if (primary == "map") {
         ref.read(navigationTabProvider.notifier).switchToMap();
@@ -133,11 +131,11 @@ class _SmartRoadAppState extends ConsumerState<SmartRoadApp> {
       }
     });
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
-    
+
     // * Show splash screen first
     if (_showSplash) {
       return MaterialApp(
@@ -148,7 +146,7 @@ class _SmartRoadAppState extends ConsumerState<SmartRoadApp> {
         home: const SplashScreen(),
       );
     }
-    
+
     return MaterialApp(
       title: "SmartRoad",
       theme: AppTheme.darkTheme,
@@ -162,21 +160,27 @@ class _SmartRoadAppState extends ConsumerState<SmartRoadApp> {
             return const LoginScreen();
           }
         },
-        loading: () => const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
-        error: (error, stack) => Scaffold(
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                const SizedBox(height: 16),
-                Text("Error: $error"),
-              ],
+        loading:
+            () => const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
             ),
-          ),
-        ),
+        error:
+            (error, stack) => Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.red,
+                    ),
+                    const SizedBox(height: 16),
+                    Text("Error: $error"),
+                  ],
+                ),
+              ),
+            ),
       ),
       routes: {
         "/login": (context) => const LoginScreen(),

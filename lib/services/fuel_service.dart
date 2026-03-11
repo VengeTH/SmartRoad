@@ -155,15 +155,16 @@ class FuelService {
     );
 
     final radiusMeters = radiusKm * 1000.0;
-    final filtered = stations.where((s) {
-      final distM = FuelUtils.calculateDistance(
-        lat,
-        lon,
-        s.latitude,
-        s.longitude,
-      );
-      return distM <= radiusMeters;
-    }).toList();
+    final filtered =
+        stations.where((s) {
+          final distM = FuelUtils.calculateDistance(
+            lat,
+            lon,
+            s.latitude,
+            s.longitude,
+          );
+          return distM <= radiusMeters;
+        }).toList();
 
     return filtered;
   }
@@ -308,7 +309,10 @@ class FuelService {
   ) {
     final map = <String, List<FuelStation>>{};
     for (final s in stations) {
-      final key = (s.region ?? s.province).trim().isEmpty ? "Unknown" : (s.region ?? s.province);
+      final key =
+          (s.region ?? s.province).trim().isEmpty
+              ? "Unknown"
+              : (s.region ?? s.province);
       map.putIfAbsent(key, () => []).add(s);
     }
     return map;
@@ -1132,7 +1136,11 @@ class FuelService {
 
     final queryRadiusKm = math.max(radiusKm, 30.0);
 
-    final bounds = _boundsForRadius(lat: lat, lon: lon, radiusKm: queryRadiusKm);
+    final bounds = _boundsForRadius(
+      lat: lat,
+      lon: lon,
+      radiusKm: queryRadiusKm,
+    );
     final pois = await OverpassPoiService().fetchFuelInBounds(
       bounds: bounds,
       limit: queryRadiusKm <= 10 ? 90 : 160,
@@ -1266,13 +1274,15 @@ class FuelService {
     final asOf = DateTime.now();
     final defaults = RegionalFuelDefaults.getDefaultPricesForStation('', null);
 
-    final templates = <({
-      String name,
-      String brand,
-      String address,
-      double latOffset,
-      double lonOffset,
-    })>[
+    final templates = <
+      ({
+        String name,
+        String brand,
+        String address,
+        double latOffset,
+        double lonOffset,
+      })
+    >[
       (
         name: 'Shell Nearby',
         brand: 'Shell',

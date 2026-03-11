@@ -26,47 +26,47 @@ class CommuteService {
   static final CommuteService _instance = CommuteService._internal();
   factory CommuteService() => _instance;
   CommuteService._internal();
-  
+
   final LocationService _locationService = LocationService();
   final NotificationService _notificationService = NotificationService();
   final EmergencySmsService _emergencySmsService = EmergencySmsService();
   final WeatherService _weatherService = WeatherService();
-  
+
   // * Location stream subscription
   StreamSubscription<Position>? _positionSubscription;
-  
+
   // * State change callback
   void Function(CommuteState)? onStateChanged;
 
   /// * Called when a transit plan is ready (itinerary or null). Notifier sets this to update state.
   void Function(Object? itinerary)? onTransitPlanReady;
-  
+
   // * Current state
   CommuteState _state = const CommuteState();
   CommuteState get state => _state;
-  
+
   // * Alarm repeat timer
   Timer? _alarmRepeatTimer;
-  
+
   // * Multi-stage alarm timers
   Timer? _stage1Timer;
   Timer? _stage2Timer;
   Timer? _stage3Timer;
-  
+
   // * Weather refresh timer
   Timer? _weatherRefreshTimer;
-  
+
   // * Average speed tracking for ETA calculation
   final List<double> _recentSpeeds = [];
   static const int _maxSpeedSamples = 10;
   // * _defaultSpeedKmh is now derived from vehicle type, see _estimateEta()
-  
+
   /// * Initialize the commute service
   Future<void> initialize() async {
     await _notificationService.initialize();
     debugPrint("[CommuteService] OK: Initialized (v2 with enhanced features)");
   }
-  
+
   /// * Start commute tracking
   Future<bool> startCommute({
     required LatLng destination,
@@ -75,14 +75,14 @@ class CommuteService {
   }) async {
     try {
       debugPrint("[CommuteService] Starting commute to: $destinationName");
-      
+
       // * Check location permission
       final hasPermission = await _locationService.requestPermission();
       if (!hasPermission) {
         debugPrint("[CommuteService] ERROR: Location permission denied");
         return false;
       }
-      
+
       // * Get initial position; on web/demo use fallback when location is unavailable
       final initialPosition = await _locationService.getCurrentPosition();
       final LatLng currentLocation;
@@ -132,35 +132,32 @@ class CommuteService {
         currentSpeedMs: speedMs,
         isLowPowerActive: commuteSettings.ultraLowPowerMode,
       );
-      
+
       _notifyStateChanged();
 
       // * Fetch initial weather data (non-blocking)
       _fetchAndUpdateWeather(currentLocation);
-      
+
       // * Fetch traffic light count along route (non-blocking)
       if (_state.destination != null) {
         _fetchTrafficLightCount(currentLocation, _state.destination!);
       }
-      
+
       // * Start periodic weather refresh every 10 minutes
       _weatherRefreshTimer?.cancel();
-      _weatherRefreshTimer = Timer.periodic(
-        const Duration(minutes: 10),
-        (_) {
-          if (_state.currentPosition != null) {
-            _fetchAndUpdateWeather(_state.currentPosition!);
-          }
-        },
-      );
-      
+      _weatherRefreshTimer = Timer.periodic(const Duration(minutes: 10), (_) {
+        if (_state.currentPosition != null) {
+          _fetchAndUpdateWeather(_state.currentPosition!);
+        }
+      });
+
       // * Show foreground notification for background tracking
       await _notificationService.showCommuteTrackingNotification(
         destinationName: destinationName,
         distanceText: _state.formattedDistance,
         etaText: _state.formattedEta,
       );
-      
+
       // * Start location stream
       _startLocationStream();
 
@@ -171,9 +168,13 @@ class CommuteService {
           destination: destination,
         ),
       );
-      
-      debugPrint("[CommuteService] OK: Commute started: ${initialDistance.round()}m to destination");
-      debugPrint("[CommuteService] Smart alarm: ${_state.smartAlarmDistanceMeters.round()}m, Multi-stage: ${commuteSettings.useMultiStageAlarm}");
+
+      debugPrint(
+        "[CommuteService] OK: Commute started: ${initialDistance.round()}m to destination",
+      );
+      debugPrint(
+        "[CommuteService] Smart alarm: ${_state.smartAlarmDistanceMeters.round()}m, Multi-stage: ${commuteSettings.useMultiStageAlarm}",
+      );
       return true;
     } catch (e) {
       debugPrint("[CommuteService] ERROR: Error starting commute: $e");
@@ -196,8 +197,8 @@ class CommuteService {
       );
       final topItinerary =
           planResult.itineraries != null && planResult.itineraries!.isNotEmpty
-          ? planResult.itineraries!.first
-          : null;
+              ? planResult.itineraries!.first
+              : null;
       _printPlanDebug(
         fromLat: currentLocation.latitude,
         fromLon: currentLocation.longitude,
@@ -218,35 +219,35 @@ class CommuteService {
       onTransitPlanReady?.call(null);
     }
   }
-  
+
   /// * Stop commute tracking
   Future<void> stopCommute() async {
     debugPrint("[CommuteService] Stopping commute");
-    
+
     // * Cancel location subscription
     await _positionSubscription?.cancel();
     _positionSubscription = null;
-    
+
     // * Cancel weather refresh timer
     _weatherRefreshTimer?.cancel();
     _weatherRefreshTimer = null;
-    
+
     // * Cancel all alarm timers
     _cancelAllAlarmTimers();
-    
+
     // * Clear speed samples
     _recentSpeeds.clear();
-    
+
     // * Cancel notifications
     await _notificationService.cancelCommuteNotifications();
-    
+
     // * Reset state
     _state = _state.reset();
     _notifyStateChanged();
-    
+
     debugPrint("[CommuteService] OK: Commute stopped");
   }
-  
+
   void _printPlanDebug({
     required double fromLat,
     required double fromLon,
@@ -261,7 +262,9 @@ class CommuteService {
     if (itinerary != null) {
       debugPrint("Total travel time: ${itinerary.totalTimeMin} minutes");
       debugPrint("Transfers: ${itinerary.transfers}");
-      debugPrint("Estimated fare: ₱${itinerary.fareEstimatePhp.toStringAsFixed(0)}");
+      debugPrint(
+        "Estimated fare: ₱${itinerary.fareEstimatePhp.toStringAsFixed(0)}",
+      );
       for (var i = 0; i < itinerary.legs.length; i++) {
         final leg = itinerary.legs[i];
         final dest = leg.endName;
@@ -272,7 +275,9 @@ class CommuteService {
         }
       }
     } else {
-      debugPrint("No itinerary (${planResult.error ?? planResult.fallback ?? "no result"})");
+      debugPrint(
+        "No itinerary (${planResult.error ?? planResult.fallback ?? "no result"})",
+      );
     }
   }
 
@@ -287,28 +292,28 @@ class CommuteService {
     _stage3Timer?.cancel();
     _stage3Timer = null;
   }
-  
+
   /// * Dismiss the alarm
   void dismissAlarm() {
     debugPrint("[CommuteService] Alarm dismissed by user");
-    
+
     _cancelAllAlarmTimers();
-    
+
     _state = _state.copyWith(
       alarmDismissed: true,
       alarmStage: AlarmStage.none,
       alarmSoundPlaying: false,
     );
     _notifyStateChanged();
-    
+
     _notificationService.cancelCommuteAlarm();
     _notificationService.cancelLagpasAlert();
   }
-  
+
   /// * Dismiss safety alert (user confirmed safe)
   void dismissSafetyAlert() {
     debugPrint("[CommuteService] OK: Safety alert dismissed - user is safe");
-    
+
     _state = _state.copyWith(
       safetyAlertTriggered: false,
       status: CommuteStatus.active,
@@ -318,7 +323,7 @@ class CommuteService {
     );
     _notifyStateChanged();
   }
-  
+
   /// * Send safety alert to emergency contacts
   Future<void> sendSafetyAlert() async {
     final safetySettings = _state.settings.safetySettings;
@@ -326,59 +331,59 @@ class CommuteService {
       debugPrint("[CommuteService] WARNING: No emergency contacts configured");
       return;
     }
-    
+
     if (_state.currentPosition == null) {
       debugPrint("[CommuteService] WARNING: No current position available");
       return;
     }
-    
+
     debugPrint("[CommuteService] Sending safety alert SMS...");
-    
+
     await _emergencySmsService.sendEmergencyAlert(
       contacts: safetySettings.emergencyContacts,
       latitude: _state.currentPosition!.latitude,
       longitude: _state.currentPosition!.longitude,
       destinationName: _state.destinationName ?? "Unknown",
     );
-    
+
     _state = _state.copyWith(
       lastSafetySmsAt: DateTime.now(),
       lastAlertTriggeredAt: DateTime.now(),
     );
     _notifyStateChanged();
   }
-  
+
   /// * Manually trigger SOS (immediate send)
   Future<void> triggerManualSOS() async {
     debugPrint("[CommuteService] ALERT: MANUAL SOS TRIGGERED!");
-    
+
     HapticFeedback.heavyImpact();
-    
+
     // * Send immediately without grace period
     await sendSafetyAlert();
   }
-  
+
   /// * Update commute settings
   void updateSettings(CommuteSettings settings) {
     _state = _state.copyWith(
       settings: settings,
       isLowPowerActive: settings.ultraLowPowerMode,
     );
-    
+
     // * Restart location stream with new settings if active
     if (_state.isActive) {
       _startLocationStream();
     }
-    
+
     _notifyStateChanged();
   }
-  
+
   /// * Start listening to location updates
   void _startLocationStream() {
     _positionSubscription?.cancel();
-    
+
     final locationSettings = _getLocationSettings();
-    
+
     _positionSubscription = Geolocator.getPositionStream(
       locationSettings: locationSettings,
     ).listen(
@@ -387,17 +392,21 @@ class CommuteService {
         debugPrint("[CommuteService] ERROR: Location stream error: $e");
       },
     );
-    
-    debugPrint("[CommuteService] Location stream started (low power: ${_state.isLowPowerActive})");
+
+    debugPrint(
+      "[CommuteService] Location stream started (low power: ${_state.isLowPowerActive})",
+    );
   }
-  
+
   /// * Get location settings based on power mode
   LocationSettings _getLocationSettings() {
     if (_state.settings.ultraLowPowerMode) {
       return LocationSettings(
         accuracy: LocationAccuracy.low,
         distanceFilter: 50, // * Update every 50 meters
-        timeLimit: Duration(seconds: _state.settings.lowPowerGpsIntervalSeconds),
+        timeLimit: Duration(
+          seconds: _state.settings.lowPowerGpsIntervalSeconds,
+        ),
       );
     }
     return const LocationSettings(
@@ -405,18 +414,18 @@ class CommuteService {
       distanceFilter: 10, // * Update every 10 meters
     );
   }
-  
+
   /// * Handle position updates
   void _onPositionUpdate(Position position) {
     if (_state.status == CommuteStatus.idle) return;
     if (_state.destination == null) return;
-    
+
     final currentLocation = LatLng(position.latitude, position.longitude);
     final destination = _state.destination!;
-    
+
     // * Calculate distance to destination
     final distance = _calculateDistanceMeters(currentLocation, destination);
-    
+
     // * Track speed for ETA calculation and smart alarm
     double? currentSpeed;
     if (position.speed > 0) {
@@ -429,24 +438,25 @@ class CommuteService {
         _recentSpeeds.removeAt(0);
       }
     }
-    
+
     // * Calculate ETA
     final eta = _estimateEta(distance);
-    
+
     // * Track minimum distance for lagpas-baba detection
     final minDistance = _state.minDistanceReached ?? distance;
     final newMinDistance = distance < minDistance ? distance : minDistance;
-    
+
     // * Check off-route distance for safety feature
     double? offRouteDistance;
     double? deviationAngle;
-    if (_state.settings.safetySettings.enabled && _state.startPosition != null) {
+    if (_state.settings.safetySettings.enabled &&
+        _state.startPosition != null) {
       offRouteDistance = _calculateOffRouteDistance(
         currentLocation,
         _state.startPosition!,
         destination,
       );
-      
+
       // * Calculate deviation angle if we have previous position
       if (_state.previousPosition != null) {
         deviationAngle = _calculateDeviationAngle(
@@ -456,25 +466,26 @@ class CommuteService {
         );
       }
     }
-    
+
     // * Update state
     _state = _state.copyWith(
       distanceToDestinationMeters: distance,
       etaToDestination: eta,
       currentPosition: currentLocation,
-      previousPosition: _state.currentPosition, // * Store previous for direction calc
+      previousPosition:
+          _state.currentPosition, // * Store previous for direction calc
       minDistanceReached: newMinDistance,
       offRouteDistanceKm: offRouteDistance,
       currentSpeedMs: currentSpeed,
       deviationAngleDegrees: deviationAngle,
     );
-    
+
     // * Check for status changes
     _checkAndUpdateStatus(distance, newMinDistance);
-    
+
     // * Check for off-route safety alert
     _checkSafetyAlert(offRouteDistance);
-    
+
     // * Update foreground notification
     if (_state.isActive && _state.status != CommuteStatus.danger) {
       _notificationService.updateCommuteTrackingNotification(
@@ -483,10 +494,10 @@ class CommuteService {
         etaText: _state.formattedEta,
       );
     }
-    
+
     _notifyStateChanged();
   }
-  
+
   /// * Calculate perpendicular distance from the route line (start -> destination)
   double _calculateOffRouteDistance(
     LatLng currentPosition,
@@ -495,58 +506,61 @@ class CommuteService {
   ) {
     // * Calculate distance from point to line (start -> destination)
     // * Using cross product method
-    
+
     final startToEnd = _calculateDistanceMeters(startPosition, destination);
     if (startToEnd < 100) {
       // * Start and destination are very close, use direct distance
       return _calculateDistanceMeters(currentPosition, destination) / 1000.0;
     }
-    
+
     // * Project current position onto line from start to destination
     // * Simplified: calculate min distance to either endpoint or perpendicular distance
-    
-    final distToStart = _calculateDistanceMeters(currentPosition, startPosition);
+
+    final distToStart = _calculateDistanceMeters(
+      currentPosition,
+      startPosition,
+    );
     final distToEnd = _calculateDistanceMeters(currentPosition, destination);
-    
+
     // * Use cross-product approximation for perpendicular distance
     // * This is a simplified version - for more accuracy, use proper geodesic math
-    
+
     // * Calculate vectors
     final v1Lat = destination.latitude - startPosition.latitude;
     final v1Lon = destination.longitude - startPosition.longitude;
     final v2Lat = currentPosition.latitude - startPosition.latitude;
     final v2Lon = currentPosition.longitude - startPosition.longitude;
-    
+
     // * Cross product magnitude
     final crossProduct = (v1Lat * v2Lon - v1Lon * v2Lat).abs();
-    
+
     // * Line length in degrees
     final lineLength = math.sqrt(v1Lat * v1Lat + v1Lon * v1Lon);
-    
+
     if (lineLength < 0.00001) {
       return distToStart / 1000.0;
     }
-    
+
     // * Perpendicular distance in degrees, convert to km approximately
     final perpDistDeg = crossProduct / lineLength;
     final perpDistKm = perpDistDeg * 111.0; // * ~111 km per degree
-    
+
     // * Check if we're past the endpoints
     final dotProduct = v1Lat * v2Lat + v1Lon * v2Lon;
     if (dotProduct < 0) {
       // * Before start point
       return distToStart / 1000.0;
     }
-    
+
     final lineLengthSq = v1Lat * v1Lat + v1Lon * v1Lon;
     if (dotProduct > lineLengthSq) {
       // * Past end point
       return distToEnd / 1000.0;
     }
-    
+
     return perpDistKm;
   }
-  
+
   /// * Calculate direction deviation from expected route
   double _calculateDeviationAngle(
     LatLng current,
@@ -562,111 +576,127 @@ class CommuteService {
     if (diff > 180) diff = 360 - diff;
     return diff;
   }
-  
+
   /// * Calculate bearing between two points in degrees
   double _calculateBearing(LatLng from, LatLng to) {
     final lat1 = _toRadians(from.latitude);
     final lat2 = _toRadians(to.latitude);
     final dLon = _toRadians(to.longitude - from.longitude);
-    
+
     final y = math.sin(dLon) * math.cos(lat2);
-    final x = math.cos(lat1) * math.sin(lat2) - 
-              math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
-    
+    final x =
+        math.cos(lat1) * math.sin(lat2) -
+        math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+
     var bearing = math.atan2(y, x);
     bearing = bearing * (180 / math.pi);
     bearing = (bearing + 360) % 360;
-    
+
     return bearing;
   }
-  
+
   /// * Check if safety alert should be triggered
   void _checkSafetyAlert(double? offRouteDistanceKm) {
     if (offRouteDistanceKm == null) return;
-    
+
     final safetySettings = _state.settings.safetySettings;
     if (!safetySettings.enabled) return;
-    
+
     // * Check if in cooldown
     if (_state.isInAlertCooldown) {
       debugPrint("[CommuteService] In alert cooldown, skipping check");
       return;
     }
-    
+
     // * Get effective threshold (adjusted for time of day)
     final threshold = _state.effectiveOffRouteThresholdKm;
-    
+
     // * Check if we've exceeded the threshold
     if (offRouteDistanceKm >= threshold) {
       // * First detection - start the sustained timer
       if (_state.offRouteStartedAt == null) {
-        debugPrint("[CommuteService] WARNING: Off-route detected, starting sustained timer...");
+        debugPrint(
+          "[CommuteService] WARNING: Off-route detected, starting sustained timer...",
+        );
         _state = _state.copyWith(offRouteStartedAt: DateTime.now());
         _notifyStateChanged();
         return;
       }
-      
+
       // * Check if sustained (meets time threshold)
       if (!_state.isSustainedOffRoute) {
         // * Not sustained yet, keep waiting
-        final elapsed = DateTime.now().difference(_state.offRouteStartedAt!).inSeconds;
-        debugPrint("[CommuteService] Off-route for ${elapsed}s / ${safetySettings.sustainedOffRouteSeconds}s");
+        final elapsed =
+            DateTime.now().difference(_state.offRouteStartedAt!).inSeconds;
+        debugPrint(
+          "[CommuteService] Off-route for ${elapsed}s / ${safetySettings.sustainedOffRouteSeconds}s",
+        );
         return;
       }
-      
+
       // * Sustained off-route! Trigger alert
       if (!_state.safetyAlertTriggered) {
-        debugPrint("[CommuteService] ALERT: SUSTAINED OFF-ROUTE DETECTED! ${offRouteDistanceKm.toStringAsFixed(1)}km from route");
-        debugPrint("[CommuteService] Night mode: ${_state.isNightMode}, Effective threshold: ${threshold.toStringAsFixed(1)}km");
-        
+        debugPrint(
+          "[CommuteService] ALERT: SUSTAINED OFF-ROUTE DETECTED! ${offRouteDistanceKm.toStringAsFixed(1)}km from route",
+        );
+        debugPrint(
+          "[CommuteService] Night mode: ${_state.isNightMode}, Effective threshold: ${threshold.toStringAsFixed(1)}km",
+        );
+
         _state = _state.copyWith(
           safetyAlertTriggered: true,
           status: CommuteStatus.danger,
           lastAlertTriggeredAt: DateTime.now(),
         );
-        
+
         HapticFeedback.heavyImpact();
-        
+
         // * Auto-send SMS if enabled and cooldown passed
         if (safetySettings.autoSmsEnabled) {
           final lastSms = _state.lastSafetySmsAt;
-          final cooldownPassed = lastSms == null ||
-              DateTime.now().difference(lastSms).inMinutes >= safetySettings.smsCooldownMinutes;
-          
+          final cooldownPassed =
+              lastSms == null ||
+              DateTime.now().difference(lastSms).inMinutes >=
+                  safetySettings.smsCooldownMinutes;
+
           if (cooldownPassed && safetySettings.emergencyContacts.isNotEmpty) {
             // * SMS will be triggered from UI after countdown
-            debugPrint("[CommuteService] Auto-SMS enabled, will trigger from overlay");
+            debugPrint(
+              "[CommuteService] Auto-SMS enabled, will trigger from overlay",
+            );
           }
         }
       }
     } else {
       // * Back on route - reset the off-route timer
       if (_state.offRouteStartedAt != null) {
-        debugPrint("[CommuteService] OK: Back on route, resetting off-route timer");
+        debugPrint(
+          "[CommuteService] OK: Back on route, resetting off-route timer",
+        );
         _state = _state.copyWith(clearOffRouteStartedAt: true);
       }
     }
   }
-  
+
   /// * Check and update commute status based on distance
   void _checkAndUpdateStatus(double distance, double minDistance) {
     // * Skip if we're in danger mode (safety takes priority)
     if (_state.status == CommuteStatus.danger) return;
-    
+
     final settings = _state.settings;
-    
+
     // * Check for lagpas-baba (passed destination)
     // * If we were very close (<100m) and now distance is increasing significantly
     if (minDistance < 100 && distance > minDistance + 50) {
       if (!_state.hasPassedDestination) {
         debugPrint("[CommuteService] WARNING: LAGPAS-BABA detected!");
-        
+
         // * Calculate overshoot distance
         final overshootDistance = distance - minDistance;
-        
+
         // * Generate recovery hint
         final recoveryHint = _generateRecoveryHint();
-        
+
         _state = _state.copyWith(
           status: CommuteStatus.passed,
           hasPassedDestination: true,
@@ -677,7 +707,7 @@ class CommuteService {
         return;
       }
     }
-    
+
     // * Check for arrival (within 50m)
     if (distance < 50) {
       if (_state.status != CommuteStatus.arrived) {
@@ -687,15 +717,17 @@ class CommuteService {
         return;
       }
     }
-    
+
     // * Get effective alarm distance (smart or fixed)
     final alarmDistance = _state.smartAlarmDistanceMeters;
-    
+
     // * Check for approaching (within alarm distance)
     if (distance <= alarmDistance) {
       if (!_state.alarmTriggered) {
-        debugPrint("[CommuteService] ALARM: Approaching destination! (${distance.round()}m <= ${alarmDistance.round()}m)");
-        
+        debugPrint(
+          "[CommuteService] ALARM: Approaching destination! (${distance.round()}m <= ${alarmDistance.round()}m)",
+        );
+
         if (settings.useMultiStageAlarm) {
           _handleMultiStageAlarm(distance);
         } else {
@@ -705,7 +737,7 @@ class CommuteService {
         return;
       }
     }
-    
+
     // * Check time-based backup alarm
     if (settings.useTimeBackupAlarm && _state.etaToDestination != null) {
       if (_state.etaToDestination!.inMinutes <= settings.backupAlarmMinutes) {
@@ -716,42 +748,45 @@ class CommuteService {
         }
       }
     }
-    
+
     // * Multi-stage alarm updates (if already triggered)
     if (_state.alarmTriggered && settings.useMultiStageAlarm) {
       _handleMultiStageAlarm(distance);
     }
   }
-  
+
   /// * Handle multi-stage alarm progression
   void _handleMultiStageAlarm(double distance) {
     final newStage = _determineAlarmStage(distance, _state.currentSpeedMs);
     final currentStage = _state.alarmStage;
-    
+
     // * Only escalate, never de-escalate once started
     if (newStage.index > currentStage.index) {
-      debugPrint("[CommuteService] ALARM: Alarm escalating: $currentStage -> $newStage");
+      debugPrint(
+        "[CommuteService] ALARM: Alarm escalating: $currentStage -> $newStage",
+      );
       _triggerAlarmStage(newStage);
     }
   }
-  
+
   /// * Determine alarm stage based on ETA/distance
   AlarmStage _determineAlarmStage(double distanceMeters, double? speedMs) {
     if (speedMs == null || speedMs <= 0) {
       // * Fallback to distance-based
       if (distanceMeters < 100) return AlarmStage.stage3Loud;
       if (distanceMeters < 250) return AlarmStage.stage2Medium;
-      if (distanceMeters < _state.smartAlarmDistanceMeters) return AlarmStage.stage1Soft;
+      if (distanceMeters < _state.smartAlarmDistanceMeters)
+        return AlarmStage.stage1Soft;
       return AlarmStage.none;
     }
-    
+
     final etaSeconds = distanceMeters / speedMs;
     if (etaSeconds < 30) return AlarmStage.stage3Loud;
     if (etaSeconds < 60) return AlarmStage.stage2Medium;
     if (etaSeconds < 90) return AlarmStage.stage1Soft;
     return AlarmStage.none;
   }
-  
+
   /// * Trigger alarm for specific stage
   void _triggerAlarmStage(AlarmStage stage) {
     _state = _state.copyWith(
@@ -759,7 +794,7 @@ class CommuteService {
       alarmStage: stage,
       status: CommuteStatus.approaching,
     );
-    
+
     switch (stage) {
       case AlarmStage.stage1Soft:
         debugPrint("[CommuteService] ALARM: Stage 1: Soft vibration");
@@ -767,14 +802,15 @@ class CommuteService {
         // * Repeat soft vibration
         _stage1Timer?.cancel();
         _stage1Timer = Timer.periodic(const Duration(seconds: 10), (timer) {
-          if (_state.alarmDismissed || _state.alarmStage != AlarmStage.stage1Soft) {
+          if (_state.alarmDismissed ||
+              _state.alarmStage != AlarmStage.stage1Soft) {
             timer.cancel();
             return;
           }
           HapticFeedback.lightImpact();
         });
         break;
-        
+
       case AlarmStage.stage2Medium:
         debugPrint("[CommuteService] ALARM: Stage 2: Medium vibration + sound");
         _stage1Timer?.cancel();
@@ -786,7 +822,8 @@ class CommuteService {
         // * Repeat medium vibration
         _stage2Timer?.cancel();
         _stage2Timer = Timer.periodic(const Duration(seconds: 8), (timer) {
-          if (_state.alarmDismissed || _state.alarmStage != AlarmStage.stage2Medium) {
+          if (_state.alarmDismissed ||
+              _state.alarmStage != AlarmStage.stage2Medium) {
             timer.cancel();
             return;
           }
@@ -797,7 +834,7 @@ class CommuteService {
           );
         });
         break;
-        
+
       case AlarmStage.stage3Loud:
         debugPrint("[CommuteService] ALARM: Stage 3: LOUD continuous alarm!");
         _stage1Timer?.cancel();
@@ -822,123 +859,119 @@ class CommuteService {
           );
         });
         break;
-        
+
       case AlarmStage.none:
         break;
     }
-    
+
     _notifyStateChanged();
   }
-  
+
   /// * Trigger approaching alarm (legacy single-stage)
   void _triggerApproachingAlarm() {
     _state = _state.copyWith(alarmTriggered: true);
-    
+
     // * Haptic feedback
     if (_state.settings.vibrateOnAlarm) {
       HapticFeedback.heavyImpact();
     }
-    
+
     // * Show alarm notification
     _notificationService.showCommuteAlarm(
       title: "Get Ready!",
       body: "${_state.formattedDistance} to ${_state.destinationName}",
     );
-    
+
     // * Start repeat alarm until dismissed
     _startAlarmRepeat();
   }
-  
+
   /// * Start repeating alarm
   void _startAlarmRepeat() {
     _alarmRepeatTimer?.cancel();
-    
+
     // * Repeat every 15 seconds until dismissed
-    _alarmRepeatTimer = Timer.periodic(
-      const Duration(seconds: 15),
-      (timer) {
-        if (_state.alarmDismissed || !_state.isActive) {
-          timer.cancel();
-          return;
-        }
-        
-        debugPrint("[CommuteService] ALARM: Alarm repeat");
-        
-        if (_state.settings.vibrateOnAlarm) {
-          HapticFeedback.heavyImpact();
-        }
-        
-        _notificationService.showCommuteAlarm(
-          title: "Almost there!",
-          body: "${_state.formattedDistance} to ${_state.destinationName}",
-        );
-      },
-    );
+    _alarmRepeatTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+      if (_state.alarmDismissed || !_state.isActive) {
+        timer.cancel();
+        return;
+      }
+
+      debugPrint("[CommuteService] ALARM: Alarm repeat");
+
+      if (_state.settings.vibrateOnAlarm) {
+        HapticFeedback.heavyImpact();
+      }
+
+      _notificationService.showCommuteAlarm(
+        title: "Almost there!",
+        body: "${_state.formattedDistance} to ${_state.destinationName}",
+      );
+    });
   }
-  
+
   /// * Generate recovery hint for lagpas-baba
   String _generateRecoveryHint() {
     // * Bilingual hint
     return "Bumaba ka sa susunod, tumawid, sakay pabalik\n"
-           "Get off at next stop, cross the street, ride back";
+        "Get off at next stop, cross the street, ride back";
   }
-  
+
   /// * Trigger lagpas-baba alert
   void _triggerLagpasAlert() {
     debugPrint("[CommuteService] ALERT: LAGPAS-BABA ALERT!");
-    
+
     // * Strong haptic feedback
     HapticFeedback.heavyImpact();
-    
+
     // * Show lagpas alert
     _notificationService.showLagpasAlert(
       destinationName: _state.destinationName ?? "your stop",
     );
-    
+
     // * Start aggressive repeat
     _alarmRepeatTimer?.cancel();
-    _alarmRepeatTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (timer) {
-        if (_state.alarmDismissed) {
-          timer.cancel();
-          return;
-        }
-        
-        HapticFeedback.heavyImpact();
-        _notificationService.showLagpasAlert(
-          destinationName: _state.destinationName ?? "your stop",
-        );
-      },
-    );
+    _alarmRepeatTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (_state.alarmDismissed) {
+        timer.cancel();
+        return;
+      }
+
+      HapticFeedback.heavyImpact();
+      _notificationService.showLagpasAlert(
+        destinationName: _state.destinationName ?? "your stop",
+      );
+    });
   }
-  
+
   /// * Trigger arrival notification
   void _triggerArrivalNotification() {
     HapticFeedback.mediumImpact();
-    
+
     _notificationService.showCommuteArrival(
       destinationName: _state.destinationName ?? "your destination",
     );
   }
-  
+
   /// * Calculate distance between two points in meters
   double _calculateDistanceMeters(LatLng from, LatLng to) {
     const double earthRadiusM = 6371000.0;
     final double dLat = _toRadians(to.latitude - from.latitude);
     final double dLon = _toRadians(to.longitude - from.longitude);
-    
-    final double a = 
-      math.sin(dLat / 2) * math.sin(dLat / 2) +
-      math.cos(_toRadians(from.latitude)) * math.cos(_toRadians(to.latitude)) *
-      math.sin(dLon / 2) * math.sin(dLon / 2);
-    
+
+    final double a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_toRadians(from.latitude)) *
+            math.cos(_toRadians(to.latitude)) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
+
     final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
     return earthRadiusM * c;
   }
-  
+
   double _toRadians(double degrees) => degrees * (math.pi / 180.0);
-  
+
   /// * Fetch weather and update state
   Future<void> _fetchAndUpdateWeather(LatLng position) async {
     try {
@@ -946,13 +979,15 @@ class CommuteService {
       if (weather != null && _state.isActive) {
         _state = _state.copyWith(currentWeather: weather);
         _notifyStateChanged();
-        debugPrint("[CommuteService] Weather updated: ${weather.displayName} (${weather.temperature.toStringAsFixed(1)}°C)");
+        debugPrint(
+          "[CommuteService] Weather updated: ${weather.displayName} (${weather.temperature.toStringAsFixed(1)}°C)",
+        );
       }
     } catch (e) {
       debugPrint("[CommuteService] WARNING: Could not fetch weather: $e");
     }
   }
-  
+
   /// * Get weather speed multiplier — only rain affects travel speed
   /// * Sunny, cloudy, and intense heat do NOT slow travel
   double _getWeatherMultiplier(WeatherData? weather) {
@@ -968,63 +1003,74 @@ class CommuteService {
         return 1.0; // * No impact on travel speed
     }
   }
-  
+
   /// * Estimate ETA based on distance, vehicle type, live speed, weather, and traffic lights
   Duration _estimateEta(double distanceMeters) {
     final vehicleType = _state.settings.vehicleType;
     final weather = _state.currentWeather;
     final weatherMultiplier = _getWeatherMultiplier(weather);
     final trafficLights = _state.trafficLightCount ?? 0;
-    
+
     double avgSpeedKmh;
-    
+
     if (_recentSpeeds.isNotEmpty) {
       // * Use live GPS average speed, clamped to vehicle type max
-      avgSpeedKmh = _recentSpeeds.reduce((a, b) => a + b) / _recentSpeeds.length;
+      avgSpeedKmh =
+          _recentSpeeds.reduce((a, b) => a + b) / _recentSpeeds.length;
       // * Clamp: minimum 2 km/h (nearly stopped), max = vehicle type max
       avgSpeedKmh = avgSpeedKmh.clamp(2.0, vehicleType.maxSpeedKmh);
     } else {
       // * No live speed yet — use vehicle type base speed
       avgSpeedKmh = vehicleType.baseSpeedKmh;
     }
-    
+
     // * Apply weather multiplier (only rain affects speed)
     final effectiveSpeedKmh = avgSpeedKmh * weatherMultiplier;
-    
+
     // * Guard against zero speed
     if (effectiveSpeedKmh <= 0) {
       return const Duration(hours: 24); // * Fallback: 24h (should never happen)
     }
-    
+
     final distanceKm = distanceMeters / 1000.0;
     final hours = distanceKm / effectiveSpeedKmh;
     int seconds = (hours * 3600).round();
-    
+
     // * Add traffic light penalty: ~30 seconds per signal
     // * Only count remaining lights proportional to remaining distance
-    if (trafficLights > 0 && _state.distanceToDestinationMeters != null && _state.distanceToDestinationMeters! > 0) {
-      final totalDistance = _state.distanceToDestinationMeters! + distanceMeters; // * approx total
-      final remainingFraction = distanceMeters / totalDistance.clamp(distanceMeters, double.infinity);
+    if (trafficLights > 0 &&
+        _state.distanceToDestinationMeters != null &&
+        _state.distanceToDestinationMeters! > 0) {
+      final totalDistance =
+          _state.distanceToDestinationMeters! +
+          distanceMeters; // * approx total
+      final remainingFraction =
+          distanceMeters / totalDistance.clamp(distanceMeters, double.infinity);
       final remainingLights = (trafficLights * remainingFraction).round();
       seconds += remainingLights * 30; // * 30s per traffic light
-      debugPrint("[CommuteService] Traffic lights: $remainingLights remaining (of $trafficLights total) → +${remainingLights * 30}s");
+      debugPrint(
+        "[CommuteService] Traffic lights: $remainingLights remaining (of $trafficLights total) → +${remainingLights * 30}s",
+      );
     } else if (trafficLights > 0) {
       seconds += trafficLights * 30;
-      debugPrint("[CommuteService] Traffic lights: $trafficLights → +${trafficLights * 30}s");
+      debugPrint(
+        "[CommuteService] Traffic lights: $trafficLights → +${trafficLights * 30}s",
+      );
     }
-    
+
     debugPrint(
       "[CommuteService] ETA calc: ${distanceKm.toStringAsFixed(2)}km "
       "@ ${effectiveSpeedKmh.toStringAsFixed(1)}km/h "
       "(vehicle: ${vehicleType.label}, weather: ×${weatherMultiplier.toStringAsFixed(2)}, "
-      "lights: $trafficLights) = ${seconds}s"
+      "lights: $trafficLights) = ${seconds}s",
     );
-    
+
     return Duration(seconds: seconds);
   }
-  
+
   /// * Max bbox span in degrees to avoid Overpass 400 (query too large).
   static const double _maxBboxSpanDeg = 0.5;
+
   /// * Max nodes to request from Overpass to stay under server limits.
   static const int _maxTrafficLightNodes = 500;
 
@@ -1048,15 +1094,18 @@ class CommuteService {
         minLon = midLon - half;
         maxLon = midLon + half;
       }
-      final query = '[out:json][timeout:10];'
+      final query =
+          '[out:json][timeout:10];'
           'node["highway"="traffic_signals"]($minLat,$minLon,$maxLat,$maxLon);'
           'out $_maxTrafficLightNodes;';
       final url = Uri.parse('https://overpass-api.de/api/interpreter');
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'data=${Uri.encodeComponent(query)}',
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'data=${Uri.encodeComponent(query)}',
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -1068,14 +1117,17 @@ class CommuteService {
         }
       } else {
         if (kDebugMode) {
-          debugPrint('[CommuteService] Overpass traffic lights: status=${response.statusCode} body=${response.body.length > 300 ? response.body.substring(0, 300) + "…" : response.body}');
+          debugPrint(
+            '[CommuteService] Overpass traffic lights: status=${response.statusCode} body=${response.body.length > 300 ? response.body.substring(0, 300) + "…" : response.body}',
+          );
         }
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('[CommuteService] Traffic lights fetch failed: $e');
+      if (kDebugMode)
+        debugPrint('[CommuteService] Traffic lights fetch failed: $e');
     }
   }
-  
+
   /// * Notify listeners of state change
   void _notifyStateChanged() {
     onStateChanged?.call(_state);

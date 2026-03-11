@@ -7,7 +7,9 @@ import "../services/commute_guide_service.dart";
 import "../services/commute_service.dart";
 
 /// * Commute mode state provider
-final commuteProvider = StateNotifierProvider<CommuteNotifier, CommuteState>((ref) {
+final commuteProvider = StateNotifierProvider<CommuteNotifier, CommuteState>((
+  ref,
+) {
   return CommuteNotifier();
 });
 
@@ -123,13 +125,13 @@ class CommuteNotifier extends StateNotifier<CommuteState> {
   CommuteNotifier() : super(const CommuteState()) {
     _initialize();
   }
-  
+
   final CommuteService _service = CommuteService();
-  
+
   /// * Initialize the service and wire up state updates
   Future<void> _initialize() async {
     await _service.initialize();
-    
+
     _service.onStateChanged = (newState) {
       state = newState;
     };
@@ -137,7 +139,7 @@ class CommuteNotifier extends StateNotifier<CommuteState> {
       state = state.copyWith(transitItinerary: itinerary);
     };
   }
-  
+
   /// * Start commute tracking
   Future<bool> startCommute({
     required LatLng destination,
@@ -149,127 +151,131 @@ class CommuteNotifier extends StateNotifier<CommuteState> {
       destinationName: destinationName,
       settings: settings ?? state.settings,
     );
-    
+
     return success;
   }
-  
+
   /// * Stop commute tracking
   Future<void> stopCommute() async {
     await _service.stopCommute();
   }
-  
+
   /// * Dismiss the current alarm
   void dismissAlarm() {
     _service.dismissAlarm();
   }
-  
+
   /// * Dismiss safety alert
   void dismissSafetyAlert() {
     _service.dismissSafetyAlert();
   }
-  
+
   /// * Send safety alert to emergency contacts
   Future<void> sendSafetyAlert() async {
     await _service.sendSafetyAlert();
   }
-  
+
   /// * Trigger manual SOS (immediate send)
   Future<void> triggerManualSOS() async {
     await _service.triggerManualSOS();
   }
-  
+
   /// * Update commute settings
   void updateSettings(CommuteSettings settings) {
     _service.updateSettings(settings);
     state = state.copyWith(settings: settings);
   }
-  
+
   /// * Update safety settings
   void updateSafetySettings(SafetySettings safetySettings) {
     final newSettings = state.settings.copyWith(safetySettings: safetySettings);
     updateSettings(newSettings);
   }
-  
+
   /// * Update alarm distance setting
   void setAlarmDistance(int meters) {
     final newSettings = state.settings.copyWith(alarmDistanceMeters: meters);
     updateSettings(newSettings);
   }
-  
+
   /// * Toggle time-based backup alarm
   void setUseTimeBackupAlarm(bool enabled) {
     final newSettings = state.settings.copyWith(useTimeBackupAlarm: enabled);
     updateSettings(newSettings);
   }
-  
+
   /// * Set backup alarm time
   void setBackupAlarmMinutes(int minutes) {
     final newSettings = state.settings.copyWith(backupAlarmMinutes: minutes);
     updateSettings(newSettings);
   }
-  
+
   /// * Toggle vibration on alarm
   void setVibrateOnAlarm(bool enabled) {
     final newSettings = state.settings.copyWith(vibrateOnAlarm: enabled);
     updateSettings(newSettings);
   }
-  
+
   /// * Toggle sound on alarm
   void setPlaySoundOnAlarm(bool enabled) {
     final newSettings = state.settings.copyWith(playSoundOnAlarm: enabled);
     updateSettings(newSettings);
   }
-  
+
   // * NEW: Smart Alarm Buffer settings
-  
+
   /// * Toggle smart alarm buffer
   void setUseSmartAlarmBuffer(bool enabled) {
     final newSettings = state.settings.copyWith(useSmartAlarmBuffer: enabled);
     updateSettings(newSettings);
   }
-  
+
   /// * Set minimum seconds before alarm
   void setMinSecondsBeforeAlarm(int seconds) {
     final newSettings = state.settings.copyWith(minSecondsBeforeAlarm: seconds);
     updateSettings(newSettings);
   }
-  
+
   /// * Set maximum seconds before alarm
   void setMaxSecondsBeforeAlarm(int seconds) {
     final newSettings = state.settings.copyWith(maxSecondsBeforeAlarm: seconds);
     updateSettings(newSettings);
   }
-  
+
   // * NEW: Multi-Stage Alarm settings
-  
+
   /// * Toggle multi-stage alarm
   void setUseMultiStageAlarm(bool enabled) {
     final newSettings = state.settings.copyWith(useMultiStageAlarm: enabled);
     updateSettings(newSettings);
   }
-  
+
   // * NEW: Ultra-Low Power Mode settings
-  
+
   /// * Toggle ultra-low power mode
   void setUltraLowPowerMode(bool enabled) {
     final newSettings = state.settings.copyWith(ultraLowPowerMode: enabled);
     updateSettings(newSettings);
   }
-  
+
   /// * Set GPS interval for low power mode
   void setLowPowerGpsIntervalSeconds(int seconds) {
-    final newSettings = state.settings.copyWith(lowPowerGpsIntervalSeconds: seconds);
+    final newSettings = state.settings.copyWith(
+      lowPowerGpsIntervalSeconds: seconds,
+    );
     updateSettings(newSettings);
   }
-  
+
   /// * Toggle minimize alerts when phone is active
   void setMinimizeAlertsWhenActive(bool enabled) {
-    final newSettings = state.settings.copyWith(minimizeAlertsWhenActive: enabled);
+    final newSettings = state.settings.copyWith(
+      minimizeAlertsWhenActive: enabled,
+    );
     updateSettings(newSettings);
   }
-  
+
   // * NEW: Safety settings helpers
-  
+
   /// * Set grace period seconds
   void setGracePeriodSeconds(int seconds) {
     final newSafetySettings = state.settings.safetySettings.copyWith(
@@ -277,7 +283,7 @@ class CommuteNotifier extends StateNotifier<CommuteState> {
     );
     updateSafetySettings(newSafetySettings);
   }
-  
+
   /// * Set sustained off-route seconds
   void setSustainedOffRouteSeconds(int seconds) {
     final newSafetySettings = state.settings.safetySettings.copyWith(
@@ -285,7 +291,7 @@ class CommuteNotifier extends StateNotifier<CommuteState> {
     );
     updateSafetySettings(newSafetySettings);
   }
-  
+
   /// * Toggle time-of-day sensitivity
   void setUseTimeOfDaySensitivity(bool enabled) {
     final newSafetySettings = state.settings.safetySettings.copyWith(
@@ -293,7 +299,7 @@ class CommuteNotifier extends StateNotifier<CommuteState> {
     );
     updateSafetySettings(newSafetySettings);
   }
-  
+
   /// * Set night mode hours
   void setNightModeHours(int startHour, int endHour) {
     final newSafetySettings = state.settings.safetySettings.copyWith(
@@ -302,7 +308,7 @@ class CommuteNotifier extends StateNotifier<CommuteState> {
     );
     updateSafetySettings(newSafetySettings);
   }
-  
+
   /// * Set night mode threshold multiplier
   void setNightModeThresholdMultiplier(double multiplier) {
     final newSafetySettings = state.settings.safetySettings.copyWith(
@@ -310,7 +316,7 @@ class CommuteNotifier extends StateNotifier<CommuteState> {
     );
     updateSafetySettings(newSafetySettings);
   }
-  
+
   /// * Set alert cooldown minutes
   void setAlertCooldownMinutes(int minutes) {
     final newSafetySettings = state.settings.safetySettings.copyWith(
@@ -318,7 +324,7 @@ class CommuteNotifier extends StateNotifier<CommuteState> {
     );
     updateSafetySettings(newSafetySettings);
   }
-  
+
   /// * Set off-route threshold
   void setOffRouteThresholdKm(double km) {
     final newSafetySettings = state.settings.safetySettings.copyWith(
@@ -326,13 +332,12 @@ class CommuteNotifier extends StateNotifier<CommuteState> {
     );
     updateSafetySettings(newSafetySettings);
   }
-  
+
   // * NEW: Vehicle Type
-  
+
   /// * Set vehicle type for ETA calculation
   void setVehicleType(VehicleType type) {
     final newSettings = state.settings.copyWith(vehicleType: type);
     updateSettings(newSettings);
   }
 }
-

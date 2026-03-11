@@ -5,7 +5,7 @@
 if (-not (Test-Path .env)) {
     Write-Host "⚠️  .env file not found!" -ForegroundColor Yellow
     Write-Host "Creating .env.example template..."
-    
+
     @"
 # Weather API Configuration
 OPENWEATHERMAP_API_KEY=your_openweathermap_api_key_here
@@ -25,7 +25,7 @@ TOMTOM_API_KEY=your_tomtom_api_key_here
 # Gemini AI (sticker verification, commute guide assistant)
 GEMINI_API_KEY=your_gemini_api_key_here
 "@ | Out-File -FilePath .env.example -Encoding utf8
-    
+
     Write-Host "✅ Created .env.example" -ForegroundColor Green
     Write-Host "📝 Copy .env.example to .env and fill in your API keys"
     exit 1

@@ -70,7 +70,10 @@ class _FuelPricesScreenState extends ConsumerState<FuelPricesScreen> {
       (position) {
         if (!mounted) return;
         final hadPosition = _currentPosition != null;
-        final shouldReload = _shouldReloadForPositionUpdate(position, hadPosition);
+        final shouldReload = _shouldReloadForPositionUpdate(
+          position,
+          hadPosition,
+        );
         setState(() {
           _currentPosition = position;
           _isLoadingLocation = false;
@@ -155,7 +158,9 @@ class _FuelPricesScreenState extends ConsumerState<FuelPricesScreen> {
     }
   }
 
-  Future<void> _refinePositionInBackground(LocationService locationService) async {
+  Future<void> _refinePositionInBackground(
+    LocationService locationService,
+  ) async {
     try {
       final precise = await locationService.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
@@ -237,11 +242,9 @@ class _FuelPricesScreenState extends ConsumerState<FuelPricesScreen> {
     // * Defer provider state mutation out of potential widget lifecycle/build stack.
     Future<void>(() {
       if (!mounted) return;
-      ref.read(nearbyFuelStationsProvider.notifier).load(
-        lat: pos.latitude,
-        lon: pos.longitude,
-        radiusKm: _radiusKm,
-      );
+      ref
+          .read(nearbyFuelStationsProvider.notifier)
+          .load(lat: pos.latitude, lon: pos.longitude, radiusKm: _radiusKm);
     });
   }
 
@@ -275,31 +278,28 @@ class _FuelPricesScreenState extends ConsumerState<FuelPricesScreen> {
   }
 
   void _prefetchMissingAddresses(List<FuelStation> stations) {
-    if (kIsWeb) {
-      return;
-    }
-
     final now = DateTime.now();
-    final toLookup = stations
-        .where((s) {
-          final retryAt = _addressRetryNotBefore[s.id];
-          if (retryAt != null && now.isBefore(retryAt)) {
-            return false;
-          }
+    final toLookup =
+        stations
+            .where((s) {
+              final retryAt = _addressRetryNotBefore[s.id];
+              if (retryAt != null && now.isBefore(retryAt)) {
+                return false;
+              }
 
-          final rawAddress = s.addressLine?.trim() ?? '';
-          final overridden = _addressOverrides[s.id]?.trim() ?? '';
-          final effective = overridden.isNotEmpty ? overridden : rawAddress;
+              final rawAddress = s.addressLine?.trim() ?? '';
+              final overridden = _addressOverrides[s.id]?.trim() ?? '';
+              final effective = overridden.isNotEmpty ? overridden : rawAddress;
 
-          final hasAddress = effective.isNotEmpty;
-          final weakAddress = _isWeakAddress(effective, s.name);
+              final hasAddress = effective.isNotEmpty;
+              final weakAddress = _isWeakAddress(effective, s.name);
 
-          if (!hasAddress) return true;
-          if (weakAddress) return true;
-          return !hasAddress;
-        })
-        .take(2)
-        .toList();
+              if (!hasAddress) return true;
+              if (weakAddress) return true;
+              return false;
+            })
+            .take(5)
+            .toList();
 
     for (final station in toLookup) {
       if (_addressLookupsInFlight.contains(station.id)) continue;
@@ -307,14 +307,16 @@ class _FuelPricesScreenState extends ConsumerState<FuelPricesScreen> {
 
       unawaited(() async {
         try {
-          final raw = await _locationSearchService
-              .getAddressFromCoordinates(station.latitude, station.longitude)
-              .timeout(const Duration(seconds: 3));
-          final cleaned = _cleanAddressNoNumbers(raw, station.name);
+          final structured = await _locationSearchService
+              .getStructuredAddressFromCoordinates(
+                station.latitude,
+                station.longitude,
+              )
+              .timeout(const Duration(seconds: 4));
           if (!mounted) return;
-          if (cleaned != null && cleaned.isNotEmpty) {
+          if (structured != null && structured.isNotEmpty) {
             setState(() {
-              _addressOverrides[station.id] = cleaned;
+              _addressOverrides[station.id] = structured;
               _addressRetryNotBefore.remove(station.id);
             });
           }
@@ -336,43 +338,17 @@ class _FuelPricesScreenState extends ConsumerState<FuelPricesScreen> {
     final station = stationName.trim().toLowerCase();
     if (clean == station) return true;
 
-    final parts = clean
-        .split(',')
-        .map((p) => p.trim())
-        .where((p) => p.isNotEmpty)
-        .toList();
-    if (parts.length <= 1) return true;
-
-    final first = parts.first;
-    final hasStreetHint =
-        first.contains('road') ||
-        first.contains('street') ||
-        first.contains('highway') ||
-        first.contains('avenue') ||
-        first.contains('ave') ||
-        first.contains('blvd') ||
-        first.contains('drive') ||
-        first.contains('lane') ||
-        first.contains('st');
-
-    return !hasStreetHint;
+    final parts =
+        clean
+            .split(',')
+            .map((p) => p.trim())
+            .where((p) => p.isNotEmpty)
+            .toList();
+    // Accept any address with at least 2 meaningful parts (e.g. "Barangay, City")
+    return parts.length < 2;
   }
 
-  String? _cleanAddressNoNumbers(String? raw, String stationName) {
-    if (raw == null || raw.trim().isEmpty) return null;
 
-    final parts = raw
-        .split(',')
-        .map((p) => p.trim())
-        .where((p) => p.toLowerCase() != stationName.trim().toLowerCase())
-        .where((p) => p.isNotEmpty)
-        .toList();
-
-    if (parts.isEmpty) return null;
-    if (parts.length == 1) return parts.first;
-    if (parts.length == 2) return '${parts[0]}, ${parts[1]}';
-    return '${parts[0]}, ${parts[1]}, ${parts[2]}';
-  }
 
   void _onRadiusChanged(double newRadius) {
     setState(() => _radiusKm = newRadius);
@@ -614,129 +590,136 @@ class _FuelPricesScreenState extends ConsumerState<FuelPricesScreen> {
           const SizedBox(height: AppTheme.spacingSM),
           // * List
           Expanded(
-            child: (position == null && (_isLoadingLocation || _isRetryingLocation))
-              ? const Center(child: CircularProgressIndicator())
-              : position == null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppTheme.spacingXL),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.location_off,
-                            size: 48,
-                            color: theme.colorScheme.outline,
-                          ),
-                          const SizedBox(height: AppTheme.spacingMD),
-                          Text(
-                            "Unable to get location",
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyLarge,
-                          ),
-                          const SizedBox(height: AppTheme.spacingSM),
-                          Text(
-                            "Check that location is enabled and try refreshing.",
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
-                          ),
-                          const SizedBox(height: AppTheme.spacingMD),
-                          ElevatedButton(
-                            onPressed: _getInitialPosition,
-                            child: const Text("Refresh"),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : stationsAsync.when(
-                  data: (stations) {
-                    final sorted = _sortedStations(stations, position);
-                    _prefetchMissingAddresses(sorted);
-                    if (sorted.isEmpty) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(AppTheme.spacingXL),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.local_gas_station_outlined,
-                                size: 48,
+            child:
+                (position == null &&
+                        (_isLoadingLocation || _isRetryingLocation))
+                    ? const Center(child: CircularProgressIndicator())
+                    : position == null
+                    ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppTheme.spacingXL),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.location_off,
+                              size: 48,
+                              color: theme.colorScheme.outline,
+                            ),
+                            const SizedBox(height: AppTheme.spacingMD),
+                            Text(
+                              "Unable to get location",
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyLarge,
+                            ),
+                            const SizedBox(height: AppTheme.spacingSM),
+                            Text(
+                              "Check that location is enabled and try refreshing.",
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.outline,
                               ),
-                              const SizedBox(height: AppTheme.spacingMD),
-                              Text(
-                                "No stations in this radius",
-                                textAlign: TextAlign.center,
-                                style: theme.textTheme.bodyLarge,
-                              ),
-                              const SizedBox(height: AppTheme.spacingSM),
-                              Text(
-                                "Try a larger radius.",
-                                textAlign: TextAlign.center,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.outline,
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: AppTheme.spacingMD),
+                            ElevatedButton(
+                              onPressed: _getInitialPosition,
+                              child: const Text("Refresh"),
+                            ),
+                          ],
                         ),
-                      );
-                    }
-                    return RefreshIndicator(
-                      onRefresh: () async => _getInitialPosition(),
-                      child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppTheme.spacingMD,
-                          vertical: AppTheme.spacingSM,
-                        ),
-                        itemCount: sorted.length,
-                        itemBuilder: (context, index) {
-                          final station = sorted[index];
-                          final distM = FuelUtils.calculateDistance(
-                            position.latitude,
-                            position.longitude,
-                            station.latitude,
-                            station.longitude,
-                          );
-                          return _StationCard(
-                            station: station,
-                            addressOverride: _addressOverrides[station.id],
-                            distanceKm: distM / 1000.0,
-                            onTap: () => _showStationSheet(station),
-                          );
-                        },
                       ),
-                    );
-                  },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (err, _) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppTheme.spacingXL),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.error_outline,
-                            size: 48,
-                            color: theme.colorScheme.error,
+                    )
+                    : stationsAsync.when(
+                      data: (stations) {
+                        final sorted = _sortedStations(stations, position);
+                        _prefetchMissingAddresses(sorted);
+                        if (sorted.isEmpty) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppTheme.spacingXL),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.local_gas_station_outlined,
+                                    size: 48,
+                                    color: theme.colorScheme.outline,
+                                  ),
+                                  const SizedBox(height: AppTheme.spacingMD),
+                                  Text(
+                                    "No stations in this radius",
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.bodyLarge,
+                                  ),
+                                  const SizedBox(height: AppTheme.spacingSM),
+                                  Text(
+                                    "Try a larger radius.",
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.outline,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+                        return RefreshIndicator(
+                          onRefresh: () async => _getInitialPosition(),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppTheme.spacingMD,
+                              vertical: AppTheme.spacingSM,
+                            ),
+                            itemCount: sorted.length,
+                            itemBuilder: (context, index) {
+                              final station = sorted[index];
+                              final distM = FuelUtils.calculateDistance(
+                                position.latitude,
+                                position.longitude,
+                                station.latitude,
+                                station.longitude,
+                              );
+                              return _StationCard(
+                                station: station,
+                                addressOverride: _addressOverrides[station.id],
+                                distanceKm: distM / 1000.0,
+                                onTap: () => _showStationSheet(station),
+                              );
+                            },
                           ),
-                          const SizedBox(height: AppTheme.spacingMD),
-                          Text(
-                            "Something went wrong",
-                            style: theme.textTheme.bodyLarge,
+                        );
+                      },
+                      loading:
+                          () =>
+                              const Center(child: CircularProgressIndicator()),
+                      error:
+                          (err, _) => Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppTheme.spacingXL),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    size: 48,
+                                    color: theme.colorScheme.error,
+                                  ),
+                                  const SizedBox(height: AppTheme.spacingMD),
+                                  Text(
+                                    "Something went wrong",
+                                    style: theme.textTheme.bodyLarge,
+                                  ),
+                                  const SizedBox(height: AppTheme.spacingSM),
+                                  ElevatedButton(
+                                    onPressed: _getInitialPosition,
+                                    child: const Text("Retry"),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          const SizedBox(height: AppTheme.spacingSM),
-                          ElevatedButton(
-                            onPressed: _getInitialPosition,
-                            child: const Text("Retry"),
-                          ),
-                        ],
-                      ),
                     ),
-                  ),
-                ),
           ),
         ],
       ),
@@ -883,5 +866,4 @@ class _StationCard extends StatelessWidget {
     }
     return '${distanceKm.toStringAsFixed(1)} km';
   }
-
 }

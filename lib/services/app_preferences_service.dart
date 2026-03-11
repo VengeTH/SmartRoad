@@ -341,10 +341,17 @@ class AppPreferencesService {
     final safeKey = _safeCommuteAiCacheKey(cacheKey);
     await box.put(
       _keyCommuteAiCachePrefix + safeKey,
-      jsonEncode({"payload": payload, "expiresAt": expiresAt.toIso8601String()}),
+      jsonEncode({
+        "payload": payload,
+        "expiresAt": expiresAt.toIso8601String(),
+      }),
     );
     final prefix = _keyCommuteAiCachePrefix;
-    final keys = box.keys.where((k) => k is String && k.startsWith(prefix)).cast<String>().toList();
+    final keys =
+        box.keys
+            .where((k) => k is String && k.startsWith(prefix))
+            .cast<String>()
+            .toList();
     if (keys.length <= _commuteAiCacheMaxEntries) return;
     final now = DateTime.now();
     final withExpiry = <String, DateTime>{};
@@ -362,7 +369,8 @@ class AppPreferencesService {
     }
     withExpiry.removeWhere((_, exp) => now.isAfter(exp));
     if (withExpiry.length <= _commuteAiCacheMaxEntries) return;
-    final sorted = withExpiry.entries.toList()..sort((a, b) => a.value.compareTo(b.value));
+    final sorted =
+        withExpiry.entries.toList()..sort((a, b) => a.value.compareTo(b.value));
     for (var i = 0; i < sorted.length - _commuteAiCacheMaxEntries; i++) {
       await box.delete(sorted[i].key);
     }

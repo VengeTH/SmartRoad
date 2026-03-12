@@ -4,6 +4,66 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
+## Version 2.8.3 - Map Interaction Polish & UI Overhaul
+
+**Release Date:** March 2026
+**Focus:** Navigation UX, Map Controls, Location Reliability, POI Consistency
+**Status:** Production Ready (Demo Mode Only)
+
+### Map Interaction Enhancements
+
+- **Compass Direction Fix**: Compass now correctly reports the user's true facing/heading direction including negative heading normalization (was stuck pointing north regardless of device orientation).
+- **Smart Center Button**: Multi-stage centering behavior:
+  1. First press → center map at current zoom level.
+  2. Second press (if already centered) → zoom in.
+  3. Third press → zoom out. Repeats zoom in/out cycle.
+- **Speed-Based Auto-Zoom**: During active navigation, the map automatically adjusts zoom level based on vehicle speed — zooms out at highway speeds, zooms in at low speeds (mimicking Waze/Google Maps behavior).
+- **Smooth Map Animations**: All map pan, zoom, and rotation operations now use `AnimationController` + `Curves.fastOutSlowIn` with a 350ms duration for fluid transitions. Designed for performance on low-end devices — no persistent background animations.
+
+### Navigation HUD
+
+- `NavigationSpeedHUD` widget: Displays current GPS speed (km/h) and speed-limit sign during navigation.
+- `NavigationHazardWarningBanner` widget: Shows upcoming road warnings (police checkpoint, stoplight, etc.) with a configurable banner.
+- Touch-free navigation design: Key at-a-glance info is always visible without requiring interaction.
+
+### Location Service Reliability
+
+- Increased GPS lock timeout from 6 seconds → **15 seconds** on Android to significantly reduce "Location request timed out" errors on real devices.
+- `LocationService.getCurrentPosition()` now defaults to a more robust timeout, greatly improving consistency for production use.
+
+### Points of Interest (POI) Visibility
+
+- **POIs hide during navigation**: When `_isNavigating` is `true`, dynamic POIs are cleared from the map automatically to reduce visual clutter and improve driving focus.
+- **POIs re-appear correctly after animations**: Animation controller completion callbacks now explicitly call `_loadDynamicPoisForViewport()` + `_onMapMoved()` so POIs correctly re-render after map panning/zooming.
+
+### Map UI Overhaul
+
+- **Circular Map Control Buttons**: All map control buttons (`+`, `-`, Layers, Location, Fuel) changed from rounded rectangles to **fully circular** pill design with deeper shadows (`elevation: 6`) for a modern, premium look.
+- **Independent Button Positioning**: Buttons refactored from a single shared `Column` into **individual `Positioned` widgets** so the Weather Layer expandable panel never displaces or overlaps the Fuel or Location buttons.
+  - Zoom (+/-) — anchored at `top: 80`.
+  - Weather Layers toggle + panel — anchored at `top: 204`.
+  - Fuel Prices button — anchored at `bottom: 168`.
+  - Location/Center button — anchored at `bottom: 100`.
+- **No more gray map canvas on zoom**: Set `Scaffold.backgroundColor` to `Color(0xFFF2EFE9)` (OSM tile beige) and added `TileLayer.keepBuffer: 5` + `panBuffer: 1` to pre-cache surrounding tiles, eliminating the grey background flash during zoom-out.
+
+### Technical Changes
+
+- **`lib/screens/map/map_screen.dart`**:
+  - Added `TickerProviderStateMixin` for `AnimationController` support.
+  - `_safeMoveMap()` and `_safeMoveAndRotateMap()` fully animated with tweens.
+  - Animation completion listeners fire `setState`, `_loadDynamicPoisForViewport`, and `_onMapMoved`.
+  - `TileLayer` now has `keepBuffer: 5` and `panBuffer: 1`.
+  - `Scaffold.backgroundColor` set to OSM beige `#F2EFE9`.
+  - Map control buttons broken into separate `Positioned` widgets.
+- **`lib/services/location_service.dart`**:
+  - Default Android GPS timeout increased from 6s to 15s.
+- **`lib/widgets/weather_layer_controls.dart`**:
+  - `WeatherLayerToggleButton` now uses `shape: const CircleBorder()` for circle FAB.
+- **`lib/widgets/navigation_speed_hud.dart`** *(new)*: Speed HUD widget for navigation overlay.
+- **`lib/widgets/navigation_hazard_warning_banner.dart`** *(new)*: Navigation hazard warning banner.
+
+---
+
 ## Version 2.8.2 - Community Fuel Pricing Beta
 
 **Release Date:** March 2026

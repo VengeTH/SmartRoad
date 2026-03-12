@@ -22,8 +22,8 @@ class UserLocationMarker extends StatelessWidget {
   double? _toRadians(double? degrees) {
     if (degrees == null) return null;
     if (!degrees.isFinite) return null;
-    if (degrees < 0 || degrees > 360) return null;
-    return degrees * (math.pi / 180.0);
+    final normalized = _normalizeDegrees(degrees);
+    return normalized * (math.pi / 180.0);
   }
 
   double _normalizeDegrees(double degrees) {
@@ -40,11 +40,11 @@ class UserLocationMarker extends StatelessWidget {
     // * If the map itself is rotated (navigation mode), rotate the icon relative
     // * to the map so it still points "forward" on screen.
     final effectiveHeadingDegrees = () {
-      if (heading == null || !heading.isFinite || heading < 0 || heading > 360) {
+      if (heading == null || !heading.isFinite) {
         return null;
       }
       if (mapRotation == null || !mapRotation.isFinite) {
-        return heading;
+        return _normalizeDegrees(heading);
       }
       return _normalizeDegrees(heading - mapRotation);
     }();

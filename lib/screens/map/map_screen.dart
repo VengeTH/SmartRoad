@@ -688,18 +688,18 @@ class _MapControlButton extends StatelessWidget {
       message: tooltip,
       child: Material(
         color: backgroundColor ?? AppTheme.surfaceColor,
-        borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-        elevation: 4,
-        shadowColor: Colors.black.withOpacity(0.3),
+        shape: const CircleBorder(),
+        elevation: 6,
+        shadowColor: Colors.black.withOpacity(0.4),
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+          customBorder: const CircleBorder(),
           child: Container(
-            width: 48,
-            height: 48,
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-              border: Border.all(color: AppTheme.borderColor, width: 1.5),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppTheme.borderColor.withOpacity(0.5), width: 1.0),
             ),
             child: Icon(
               icon,
@@ -741,7 +741,7 @@ class MapScreen extends ConsumerStatefulWidget {
   ConsumerState<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends ConsumerState<MapScreen> {
+class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateMixin {
   static const double _knownPlacesMinZoom =
       9.0; // * Show curated places earlier as instant POI fallback
   static const double _dynamicPoisMinZoom =
@@ -967,9 +967,39 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     try {
-      _mapController.move(center, zoom);
+      final latTween = Tween<double>(begin: _mapController.camera.center.latitude, end: center.latitude);
+      final lngTween = Tween<double>(begin: _mapController.camera.center.longitude, end: center.longitude);
+      final zoomTween = Tween<double>(begin: _mapController.camera.zoom, end: zoom);
+
+      final controller = AnimationController(duration: const Duration(milliseconds: 350), vsync: this);
+      final animation = CurvedAnimation(parent: controller, curve: Curves.fastOutSlowIn);
+
+      controller.addListener(() {
+        _mapController.move(
+          LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
+          zoomTween.evaluate(animation),
+        );
+      });
+
+      controller.addStatusListener((status) {
+        if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
+          controller.dispose();
+          if (mounted) {
+            setState(() {
+              _mapZoom = _mapController.camera.zoom;
+              _mapCenter = _mapController.camera.center;
+              _mapRotationDegrees = _mapController.camera.rotation;
+              _mapVisibleBounds = _mapController.camera.visibleBounds;
+            });
+            if (!_isLoadingDynamicPois) _loadDynamicPoisForViewport();
+            _onMapMoved();
+          }
+        }
+      });
+
+      controller.forward();
     } catch (_) {
-      // * Ignore: can happen if the controller is used during a transient rebuild.
+      // * Ignore transient rebuild errors
     }
   }
 
@@ -986,9 +1016,39 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     try {
-      _mapController.moveAndRotate(center, zoom, rotationDegrees);
+      final latTween = Tween<double>(begin: _mapController.camera.center.latitude, end: center.latitude);
+      final lngTween = Tween<double>(begin: _mapController.camera.center.longitude, end: center.longitude);
+      final zoomTween = Tween<double>(begin: _mapController.camera.zoom, end: zoom);
+      
+      // Handle rotation shortest path
+      double startRot = _mapController.camera.rotation;
+      double endRot = rotationDegrees;
+      double diff = (endRot - startRot) % 360;
+      if (diff > 180) diff -= 360;
+      endRot = startRot + diff;
+
+      final rotTween = Tween<double>(begin: startRot, end: endRot);
+
+      final controller = AnimationController(duration: const Duration(milliseconds: 350), vsync: this);
+      final animation = CurvedAnimation(parent: controller, curve: Curves.fastOutSlowIn);
+
+      controller.addListener(() {
+        _mapController.moveAndRotate(
+          LatLng(latTween.evaluate(animation), lngTween.evaluate(animation)),
+          zoomTween.evaluate(animation),
+          rotTween.evaluate(animation),
+        );
+      });
+
+      controller.addStatusListener((status) {
+        if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
+          controller.dispose();
+        }
+      });
+
+      controller.forward();
     } catch (_) {
-      // * Ignore: can happen if the controller is used during a transient rebuild.
+      // * Ignore transient rebuild errors
     }
   }
 
@@ -5591,7 +5651,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _lastNavigationCameraUpdateAt = now;
 
     // * Use a zoomed-in default when (re)centering, otherwise respect current zoom.
-    final desiredZoom = (force ? _navigationFollowZoom : _mapZoom).clamp(
+    // * Auto-zoom based on speed: the faster you go, the more it zooms out to show the road ahead.
+    double targetZoom;
+    if (_isNavigationFollowing && _currentSpeedKph != null && _currentSpeedKph! > 15.0) {
+      // Speed from 15 km/h to 90 km/h maps to zoom 18.0 down to 14.5
+      final speedFactor = ((_currentSpeedKph! - 15.0) / 75.0).clamp(0.0, 1.0);
+      targetZoom = 18.0 - (speedFactor * (18.0 - 15.0)); // interpolate 18.0 -> 15.0
+    } else {
+      targetZoom = force ? _navigationFollowZoom : _mapZoom;
+    }
+
+    final desiredZoom = targetZoom.clamp(
       AppConstants.minZoom,
       AppConstants.maxZoom,
     );
@@ -7289,6 +7359,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       });
 
       return Scaffold(
+        backgroundColor: const Color(0xFFF2EFE9), // * Match OSM tile background color
         body: Stack(
           children: [
             FlutterMap(
@@ -7298,6 +7369,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 initialZoom: AppConstants.defaultZoom,
                 minZoom: AppConstants.minZoom,
                 maxZoom: AppConstants.maxZoom,
+                // * Use OSM tile beige instead of default gray (0xFFE0E0E0) to prevent
+                // * the gray flash visible when map tiles haven't loaded yet during zoom
+                backgroundColor: const Color(0xFFF2EFE9),
                 // * Enable infinite horizontal scrolling (map wrapping)
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all,
@@ -7642,6 +7716,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   userAgentPackageName:
                       "com.smartroad.app", // * Package name stays lowercase (technical identifier)
                   maxZoom: 19,
+                  keepBuffer: 5,
+                  panBuffer: 1,
                   // * Enable tile wrapping for infinite horizontal scrolling
                   // * flutter_map handles wrapping automatically for Epsg3857 (Web Mercator)
                   // * Tiles will wrap horizontally when panning left/right
@@ -8223,95 +8299,81 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 if (showHoaMarkers) _buildHOAMarkers(),
               ],
             ),
-            // * Map Controls - Top Right (below search bar)
+            // * Zoom Controls - Top Right
             Positioned(
-              top: 80, // * Below search bar
+              top: 80,
               right: AppTheme.spacingMD,
               child: Column(
                 children: [
-                  // * Zoom In Button
                   _MapControlButton(
                     icon: Icons.add,
                     onPressed: () {
-                      final currentZoom = _mapZoom;
-                      final currentCenter = _mapCenter;
                       _safeMoveMap(
-                        currentCenter,
-                        (currentZoom + 1).clamp(
-                          AppConstants.minZoom,
-                          AppConstants.maxZoom,
-                        ),
+                        _mapCenter,
+                        (_mapZoom + 1).clamp(AppConstants.minZoom, AppConstants.maxZoom),
                       );
                     },
                     tooltip: "Zoom in",
                   ),
-                  const SizedBox(height: AppTheme.spacingXS),
-                  // * Zoom Out Button
+                  const SizedBox(height: 8),
                   _MapControlButton(
                     icon: Icons.remove,
                     onPressed: () {
-                      final currentZoom = _mapZoom;
-                      final currentCenter = _mapCenter;
                       _safeMoveMap(
-                        currentCenter,
-                        (currentZoom - 1).clamp(
-                          AppConstants.minZoom,
-                          AppConstants.maxZoom,
-                        ),
+                        _mapCenter,
+                        (_mapZoom - 1).clamp(AppConstants.minZoom, AppConstants.maxZoom),
                       );
                     },
                     tooltip: "Zoom out",
                   ),
-                  const SizedBox(height: AppTheme.spacingMD),
-                  // * Location Button
-                  _MapControlButton(
-                    icon:
-                        _isNavigating
-                            ? (_isNavigationFollowing
-                                ? Icons.navigation
-                                : Icons.my_location)
-                            : Icons.gps_fixed,
-                    onPressed:
-                        _hasPreciseLocation
-                            ? () {
-                              if (_isNavigating) {
-                                // * Re-center and resume follow mode.
-                                _recenterNavigationCamera();
-                                return;
-                              }
-
-                              // * Center on current location
-                              _safeMoveMap(_currentLocation, _mapZoom);
-                            }
-                            : _requestLocationPermission,
-                    tooltip:
-                        _hasPreciseLocation
-                            ? (_isNavigating
-                                ? (_isNavigationFollowing
-                                    ? "Following route"
-                                    : "Re-center")
-                                : "Center on my location")
-                            : "Get my location",
-                    backgroundColor:
-                        _hasPreciseLocation
-                            ? (_isNavigating && !_isNavigationFollowing
-                                ? AppTheme.warningColor
-                                : AppTheme.primaryColor)
-                            : AppTheme.textSecondary,
-                  ),
-                  const SizedBox(height: AppTheme.spacingMD),
-                  _MapControlButton(
-                    icon: Icons.local_gas_station_outlined,
+                ],
+              ),
+            ),
+            // * Weather Layer Button + Expandable Panel - opens UPWARD from toggle button
+            // * Bottom-anchored so the panel never overlaps Fuel/Location buttons below
+            Positioned(
+              bottom: 232, // * sits just above the Fuel button (168 + 52 + 12)
+              right: AppTheme.spacingMD,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // * Panel FIRST in column = renders above the toggle button (grows upward)
+                  if (_showWeatherControls) ...[
+                    WeatherLayerControls(
+                      manager: _weatherLayerManager,
+                      onLayersChanged: () {
+                        setState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  WeatherLayerToggleButton(
+                    manager: _weatherLayerManager,
                     onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const FuelPricesScreen(),
-                        ),
-                      );
+                      setState(() {
+                        _showWeatherControls = !_showWeatherControls;
+                      });
                     },
-                    tooltip: "Fuel prices",
                   ),
                 ],
+              ),
+            ),
+
+            // * Fuel Button - Right side, fixed above location button
+            Positioned(
+              bottom: 168, // * above the location button (100 + 52 + 16)
+              right: AppTheme.spacingMD,
+              child: _MapControlButton(
+                icon: Icons.local_gas_station_outlined,
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const FuelPricesScreen(),
+                    ),
+                  );
+                },
+                tooltip: "Fuel prices",
               ),
             ),
             // * Search Bar - Top Center
@@ -9417,32 +9479,58 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               left: AppTheme.spacingMD,
               child: const MusicControlWidget(),
             ),
-            // * Weather layer controls toggle button
+            // * Location Button
             Positioned(
               bottom: 100, // * Above bottom navigation
               right: AppTheme.spacingMD,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  WeatherLayerToggleButton(
-                    manager: _weatherLayerManager,
-                    onPressed: () {
-                      setState(() {
-                        _showWeatherControls = !_showWeatherControls;
-                      });
-                    },
-                  ),
-                  if (_showWeatherControls) ...[
-                    const SizedBox(height: AppTheme.spacingMD),
-                    WeatherLayerControls(
-                      manager: _weatherLayerManager,
-                      onLayersChanged: () {
-                        setState(() {}); // * Rebuild to update layers
-                      },
-                    ),
-                  ],
-                ],
+              child: _MapControlButton(
+                icon:
+                    _isNavigating
+                        ? (_isNavigationFollowing
+                            ? Icons.navigation
+                            : Icons.my_location)
+                        : Icons.gps_fixed,
+                onPressed:
+                    _hasPreciseLocation
+                        ? () {
+                          if (_isNavigating) {
+                            // * Re-center and resume follow mode.
+                            _recenterNavigationCamera();
+                            return;
+                          }
+
+                          // * Check if already centered (within ~10 meters)
+                          const double tolerance = 0.0001;
+                          final bool isCentered = (_mapCenter.latitude - _currentLocation.latitude).abs() < tolerance &&
+                                                  (_mapCenter.longitude - _currentLocation.longitude).abs() < tolerance;
+
+                          if (isCentered) {
+                            // * Toggle zoom if already centered
+                            if (_mapZoom < 17.5) {
+                              _safeMoveMap(_currentLocation, 18.0);
+                            } else {
+                              _safeMoveMap(_currentLocation, 15.0);
+                            }
+                          } else {
+                            // * Center on current location without changing zoom
+                            _safeMoveMap(_currentLocation, _mapZoom);
+                          }
+                        }
+                        : _requestLocationPermission,
+                tooltip:
+                    _hasPreciseLocation
+                        ? (_isNavigating
+                            ? (_isNavigationFollowing
+                                ? "Following route"
+                                : "Re-center")
+                            : "Center on my location")
+                        : "Get my location",
+                backgroundColor:
+                    _hasPreciseLocation
+                        ? (_isNavigating && !_isNavigationFollowing
+                            ? AppTheme.warningColor
+                            : AppTheme.primaryColor)
+                        : AppTheme.textSecondary,
               ),
             ),
             // * Bottom Toolbar (removed - using main navigation bar instead)

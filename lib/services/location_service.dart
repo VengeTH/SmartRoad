@@ -108,7 +108,7 @@ class LocationService {
           (kIsWeb ? LocationAccuracy.medium : LocationAccuracy.high);
       final timeout =
           timeLimit ??
-          (kIsWeb ? const Duration(seconds: 8) : const Duration(seconds: 6));
+          (kIsWeb ? const Duration(seconds: 8) : const Duration(seconds: 15));
 
       // * Removed verbose logging to prevent console overflow
 

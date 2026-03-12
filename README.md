@@ -129,11 +129,15 @@ smartroad/
     - `> 200m`: submission rejected
   - Long-press map supports `Add Fuel Station`
   - Admin review tools for pending stations and incorrect price reports
-- **Current Location**: Real-time location tracking with platform-specific optimizations
-- **Map Controls**: Zoom in/out, center on location, filter panel
+- **Current Location**: Real-time location tracking with platform-specific optimizations. GPS timeout increased to 15s for reliable lock on real devices.
+- **Map Controls**: Zoom in/out, center on location, filter panel, weather layers, and fuel prices — all as **circular** floating buttons for a modern look.
   - **Zoom Limits**: Restricted to Philippines area (minZoom: 6.8, maxZoom: 18.0)
   - **Geographic Bounds**: Map panning restricted to Philippines boundaries
   - **Continuous Enforcement**: Zoom and bounds limits enforced automatically
+  - **Smart Center Button**: First press centers; subsequent presses cycle zoom in/out
+  - **Speed-Based Auto-Zoom**: Zoom adjusts dynamically to vehicle speed during navigation
+  - **Independent Button Groups**: Each button group (Zoom, Weather, Fuel, Location) is independently anchored so panels never overlap other controls
+  - **No gray flashing**: Map background set to OSM tile beige `#F2EFE9` and tiles pre-cached with `keepBuffer:5`
 - **HOA Gate Markers**: Color-coded gate markers (Red = Strict, Green = Open)
 
 ### Place Previews (Known Places + Community)

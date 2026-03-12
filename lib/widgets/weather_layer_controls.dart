@@ -358,6 +358,7 @@ class WeatherLayerToggleButton extends StatelessWidget {
       backgroundColor: hasLayers 
           ? AppTheme.primaryColor 
           : AppTheme.surfaceColor,
+      shape: const CircleBorder(),
       child: Icon(
         hasLayers ? Icons.layers : Icons.layers_outlined,
         color: hasLayers 

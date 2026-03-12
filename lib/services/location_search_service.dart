@@ -36,6 +36,32 @@ class LocationSearchService {
   static const String _contactEmail = "contact@smartroad.app";
   DateTime? _reverseCooldownUntil;
 
+  // * Global rate limiting state for Nominatim (max 1 request per second)
+  static DateTime? _lastRequestTime;
+  static bool _isRequestInProgress = false;
+
+  /// Guarantee at least 1.1s between Nominatim requests to strictly respect their usage policy.
+  static Future<void> enforceRateLimit() async {
+    while (_isRequestInProgress) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    _isRequestInProgress = true;
+
+    final last = _lastRequestTime;
+    if (last != null) {
+      final elapsed = DateTime.now().difference(last);
+      const limit = Duration(milliseconds: 1100);
+      if (elapsed < limit) {
+        await Future<void>.delayed(limit - elapsed);
+      }
+    }
+  }
+
+  static void releaseRateLimit() {
+    _lastRequestTime = DateTime.now();
+    _isRequestInProgress = false;
+  }
+
   static final RegExp _queryWithCountryHint = RegExp(
     r"(,\s*[a-zA-Z ]{3,})|(\bphilippines\b|\bph\b|\bperu\b|\bjapan\b|\bus\b|\busa\b|\bunited states\b)",
     caseSensitive: false,
@@ -109,6 +135,8 @@ class LocationSearchService {
     }
 
     try {
+      await enforceRateLimit();
+      
       // * Build URL with optional country code restriction
       String urlString =
           "$_baseUrl/search?q=${Uri.encodeComponent(query)}"
@@ -164,6 +192,8 @@ class LocationSearchService {
     } catch (e) {
       debugPrint("❌ [LocationSearchService] Location search error: $e");
       return [];
+    } finally {
+      releaseRateLimit();
     }
   }
 
@@ -179,6 +209,8 @@ class LocationSearchService {
     }
 
     try {
+      await enforceRateLimit();
+
       final url = Uri.parse(
         "$_baseUrl/reverse?lat=$lat&lon=$lon"
         "&format=json"
@@ -216,6 +248,8 @@ class LocationSearchService {
     } catch (e) {
       debugPrint("Structured reverse geocoding error: $e");
       return null;
+    } finally {
+      releaseRateLimit();
     }
   }
 
@@ -275,6 +309,8 @@ class LocationSearchService {
     }
 
     try {
+      await enforceRateLimit();
+
       final url = Uri.parse(
         "$_baseUrl/reverse?lat=$lat&lon=$lon"
         "&format=json"
@@ -305,6 +341,8 @@ class LocationSearchService {
     } catch (e) {
       debugPrint("Reverse geocoding error: $e");
       return null;
+    } finally {
+      releaseRateLimit();
     }
   }
 
@@ -313,6 +351,8 @@ class LocationSearchService {
   /// * Returns null if country cannot be determined
   Future<String?> getCountryCodeFromCoordinates(double lat, double lon) async {
     try {
+      await enforceRateLimit();
+
       final url = Uri.parse(
         "$_baseUrl/reverse?lat=$lat&lon=$lon"
         "&format=json"
@@ -346,6 +386,8 @@ class LocationSearchService {
     } catch (e) {
       debugPrint("❌ [LocationSearchService] Error getting country code: $e");
       return null;
+    } finally {
+      releaseRateLimit();
     }
   }
 }

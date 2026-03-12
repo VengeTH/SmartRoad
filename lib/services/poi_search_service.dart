@@ -5,6 +5,7 @@ import "package:flutter_map/flutter_map.dart";
 import "package:http/http.dart" as http;
 
 import "../models/map_poi.dart";
+import "location_search_service.dart";
 
 /// * Searches map landmarks/POIs using OpenStreetMap Nominatim (web-CORS friendly).
 /// *
@@ -33,6 +34,8 @@ class PoiSearchService {
     }
 
     try {
+      await LocationSearchService.enforceRateLimit();
+
       final west = bounds.west;
       final east = bounds.east;
       final north = bounds.north;
@@ -112,6 +115,8 @@ class PoiSearchService {
     } catch (e) {
       debugPrint("❌ [PoiSearchService] searchInBounds failed: $e");
       return [];
+    } finally {
+      LocationSearchService.releaseRateLimit();
     }
   }
 }

@@ -8,6 +8,7 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:flutter_map/flutter_map.dart";
 import "package:latlong2/latlong.dart";
 import "package:geolocator/geolocator.dart";
+import "package:flutter_compass/flutter_compass.dart";
 import "package:dio/dio.dart";
 import "../../providers/hazards_provider.dart";
 import "../../providers/location_provider.dart";
@@ -810,6 +811,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   final SpeedLimitService _speedLimitService = SpeedLimitService();
   final WeatherService _weatherService = WeatherService();
   StreamSubscription<Position>? _positionSubscription;
+  StreamSubscription<CompassEvent>? _compassSubscription;
   Timer? _zoomLimitTimer; // * Timer to enforce zoom limits
   bool _hasPreciseLocation = false;
   // * Cache country code to avoid repeated reverse geocoding calls
@@ -887,6 +889,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   void dispose() {
     _positionSubscription?.cancel();
+    _compassSubscription?.cancel();
     _zoomLimitTimer?.cancel();
     _poiDebounceTimer?.cancel();
     _commuteBallDimTimer?.cancel();
@@ -5994,6 +5997,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
 
     await _positionSubscription?.cancel();
+    await _compassSubscription?.cancel();
+    
+    // * Start compass stream for reliable device orientation
+    _compassSubscription = FlutterCompass.events?.listen((event) {
+      if (!mounted) return;
+      final heading = event.heading;
+      if (heading != null) {
+        setState(() {
+          // * Use device compass orientation for the user location icon
+          _currentHeadingDegrees = heading;
+        });
+      }
+    });
+
     // * Removed verbose logging to prevent console overflow
 
     _positionSubscription = Geolocator.getPositionStream(
@@ -6024,8 +6041,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         setState(() {
           _currentLocation = updated;
           _hasPreciseLocation = true;
-          _currentHeadingDegrees =
-              headingIsValid ? heading : _currentHeadingDegrees;
+          // * Only fallback to GPS course if compass is unavailable or hasn't updated yet.
+          if (_compassSubscription == null && headingIsValid) {
+            _currentHeadingDegrees = heading;
+          }
         });
 
         // * Detect country code when location is updated (only once per significant move)

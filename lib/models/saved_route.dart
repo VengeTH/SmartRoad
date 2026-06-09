@@ -246,6 +246,14 @@ class SavedRoute {
         return 'truck';
       case VehicleType.pedestrian:
         return 'pedestrian';
+      case VehicleType.deliveryRider:
+        return 'delivery_rider';
+      case VehicleType.floodSafe:
+        return 'flood_safe';
+      case VehicleType.weatherSafe:
+        return 'weather_safe';
+      case VehicleType.hoaAccess:
+        return 'hoa_access';
     }
   }
   

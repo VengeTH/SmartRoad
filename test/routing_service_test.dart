@@ -44,11 +44,11 @@ void main() {
       expect(VehicleType.hoaAccess.graphhopperParam, equals("car"));
     });
 
-    test("custom profiles return correct profile names", () {
-      expect(VehicleType.deliveryRider.graphhopperProfile, equals("delivery_rider"));
-      expect(VehicleType.floodSafe.graphhopperProfile, equals("flood_safe"));
-      expect(VehicleType.weatherSafe.graphhopperProfile, equals("weather_safe"));
-      expect(VehicleType.hoaAccess.graphhopperProfile, equals("hoa_access"));
+    test("custom profiles return correct backend profile names", () {
+      expect(VehicleType.deliveryRider.backendProfile, equals("delivery_rider"));
+      expect(VehicleType.floodSafe.backendProfile, equals("flood_safe"));
+      expect(VehicleType.weatherSafe.backendProfile, equals("weather_safe"));
+      expect(VehicleType.hoaAccess.backendProfile, equals("hoa_access"));
     });
   });
 

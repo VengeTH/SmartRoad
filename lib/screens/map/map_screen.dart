@@ -4693,6 +4693,14 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
         case VehicleType.pedestrian:
           mode = 'pedestrian';
           break;
+        case VehicleType.deliveryRider:
+          mode = 'motorcycle_sub400';
+          break;
+        case VehicleType.floodSafe:
+        case VehicleType.weatherSafe:
+        case VehicleType.hoaAccess:
+          mode = 'car';
+          break;
       }
       _navigationMode = mode;
 

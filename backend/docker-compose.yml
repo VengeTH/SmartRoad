@@ -52,36 +52,39 @@ services:
       - smartroad-backend
 
   # * SmartRoad API Service
-  # * FUTURE FEATURE - Not implemented in MVP
-  # * This will be the main backend API for the SmartRoad app
-  # * 
-  # * When implemented, this service will:
-  # * - Handle user authentication
-  # * - Process route requests (calling GraphHopper)
-  # * - Apply business logic (permissions, HOA restrictions)
-  # * - Manage hazard data
-  # * - Handle route selling logic
-  #
-  # api:
-  #   build:
-  #     context: ./api
-  #     dockerfile: Dockerfile
-  #   container_name: smartroad-api
-  #   ports:
-  #     - "3000:3000"  # API port
-  #   environment:
-  #     - NODE_ENV=development
-  #     - GRAPHHOPPER_URL=http://graphhopper:8989
-  #     - DATABASE_URL=postgresql://user:pass@postgres:5432/smartroad
-  #   volumes:
-  #     - ./api:/app
-  #     - /app/node_modules
-  #   depends_on:
-  #     - graphhopper
-  #     - postgres
-  #   networks:
-  #     - smartroad-backend
-  #   restart: unless-stopped
+  # * Main backend API — handles routing, auth, hazards, marketplace
+  # * Flutter app → SmartRoad API → GraphHopper (no direct Flutter→GH calls)
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: smartroad-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - GRAPH_HOPPER_URL=http://graphhopper:8989
+      - GRAPH_HOPPER_TIMEOUT_MS=15000
+      - GRAPH_HOPPER_MAX_RETRIES=2
+      - LOG_LEVEL=debug
+      - RATE_LIMIT_WINDOW_MS=60000
+      - RATE_LIMIT_MAX_REQUESTS=100
+    volumes:
+      - ./api/src:/app/src
+      - api-logs:/app/logs
+    depends_on:
+      graphhopper:
+        condition: service_healthy
+    networks:
+      - smartroad-backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
 
   # * PostgreSQL Database + PostGIS
   # * Stores all SmartRoad data (users, routes, hazards, stickers, etc.)
@@ -146,6 +149,8 @@ volumes:
   postgres-data:
     driver: local
   redis-data:
+    driver: local
+  api-logs:
     driver: local
 
 networks:

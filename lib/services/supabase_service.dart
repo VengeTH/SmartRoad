@@ -1,7 +1,6 @@
-/// * Data Service
-/// * SmartRoad's primary data access layer.
+﻿/// * Data Service — SmartRoad's primary data access layer.
 /// * Handles all database operations, authentication, and storage via PostgreSQL.
-/// * Replaces the former Supabase-backed implementation with our own DatabaseService.
+/// * Replaces the former Supabase-backed implementation with DatabaseService.
 /// *
 /// * Architecture:
 /// *   Flutter App → SupabaseService (this) → DatabaseService → Backend API → PostgreSQL
@@ -19,7 +18,6 @@ import "../core/config/env.dart";
 import "../core/constants/app_constants.dart";
 import "database_service.dart";
 
-/// * SmartRoad's data service — singleton that manages all PostgreSQL-backed operations.
 class SupabaseService {
   static const String demoUserId = SmartRoadUser.demoUserId;
 
@@ -28,22 +26,16 @@ class SupabaseService {
   SupabaseService._internal();
 
   final DatabaseService _db = DatabaseService();
-
   bool _isDemoAuthenticated = false;
 
-  // * Demo in-memory stores
   final Map<String, List<PlaceComment>> _demoPlaceComments = {};
   final Map<String, Set<String>> _demoPlaceLikes = {};
   final Map<String, Map<String, int>> _demoPlaceRatings = {};
   final Map<String, List<PlaceImage>> _demoPlaceImages = {};
 
-  /// * Check if running in demo mode (no database connection)
   bool get isDemoMode => !_db.isConnected;
-
-  /// * Get DatabaseService client (null in demo mode)
   DatabaseService? get client => _db.isConnected ? _db : null;
 
-  /// * Initialize the service
   Future<void> initialize() async {
     await _db.initialize();
     if (_db.isConnected) {
@@ -53,335 +45,254 @@ class SupabaseService {
     }
   }
 
-  /// * Mark demo mode as authenticated.
-  void markDemoAuthenticated() {
-    _isDemoAuthenticated = true;
-  }
+  void markDemoAuthenticated() => _isDemoAuthenticated = true;
+  void clearDemoAuthentication() => _isDemoAuthenticated = false;
+  String? get _effectiveUserId => currentUserId;
 
-  /// * Mark demo mode as guest/not authenticated.
-  void clearDemoAuthentication() {
-    _isDemoAuthenticated = false;
-  }
-
-  // ========================================================================
-  // * AUTHENTICATION
-  // ========================================================================
-
-  /// * Sign up with email and password
+  // AUTH
   Future<SmartRoadUser> signUp(String email, String password, String name) async {
-    if (isDemoMode) {
-      throw Exception("Sign up not available in demo mode");
-    }
+    if (isDemoMode) throw Exception("Sign up not available in demo mode");
     final user = await _db.signUp(email, password, name);
-    if (user == null) {
-      throw Exception("Sign up failed");
-    }
+    if (user == null) throw Exception("Sign up failed");
     return user;
   }
 
-  /// * Sign in with email and password
-  /// * In demo mode, validates demo credentials.
   Future<SmartRoadUser> signIn(String email, String password) async {
     if (isDemoMode) {
-      if (email == AppConstants.demoEmail &&
-          password == AppConstants.demoPassword) {
+      if (email == AppConstants.demoEmail && password == AppConstants.demoPassword) {
         _isDemoAuthenticated = true;
-        debugPrint("✅ Demo login successful");
         throw Exception("DEMO_MODE_LOGIN");
-      } else {
-        throw Exception("Invalid credentials. Use demo credentials in demo mode.");
       }
+      throw Exception("Invalid credentials");
     }
     final user = await _db.signIn(email, password);
-    if (user == null) {
-      throw Exception("Sign in failed");
-    }
+    if (user == null) throw Exception("Sign in failed");
     return user;
   }
 
-  /// * Sign out
   Future<void> signOut() async {
-    if (isDemoMode) {
-      _isDemoAuthenticated = false;
-      return;
-    }
+    if (isDemoMode) { _isDemoAuthenticated = false; return; }
     await _db.signOut();
   }
 
-  /// * Get current user (null when no authenticated session exists)
-  SmartRoadUser? get currentUser {
-    if (isDemoMode) {
-      if (!_isDemoAuthenticated) return null;
-      return SmartRoadUser.createDemo();
-    }
-    // * In live mode the auth state is managed by auth_provider
-    return null;
-  }
+  SmartRoadUser? get currentUser =>
+    isDemoMode && _isDemoAuthenticated ? SmartRoadUser.createDemo() : null;
 
-  /// * Get current user ID
-  String? get currentUserId {
-    if (isDemoMode) {
-      return _isDemoAuthenticated ? demoUserId : null;
-    }
-    return null;
-  }
+  String? get currentUserId => isDemoMode ? (_isDemoAuthenticated ? demoUserId : null) : null;
+  bool get isAuthenticated => isDemoMode ? _isDemoAuthenticated : _db.isConnected;
 
-  /// * Check if user is authenticated
-  bool get isAuthenticated {
-    if (isDemoMode) {
-      return _isDemoAuthenticated;
-    }
-    return _db.isConnected;
-  }
-
-  // ========================================================================
-  // * PROFILES
-  // ========================================================================
-
-  /// * Get user profile
+  // PROFILES
   Future<UserProfile?> getProfile(String userId) async {
-    if (isDemoMode) {
-      return UserProfile(
-        id: userId,
-        name: "Demo User",
-        email: "demo@smartroad.app",
-        photoUrl: null,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-        reporterLevel: ReporterLevel.novice,
-        validReportsCount: 0,
-      );
-    }
+    if (isDemoMode) return UserProfile(
+      id: userId, name: "Demo User", email: "demo@smartroad.app",
+      photoUrl: null, createdAt: DateTime.now(), updatedAt: DateTime.now(),
+      reporterLevel: ReporterLevel.novice, validReportsCount: 0,
+    );
     return await _db.getProfile(userId);
   }
 
-  /// * Update user profile
   Future<void> updateProfile(String userId, Map<String, dynamic> updates) async {
     if (isDemoMode) return;
     await _db.updateProfile(userId, updates);
   }
 
-  // ========================================================================
-  // * HAZARDS
-  // ========================================================================
-
-  /// * Get all hazards (with pagination)
-  Future<List<Hazard>> getHazards({
-    int limit = AppConstants.feedPageSize,
-    int offset = 0,
-  }) async {
+  // HAZARDS
+  Future<List<Hazard>> getHazards({int limit = 20, int offset = 0}) async {
     if (isDemoMode) return [];
     return await _db.getHazards();
   }
 
-  /// * Get hazards within bounding box
-  Future<List<Hazard>> getHazardsInBounds({
-    required double minLat,
-    required double maxLat,
-    required double minLon,
-    required double maxLon,
-  }) async {
-    if (isDemoMode) return [];
-    if (!_db.isConnected) return [];
-
-    final result = await _db.query(
-      """SELECT * FROM SmartRoad.hazards
-         WHERE ST_Y(location::geometry) BETWEEN @minLat AND @maxLat
-           AND ST_X(location::geometry) BETWEEN @minLon AND @maxLon
-         ORDER BY created_at DESC""",
+  Future<List<Hazard>> getHazardsInBounds(double minLat, double minLon, double maxLat, double maxLon) async {
+    if (isDemoMode || !_db.isConnected) return [];
+    final r = await _db.query(
+      "SELECT * FROM SmartRoad.hazards WHERE ST_Y(location::geometry) BETWEEN @1 AND @2 AND ST_X(location::geometry) BETWEEN @3 AND @4 ORDER BY created_at DESC",
       [minLat, maxLat, minLon, maxLon],
     );
-    if (!result.isError) {
-      return result.rows.map((json) => Hazard.fromJson(json)).toList();
-    }
+    if (!r.isError) return r.rows.map((j) => Hazard.fromJson(j)).toList();
     return [];
   }
 
-  /// * Create a new hazard
   Future<void> createHazard(Map<String, dynamic> data) async {
-    if (isDemoMode) {
-      debugPrint("⚠️ [Demo] Hazard report saved locally (not persisted)");
-      return;
-    }
+    if (isDemoMode) { debugPrint("⚠️ [Demo] Hazard saved locally"); return; }
     await _db.createHazard(data);
   }
 
-  // ========================================================================
-  // * HAZARD COMMENTS
-  // ========================================================================
-
+  // HAZARD COMMENTS
   Future<List<HazardComment>> getHazardComments(String hazardId) async {
     if (isDemoMode) return [];
     return await _db.getHazardComments(hazardId);
   }
 
-  Future<HazardComment> createComment(Map<String, dynamic> data) async {
-    if (isDemoMode) {
-      throw Exception("Comments not available in demo mode");
-    }
-    final result = await _db.query(
-      """INSERT INTO SmartRoad.hazard_comments (hazard_id, user_id, text)
-         VALUES (@hazard_id, @user_id, @text) RETURNING *""",
-      [data['hazard_id'], data['user_id'], data['text']],
+  Future<HazardComment> createComment({required String hazardId, required String text}) async {
+    if (isDemoMode) throw Exception("Comments not available in demo mode");
+    final userId = currentUserId;
+    if (userId == null) throw Exception("Not authenticated");
+    final r = await _db.query(
+      "INSERT INTO SmartRoad.hazard_comments (hazard_id, user_id, text) VALUES (@1, @2, @3) RETURNING *",
+      [hazardId, userId, text.trim()],
     );
-    if (!result.isError && result.isNotEmpty) {
-      return HazardComment.fromJson(result.rows.first);
-    }
+    if (!r.isError && r.rows.isNotEmpty) return HazardComment.fromJson(r.rows.first);
     throw Exception("Failed to create comment");
   }
 
-  Future<HazardComment> updateComment(
-    String commentId,
-    Map<String, dynamic> data,
-  ) async {
+  Future<HazardComment> updateComment({required String commentId, required String text}) async {
     if (isDemoMode) throw Exception("Not available in demo mode");
-    final result = await _db.query(
-      "UPDATE SmartRoad.hazard_comments SET text = @text, updated_at = NOW() WHERE id = @id RETURNING *",
-      [data['text'], commentId],
+    final r = await _db.query(
+      "UPDATE SmartRoad.hazard_comments SET text = @1, updated_at = NOW() WHERE id = @2 RETURNING *",
+      [text.trim(), commentId],
     );
-    if (!result.isError && result.isNotEmpty) {
-      return HazardComment.fromJson(result.rows.first);
-    }
+    if (!r.isError && r.rows.isNotEmpty) return HazardComment.fromJson(r.rows.first);
     throw Exception("Failed to update comment");
   }
 
   Future<void> deleteComment(String commentId) async {
     if (isDemoMode) return;
-    await _db.query("DELETE FROM SmartRoad.hazard_comments WHERE id = @id", [commentId]);
+    await _db.query("DELETE FROM SmartRoad.hazard_comments WHERE id = @1", [commentId]);
   }
 
-  /// * Subscribe to hazard comment changes (stub — realtime via WebSocket when backend is ready)
-  dynamic subscribeToComments(String hazardId, void Function(dynamic payload) onEvent) {
-    debugPrint("[SupabaseService] Realtime comments unimplemented (requires backend WebSocket)");
-    return null;
-  }
+  dynamic subscribeToComments({String? hazardId, void Function(Map<String, dynamic>)? onInsert, void Function(Map<String, dynamic>)? onUpdate, void Function(Map<String, dynamic>)? onDelete}) => null;
+  dynamic subscribeToHazards({void Function(Map<String, dynamic>)? onInsert, void Function(Map<String, dynamic>)? onUpdate, void Function(Map<String, dynamic>)? onDelete}) => null;
+  dynamic subscribeToPlaceComments({String? placeId, void Function(Map<String, dynamic>)? onInsert, void Function(Map<String, dynamic>)? onUpdate, void Function(Map<String, dynamic>)? onDelete}) => null;
 
-  /// * Subscribe to hazard changes (stub)
-  dynamic subscribeToHazards(void Function(dynamic payload) onEvent) {
-    debugPrint("[SupabaseService] Realtime hazards unimplemented (requires backend WebSocket)");
-    return null;
-  }
-
-  // ========================================================================
-  // * PLACES (Known Locations)
-  // ========================================================================
-
+  // PLACES
   Future<List<PlaceComment>> getPlaceComments(String placeId) async {
     if (isDemoMode) {
-      return _demoPlaceComments[placeId] ?? [];
+      final c = List<PlaceComment>.from(_demoPlaceComments[placeId] ?? []);
+      c.sort((a, b) => b.createdAt.compareTo(a.createdAt)); return c;
     }
     if (!_db.isConnected) return [];
-    final result = await _db.query(
-      "SELECT * FROM SmartRoad.place_comments WHERE place_id = @id ORDER BY created_at DESC",
-      [placeId],
-    );
-    if (!result.isError) {
-      return result.rows.map((json) => PlaceComment.fromJson(json)).toList();
-    }
+    final r = await _db.query("SELECT * FROM SmartRoad.place_comments WHERE place_id = @1 ORDER BY created_at DESC", [placeId]);
+    if (!r.isError) return r.rows.map((j) => PlaceComment.fromJson(j)).toList();
     return [];
   }
 
-  Future<PlaceComment> createPlaceComment(Map<String, dynamic> data) async {
-    final placeId = data['place_id'] as String;
+  Future<PlaceComment> createPlaceComment({required String placeId, required String text}) async {
     if (isDemoMode) {
-      final comment = PlaceComment(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        placeId: placeId,
-        userId: data['user_id'] as String,
-        text: data['text'] as String,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-      _demoPlaceComments.putIfAbsent(placeId, () => []).add(comment);
-      return comment;
+      final now = DateTime.now(); final uid = _effectiveUserId ?? demoUserId;
+      final c = PlaceComment(id: "d-", placeId: placeId, userId: uid, text: text.trim(), createdAt: now, updatedAt: now, userName: "Demo User");
+      _demoPlaceComments.putIfAbsent(placeId, () => []).insert(0, c); return c;
     }
-    final result = await _db.query(
-      """INSERT INTO SmartRoad.place_comments (place_id, user_id, text)
-         VALUES (@place_id, @user_id, @text) RETURNING *""",
-      [placeId, data['user_id'], data['text']],
-    );
-    if (!result.isError && result.isNotEmpty) {
-      return PlaceComment.fromJson(result.rows.first);
-    }
-    throw Exception("Failed to create place comment");
+    final uid = currentUserId; if (uid == null) throw Exception("Not authenticated");
+    final r = await _db.query("INSERT INTO SmartRoad.place_comments (place_id, user_id, text) VALUES (@1, @2, @3) RETURNING *", [placeId, uid, text.trim()]);
+    if (!r.isError && r.rows.isNotEmpty) return PlaceComment.fromJson(r.rows.first);
+    throw Exception("Failed");
   }
 
-  Future<void> togglePlaceLike(String placeId, String userId) async {
-    if (isDemoMode) {
-      _demoPlaceLikes.putIfAbsent(placeId, () => {}).contains(userId)
-          ? _demoPlaceLikes[placeId]!.remove(userId)
-          : _demoPlaceLikes[placeId]!.add(userId);
-      return;
-    }
-    // * Upsert: if exists, delete; otherwise insert
-    final existing = await _db.query(
-      "SELECT 1 FROM SmartRoad.place_likes WHERE place_id = @pid AND user_id = @uid",
-      [placeId, userId],
-    );
-    if (existing.isNotEmpty) {
-      await _db.query(
-        "DELETE FROM SmartRoad.place_likes WHERE place_id = @pid AND user_id = @uid",
-        [placeId, userId],
-      );
-    } else {
-      await _db.query(
-        "INSERT INTO SmartRoad.place_likes (place_id, user_id) VALUES (@pid, @uid)",
-        [placeId, userId],
-      );
-    }
+  Future<PlaceComment> updatePlaceComment({required String commentId, required String text}) async {
+    if (isDemoMode) throw Exception("Not available in demo mode");
+    final r = await _db.query("UPDATE SmartRoad.place_comments SET text = @1, updated_at = NOW() WHERE id = @2 RETURNING *", [text.trim(), commentId]);
+    if (!r.isError && r.rows.isNotEmpty) return PlaceComment.fromJson(r.rows.first);
+    throw Exception("Failed");
   }
 
-  Future<void> ratePlace(String placeId, String userId, int rating) async {
-    if (isDemoMode) {
-      _demoPlaceRatings.putIfAbsent(placeId, () => {})[userId] = rating;
-      return;
-    }
-    await _db.query(
-      """INSERT INTO SmartRoad.place_ratings (place_id, user_id, rating)
-         VALUES (@pid, @uid, @rating)
-         ON CONFLICT (place_id, user_id)
-         DO UPDATE SET rating = @rating, updated_at = NOW()""",
-      [placeId, userId, rating],
-    );
+  Future<void> deletePlaceComment(String commentId) async {
+    if (isDemoMode) return;
+    await _db.query("DELETE FROM SmartRoad.place_comments WHERE id = @1", [commentId]);
   }
 
-  // ========================================================================
-  // * PLACE IMAGES
-  // ========================================================================
+  Future<int> getPlaceLikesCount(String placeId) async {
+    if (isDemoMode) return (_demoPlaceLikes[placeId] ?? <String>{}).length;
+    if (!_db.isConnected) return 0;
+    final r = await _db.query("SELECT COUNT(*) AS c FROM SmartRoad.place_likes WHERE place_id = @1", [placeId]);
+    if (!r.isError && r.rows.isNotEmpty) return (r.rows.first['c'] as num?)?.toInt() ?? 0;
+    return 0;
+  }
+
+  Future<bool> hasLikedPlace(String placeId) async {
+    if (!isAuthenticated) return false;
+    if (isDemoMode) { final u = _effectiveUserId; return u != null && (_demoPlaceLikes[placeId] ?? <String>{}).contains(u); }
+    final uid = currentUserId; if (uid == null) return false;
+    final r = await _db.query("SELECT 1 FROM SmartRoad.place_likes WHERE place_id = @1 AND user_id = @2", [placeId, uid]);
+    return r.rows.isNotEmpty;
+  }
+
+  Future<void> togglePlaceLike(String placeId, {String? userId}) async {
+    if (!isAuthenticated) throw Exception("Must be authenticated");
+    final uid = userId ?? currentUserId; if (uid == null) throw Exception("User not available");
+    if (isDemoMode) {
+      final s = _demoPlaceLikes.putIfAbsent(placeId, () => <String>{});
+      if (s.contains(uid)) s.remove(uid); else s.add(uid); return;
+    }
+    final e = await _db.query("SELECT 1 FROM SmartRoad.place_likes WHERE place_id = @1 AND user_id = @2", [placeId, uid]);
+    if (e.rows.isNotEmpty) { await _db.query("DELETE FROM SmartRoad.place_likes WHERE place_id = @1 AND user_id = @2", [placeId, uid]); }
+    else { await _db.query("INSERT INTO SmartRoad.place_likes (place_id, user_id) VALUES (@1, @2)", [placeId, uid]); }
+  }
+
+  Future<int?> getMyPlaceRating(String placeId) async {
+    if (!isAuthenticated) return null;
+    if (isDemoMode) { final u = _effectiveUserId; if (u == null) return null; final ratings = _demoPlaceRatings[placeId]; return ratings?[u]; }
+    final uid = currentUserId; if (uid == null) return null;
+    final r = await _db.query("SELECT rating FROM SmartRoad.place_ratings WHERE place_id = @1 AND user_id = @2", [placeId, uid]);
+    if (!r.isError && r.rows.isNotEmpty) { final v = r.rows.first['rating']; if (v is int) return v; if (v is num) return v.toInt(); }
+    return null;
+  }
+
+  Future<Map<String, dynamic>> getPlaceRatingsSummary(String placeId) async {
+    if (isDemoMode) {
+      final vals = (_demoPlaceRatings[placeId] ?? <String, int>{}).values.toList();
+      if (vals.isEmpty) return {"avgRating": 0.0, "ratingsCount": 0};
+      return {"avgRating": vals.fold<int>(0, (s, r) => s + r) / vals.length, "ratingsCount": vals.length};
+    }
+    if (!_db.isConnected) return {"avgRating": 0.0, "ratingsCount": 0};
+    final r = await _db.query("SELECT AVG(rating) AS a, COUNT(*) AS c FROM SmartRoad.place_ratings WHERE place_id = @1", [placeId]);
+    if (!r.isError && r.rows.isNotEmpty) return {"avgRating": (r.rows.first['a'] as num?)?.toDouble() ?? 0.0, "ratingsCount": (r.rows.first['c'] as num?)?.toInt() ?? 0};
+    return {"avgRating": 0.0, "ratingsCount": 0};
+  }
+
+  Future<void> setPlaceRating({required String placeId, required int rating}) async {
+    if (rating < 1 || rating > 5) throw Exception("Rating must be 1-5");
+    if (!isAuthenticated) throw Exception("Must be authenticated");
+    if (isDemoMode) { final u = _effectiveUserId; if (u != null) _demoPlaceRatings.putIfAbsent(placeId, () => <String, int>{})[u] = rating; return; }
+    final uid = currentUserId; if (uid == null) throw Exception("User not available");
+    await _db.query("INSERT INTO SmartRoad.place_ratings (place_id, user_id, rating) VALUES (@1, @2, @3) ON CONFLICT (place_id, user_id) DO UPDATE SET rating = @3, updated_at = NOW()", [placeId, uid, rating]);
+  }
+
+  // PLACE IMAGES
+  Future<List<PlaceImage>> getPlaceImages({required String placeId, PlaceImageStatus? status}) async {
+    if (isDemoMode) {
+      var s = List<PlaceImage>.from(_demoPlaceImages[placeId] ?? []);
+      if (status != null) s = s.where((i) => i.status == status).toList();
+      s.sort((a, b) => b.createdAt.compareTo(a.createdAt)); return s;
+    }
+    if (!_db.isConnected) return [];
+    var sql = "SELECT * FROM SmartRoad.place_images WHERE place_id = @1";
+    if (status != null) sql += " AND status = ''";
+    sql += " ORDER BY created_at DESC";
+    final r = await _db.query(sql, [placeId]);
+    if (!r.isError) return r.rows.map((j) => PlaceImage.fromJson(j)).toList();
+    return [];
+  }
+
+  Future<PlaceImage> createPlaceImage({required String placeId, required String imageUrl}) async {
+    if (isDemoMode) {
+      final now = DateTime.now(); final uid = _effectiveUserId ?? demoUserId;
+      final img = PlaceImage(id: "d-", placeId: placeId, userId: uid, imageUrl: imageUrl, status: PlaceImageStatus.approved, createdAt: now, updatedAt: now, userName: "Demo User");
+      _demoPlaceImages.putIfAbsent(placeId, () => []).insert(0, img); return img;
+    }
+    final uid = currentUserId; if (uid == null) throw Exception("Not authenticated");
+    final r = await _db.query("INSERT INTO SmartRoad.place_images (place_id, user_id, image_url, status) VALUES (@1, @2, @3, 'pending') RETURNING *", [placeId, uid, imageUrl]);
+    if (!r.isError && r.rows.isNotEmpty) return PlaceImage.fromJson(r.rows.first);
+    throw Exception("Failed");
+  }
 
   Future<List<PlaceImage>> getPendingPlaceImages() async {
-    if (isDemoMode) return [];
-    if (!_db.isConnected) return [];
-    final result = await _db.query(
-      "SELECT * FROM SmartRoad.place_images WHERE status = 'pending' ORDER BY created_at DESC",
-    );
-    if (!result.isError) {
-      return result.rows.map((json) => PlaceImage.fromJson(json)).toList();
-    }
+    if (isDemoMode || !_db.isConnected) return [];
+    final r = await _db.query("SELECT * FROM SmartRoad.place_images WHERE status = 'pending' ORDER BY created_at DESC");
+    if (!r.isError) return r.rows.map((j) => PlaceImage.fromJson(j)).toList();
     return [];
   }
 
   Future<void> approvePlaceImage(String imageId) async {
     if (isDemoMode) return;
-    await _db.query(
-      "UPDATE SmartRoad.place_images SET status = 'approved', reviewed_at = NOW() WHERE id = @id",
-      [imageId],
-    );
+    await _db.query("UPDATE SmartRoad.place_images SET status = 'approved', reviewed_at = NOW() WHERE id = @1", [imageId]);
   }
 
   Future<void> rejectPlaceImage(String imageId, {String? reason}) async {
     if (isDemoMode) return;
-    await _db.query(
-      "UPDATE SmartRoad.place_images SET status = 'rejected', review_reason = @reason, reviewed_at = NOW() WHERE id = @id",
-      [reason, imageId],
-    );
+    await _db.query("UPDATE SmartRoad.place_images SET status = 'rejected', review_reason = @1, reviewed_at = NOW() WHERE id = @2", [reason, imageId]);
   }
 
-  // ========================================================================
-  // * IMAGE UPLOAD
-  // ========================================================================
-
-  /// * Upload an image file
+  // IMAGE UPLOAD
   Future<String?> uploadImage(File imageFile, String fileName) async {
     if (isDemoMode) return null;
     return await _db.uploadImage(imageFile, fileName);
@@ -389,860 +300,28 @@ class SupabaseService {
 
   Future<String?> uploadImageBytes(Uint8List bytes, String fileName) async {
     if (isDemoMode) return null;
-    // * For bytes-based upload, write to temp file then upload
     try {
-      final tempDir = Directory.systemTemp;
-      final tempFile = File('${tempDir.path}/$fileName');
-      await tempFile.writeAsBytes(bytes);
-      final url = await _db.uploadImage(tempFile, fileName);
-      await tempFile.delete();
-      return url;
-    } catch (e) {
-      debugPrint("Upload bytes error: $e");
-      return null;
-    }
+      final tmp = File('/');
+      await tmp.writeAsBytes(bytes);
+      final url = await _db.uploadImage(tmp, fileName);
+      await tmp.delete(); return url;
+    } catch (e) { debugPrint("Upload error: "); return null; }
   }
 
-  // ========================================================================
-  // * COMMUTE AI CACHE
-  // ========================================================================
-
+  // COMMUTE AI CACHE
   Future<Map<String, dynamic>?> getCommuteAiCache(String cacheKey) async {
     if (!_db.isConnected) return null;
-    final result = await _db.query(
-      "SELECT payload FROM SmartRoad.commute_ai_cache WHERE cache_key = @key AND expires_at > NOW()",
-      [cacheKey],
-    );
-    if (!result.isError && result.isNotEmpty) {
-      return result.rows.first['payload'] as Map<String, dynamic>?;
-    }
+    final r = await _db.query("SELECT payload FROM SmartRoad.commute_ai_cache WHERE cache_key = @1 AND expires_at > NOW()", [cacheKey]);
+    if (!r.isError && r.rows.isNotEmpty) { final p = r.rows.first['payload']; if (p is Map<String, dynamic>) return p; }
     return null;
   }
 
-  Future<void> upsertCommuteAiCache(String cacheKey, Map<String, dynamic> payload,
-      {Duration ttl = const Duration(hours: 24)}) async {
+  Future<void> upsertCommuteAiCache(String cacheKey, Map<String, dynamic> payload, {int ttlMinutes = 1440}) async {
     if (!_db.isConnected) return;
     await _db.query(
-      """INSERT INTO SmartRoad.commute_ai_cache (cache_key, payload, expires_at)
-         VALUES (@key, @payload, NOW() + INTERVAL '24 hours')
-         ON CONFLICT (cache_key)
-         DO UPDATE SET payload = @payload, expires_at = NOW() + INTERVAL '24 hours', hit_count = SmartRoad.commute_ai_cache.hit_count + 1""",
+      "INSERT INTO SmartRoad.commute_ai_cache (cache_key, payload, expires_at) VALUES (@1, @2, NOW() + INTERVAL '1 day') "
+      "ON CONFLICT (cache_key) DO UPDATE SET payload = @2, expires_at = NOW() + INTERVAL '1 day', hit_count = SmartRoad.commute_ai_cache.hit_count + 1",
       [cacheKey, payload],
     );
-  }
-}
-
-    final commentJson = response;
-    final profileData = commentJson['profiles'] as Map<String, dynamic>?;
-
-    if (profileData != null) {
-      commentJson['user_name'] = profileData['name'];
-      commentJson['user_photo_url'] = profileData['photo_url'];
-    }
-
-    return HazardComment.fromJson(commentJson);
-  }
-
-  /// * Delete a comment
-  Future<void> deleteComment(String commentId) async {
-    if (isDemoMode) {
-      throw Exception("Deleting comments not available in demo mode");
-    }
-    if (!isAuthenticated) {
-      throw Exception("User must be authenticated to delete comments");
-    }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-
-    await c.from('hazard_comments').delete().eq('id', commentId);
-  }
-
-  /// * Subscribe to realtime comments updates for a hazard
-  RealtimeChannel? subscribeToComments({
-    required String hazardId,
-    required Function(Map<String, dynamic>) onInsert,
-    required Function(Map<String, dynamic>) onUpdate,
-    required Function(Map<String, dynamic>) onDelete,
-  }) {
-    if (isDemoMode) {
-      return null; // * No realtime in demo mode
-    }
-    final c = client;
-    if (c == null) {
-      return null;
-    }
-    final channel = c.channel('comments_channel_$hazardId');
-
-    channel
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'hazard_comments',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'hazard_id',
-            value: hazardId,
-          ),
-          callback: (payload) => onInsert(payload.newRecord),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'hazard_comments',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'hazard_id',
-            value: hazardId,
-          ),
-          callback: (payload) => onUpdate(payload.newRecord),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.delete,
-          schema: 'public',
-          table: 'hazard_comments',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'hazard_id',
-            value: hazardId,
-          ),
-          callback: (payload) => onDelete(payload.oldRecord),
-        )
-        .subscribe();
-
-    return channel;
-  }
-
-  // * Place Preview (Known Locations) - Photos, Comments, Likes
-  // *
-  // * Expected tables in Supabase:
-  // * - place_comments
-  // * - place_images
-  // * - place_likes
-  // *
-  // * See `supabase_places_schema.sql` for the recommended schema + RLS policies.
-
-  /// * Get comments for a place
-  Future<List<PlaceComment>> getPlaceComments(String placeId) async {
-    if (isDemoMode) {
-      final comments = List<PlaceComment>.from(
-        _demoPlaceComments[placeId] ?? const [],
-      );
-      comments.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return comments;
-    }
-    final c = client;
-    if (c == null) {
-      return [];
-    }
-
-    final response = await c
-        .from('place_comments')
-        .select('''
-          *,
-          profiles:user_id (
-            name,
-            photo_url
-          )
-        ''')
-        .eq('place_id', placeId)
-        .order('created_at', ascending: false);
-
-    final comments = <PlaceComment>[];
-    for (final item in response) {
-      final Map<String, dynamic> commentData = item;
-      final profileData = commentData['profiles'] as Map<String, dynamic>?;
-
-      if (profileData != null) {
-        commentData['user_name'] = profileData['name'];
-        commentData['user_photo_url'] = profileData['photo_url'];
-      }
-
-      comments.add(PlaceComment.fromJson(commentData));
-    }
-    return comments;
-  }
-
-  /// * Create a new comment on a place
-  Future<PlaceComment> createPlaceComment({
-    required String placeId,
-    required String text,
-  }) async {
-    if (!isAuthenticated) {
-      throw Exception("User must be authenticated to comment");
-    }
-
-    if (isDemoMode) {
-      final now = DateTime.now();
-      final userId = _effectiveUserId ?? demoUserId;
-      final comment = PlaceComment(
-        id: "demo-comment-${now.microsecondsSinceEpoch}",
-        placeId: placeId,
-        userId: userId,
-        text: text.trim(),
-        createdAt: now,
-        updatedAt: now,
-        userName: "Demo User",
-      );
-      final comments = _demoPlaceComments.putIfAbsent(
-        placeId,
-        () => <PlaceComment>[],
-      );
-      comments.insert(0, comment);
-      return comment;
-    }
-
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-
-    final commentData = {'place_id': placeId, 'text': text.trim()};
-
-    final response =
-        await c.from('place_comments').insert(commentData).select('''
-          *,
-          profiles:user_id (
-            name,
-            photo_url
-          )
-        ''').single();
-
-    final Map<String, dynamic> commentJson = response;
-    final profileData = commentJson['profiles'] as Map<String, dynamic>?;
-
-    if (profileData != null) {
-      commentJson['user_name'] = profileData['name'];
-      commentJson['user_photo_url'] = profileData['photo_url'];
-    }
-
-    return PlaceComment.fromJson(commentJson);
-  }
-
-  /// * Update a place comment
-  Future<PlaceComment> updatePlaceComment({
-    required String commentId,
-    required String text,
-  }) async {
-    if (isDemoMode) {
-      throw Exception("Updating place comments not available in demo mode");
-    }
-    if (!isAuthenticated) {
-      throw Exception("User must be authenticated to update comments");
-    }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-
-    final response =
-        await c
-            .from('place_comments')
-            .update({'text': text.trim()})
-            .eq('id', commentId)
-            .select('''
-          *,
-          profiles:user_id (
-            name,
-            photo_url
-          )
-        ''')
-            .single();
-
-    final Map<String, dynamic> commentJson = response;
-    final profileData = commentJson['profiles'] as Map<String, dynamic>?;
-
-    if (profileData != null) {
-      commentJson['user_name'] = profileData['name'];
-      commentJson['user_photo_url'] = profileData['photo_url'];
-    }
-
-    return PlaceComment.fromJson(commentJson);
-  }
-
-  /// * Delete a place comment
-  Future<void> deletePlaceComment(String commentId) async {
-    if (isDemoMode) {
-      throw Exception("Deleting place comments not available in demo mode");
-    }
-    if (!isAuthenticated) {
-      throw Exception("User must be authenticated to delete comments");
-    }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-
-    await c.from('place_comments').delete().eq('id', commentId);
-  }
-
-  /// * Subscribe to realtime comments updates for a place
-  RealtimeChannel? subscribeToPlaceComments({
-    required String placeId,
-    required Function(Map<String, dynamic>) onInsert,
-    required Function(Map<String, dynamic>) onUpdate,
-    required Function(Map<String, dynamic>) onDelete,
-  }) {
-    if (isDemoMode) {
-      return null;
-    }
-    final c = client;
-    if (c == null) {
-      return null;
-    }
-
-    final channel = c.channel('place_comments_channel_$placeId');
-
-    channel
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'place_comments',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'place_id',
-            value: placeId,
-          ),
-          callback: (payload) => onInsert(payload.newRecord),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'place_comments',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'place_id',
-            value: placeId,
-          ),
-          callback: (payload) => onUpdate(payload.newRecord),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.delete,
-          schema: 'public',
-          table: 'place_comments',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'place_id',
-            value: placeId,
-          ),
-          callback: (payload) => onDelete(payload.oldRecord),
-        )
-        .subscribe();
-
-    return channel;
-  }
-
-  /// * Get images for a place (optionally filtered by [status])
-  Future<List<PlaceImage>> getPlaceImages({
-    required String placeId,
-    PlaceImageStatus? status,
-  }) async {
-    if (isDemoMode) {
-      final source = List<PlaceImage>.from(
-        _demoPlaceImages[placeId] ?? const [],
-      );
-      if (status == null) {
-        source.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return source;
-      }
-      final filtered = source.where((item) => item.status == status).toList();
-      filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return filtered;
-    }
-    final c = client;
-    if (c == null) {
-      return [];
-    }
-
-    var query = c
-        .from('place_images')
-        .select('''
-          *,
-          profiles:user_id (
-            name,
-            photo_url
-          )
-        ''')
-        .eq('place_id', placeId);
-
-    if (status != null) {
-      query = query.eq('status', status.value);
-    }
-
-    final response = await query.order('created_at', ascending: false);
-
-    final images = <PlaceImage>[];
-    for (final item in response) {
-      final Map<String, dynamic> imageData = item;
-      final profileData = imageData['profiles'] as Map<String, dynamic>?;
-
-      if (profileData != null) {
-        imageData['user_name'] = profileData['name'];
-        imageData['user_photo_url'] = profileData['photo_url'];
-      }
-
-      images.add(PlaceImage.fromJson(imageData));
-    }
-
-    return images;
-  }
-
-  /// * Create a new place image record (defaults to pending)
-  Future<PlaceImage> createPlaceImage({
-    required String placeId,
-    required String imageUrl,
-  }) async {
-    if (!isAuthenticated) {
-      throw Exception("User must be authenticated to submit photos");
-    }
-
-    if (isDemoMode) {
-      final now = DateTime.now();
-      final userId = _effectiveUserId ?? demoUserId;
-      final image = PlaceImage(
-        id: "demo-image-${now.microsecondsSinceEpoch}",
-        placeId: placeId,
-        userId: userId,
-        imageUrl: imageUrl,
-        status: PlaceImageStatus.approved,
-        createdAt: now,
-        updatedAt: now,
-        userName: "Demo User",
-      );
-      final images = _demoPlaceImages.putIfAbsent(
-        placeId,
-        () => <PlaceImage>[],
-      );
-      images.insert(0, image);
-      return image;
-    }
-
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-
-    final record = {
-      'place_id': placeId,
-      'image_url': imageUrl,
-      'status': PlaceImageStatus.pending.value,
-    };
-
-    final response =
-        await c.from('place_images').insert(record).select('''
-          *,
-          profiles:user_id (
-            name,
-            photo_url
-          )
-        ''').single();
-
-    final Map<String, dynamic> imageJson = response;
-    final profileData = imageJson['profiles'] as Map<String, dynamic>?;
-
-    if (profileData != null) {
-      imageJson['user_name'] = profileData['name'];
-      imageJson['user_photo_url'] = profileData['photo_url'];
-    }
-
-    return PlaceImage.fromJson(imageJson);
-  }
-
-  /// * Get pending images (admin moderation queue)
-  Future<List<PlaceImage>> getPendingPlaceImages() async {
-    if (isDemoMode) {
-      return [];
-    }
-    final c = client;
-    if (c == null) {
-      return [];
-    }
-
-    final response = await c
-        .from('place_images')
-        .select('''
-          *,
-          profiles:user_id (
-            name,
-            photo_url
-          )
-        ''')
-        .eq('status', PlaceImageStatus.pending.value)
-        .order('created_at', ascending: true);
-
-    final images = <PlaceImage>[];
-    for (final item in response) {
-      final Map<String, dynamic> imageData = item;
-      final profileData = imageData['profiles'] as Map<String, dynamic>?;
-
-      if (profileData != null) {
-        imageData['user_name'] = profileData['name'];
-        imageData['user_photo_url'] = profileData['photo_url'];
-      }
-
-      images.add(PlaceImage.fromJson(imageData));
-    }
-
-    return images;
-  }
-
-  /// * Approve a place image (admin)
-  Future<void> approvePlaceImage(String imageId) async {
-    if (isDemoMode) {
-      throw Exception("Moderation not available in demo mode");
-    }
-    if (!isAuthenticated) {
-      throw Exception("User must be authenticated to review photos");
-    }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-
-    await c
-        .from('place_images')
-        .update({
-          'status': PlaceImageStatus.approved.value,
-          'reviewed_by': currentUserId,
-          'reviewed_at': DateTime.now().toUtc().toIso8601String(),
-          'review_reason': null,
-        })
-        .eq('id', imageId);
-  }
-
-  /// * Reject a place image (admin)
-  Future<void> rejectPlaceImage(String imageId, {String? reason}) async {
-    if (isDemoMode) {
-      throw Exception("Moderation not available in demo mode");
-    }
-    if (!isAuthenticated) {
-      throw Exception("User must be authenticated to review photos");
-    }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-
-    await c
-        .from('place_images')
-        .update({
-          'status': PlaceImageStatus.rejected.value,
-          'reviewed_by': currentUserId,
-          'reviewed_at': DateTime.now().toUtc().toIso8601String(),
-          'review_reason': reason?.trim(),
-        })
-        .eq('id', imageId);
-  }
-
-  /// * Get likes count for a place
-  Future<int> getPlaceLikesCount(String placeId) async {
-    if (isDemoMode) {
-      return (_demoPlaceLikes[placeId] ?? const <String>{}).length;
-    }
-    final c = client;
-    if (c == null) {
-      return 0;
-    }
-
-    final response = await c
-        .from('place_likes')
-        .select('user_id')
-        .eq('place_id', placeId);
-
-    return (response as List).length;
-  }
-
-  /// * Check if current user liked a place
-  Future<bool> hasLikedPlace(String placeId) async {
-    if (!isAuthenticated) {
-      return false;
-    }
-
-    if (isDemoMode) {
-      final userId = _effectiveUserId;
-      if (userId == null) return false;
-      return (_demoPlaceLikes[placeId] ?? const <String>{}).contains(userId);
-    }
-
-    final c = client;
-    if (c == null) {
-      return false;
-    }
-
-    final userId = currentUserId;
-    if (userId == null) {
-      return false;
-    }
-
-    final existing =
-        await c
-            .from('place_likes')
-            .select('place_id')
-            .eq('place_id', placeId)
-            .eq('user_id', userId)
-            .maybeSingle();
-
-    return existing != null;
-  }
-
-  /// * Toggle like for current user on a place (like/unlike)
-  Future<void> togglePlaceLike(String placeId) async {
-    if (!isAuthenticated) {
-      throw Exception("User must be authenticated to like");
-    }
-
-    if (isDemoMode) {
-      final userId = _effectiveUserId;
-      if (userId == null) {
-        throw Exception("User not available");
-      }
-      final likes = _demoPlaceLikes.putIfAbsent(placeId, () => <String>{});
-      if (likes.contains(userId)) {
-        likes.remove(userId);
-      } else {
-        likes.add(userId);
-      }
-      return;
-    }
-
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-
-    final userId = currentUserId;
-    if (userId == null) {
-      throw Exception("User not available");
-    }
-
-    final existing =
-        await c
-            .from('place_likes')
-            .select('place_id')
-            .eq('place_id', placeId)
-            .eq('user_id', userId)
-            .maybeSingle();
-
-    if (existing != null) {
-      await c
-          .from('place_likes')
-          .delete()
-          .eq('place_id', placeId)
-          .eq('user_id', userId);
-      return;
-    }
-
-    await c.from('place_likes').insert({
-      'place_id': placeId,
-      'user_id': userId,
-    });
-  }
-
-  /// * Get current user's rating for a place (1–5), or null if not rated.
-  Future<int?> getMyPlaceRating(String placeId) async {
-    if (!isAuthenticated) {
-      return null;
-    }
-
-    if (isDemoMode) {
-      final userId = _effectiveUserId;
-      if (userId == null) return null;
-      return _demoPlaceRatings[placeId]?[userId];
-    }
-
-    final c = client;
-    if (c == null) {
-      return null;
-    }
-    final userId = currentUserId;
-    if (userId == null) {
-      return null;
-    }
-
-    final existing =
-        await c
-            .from('place_ratings')
-            .select('rating')
-            .eq('place_id', placeId)
-            .eq('user_id', userId)
-            .maybeSingle();
-
-    if (existing == null) {
-      return null;
-    }
-
-    final ratingValue = existing['rating'];
-    if (ratingValue is int) {
-      return ratingValue;
-    }
-    if (ratingValue is num) {
-      return ratingValue.toInt();
-    }
-    return null;
-  }
-
-  /// * Get ratings summary for a place.
-  /// *
-  /// * Returns:
-  /// * - avgRating: 0..5
-  /// * - ratingsCount: 0..n
-  Future<Map<String, dynamic>> getPlaceRatingsSummary(String placeId) async {
-    if (isDemoMode) {
-      final ratings =
-          (_demoPlaceRatings[placeId] ?? const <String, int>{}).values.toList();
-      if (ratings.isEmpty) {
-        return {"avgRating": 0.0, "ratingsCount": 0};
-      }
-
-      final total = ratings.fold<int>(0, (sum, r) => sum + r);
-      final avg = total / ratings.length;
-      return {"avgRating": avg, "ratingsCount": ratings.length};
-    }
-    final c = client;
-    if (c == null) {
-      return {"avgRating": 0.0, "ratingsCount": 0};
-    }
-
-    final rows = await c
-        .from('place_ratings')
-        .select('rating')
-        .eq('place_id', placeId);
-
-    final ratings = <int>[];
-    for (final row in rows) {
-      final Map<String, dynamic> item = row;
-      final value = item['rating'];
-      if (value is int) {
-        ratings.add(value);
-        continue;
-      }
-      if (value is num) {
-        ratings.add(value.toInt());
-      }
-    }
-
-    if (ratings.isEmpty) {
-      return {"avgRating": 0.0, "ratingsCount": 0};
-    }
-
-    final total = ratings.fold<int>(0, (sum, r) => sum + r);
-    final avg = total / ratings.length;
-
-    return {"avgRating": avg, "ratingsCount": ratings.length};
-  }
-
-  /// * Create or update the current user's rating for a place (1–5).
-  Future<void> setPlaceRating({
-    required String placeId,
-    required int rating,
-  }) async {
-    if (rating < 1 || rating > 5) {
-      throw Exception("Rating must be between 1 and 5");
-    }
-    if (!isAuthenticated) {
-      throw Exception("User must be authenticated to rate places");
-    }
-
-    if (isDemoMode) {
-      final userId = _effectiveUserId;
-      if (userId == null) {
-        throw Exception("User not available");
-      }
-      final ratings = _demoPlaceRatings.putIfAbsent(
-        placeId,
-        () => <String, int>{},
-      );
-      ratings[userId] = rating;
-      return;
-    }
-
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-
-    final userId = currentUserId;
-    if (userId == null) {
-      throw Exception("User not available");
-    }
-
-    final existing =
-        await c
-            .from('place_ratings')
-            .select('rating')
-            .eq('place_id', placeId)
-            .eq('user_id', userId)
-            .maybeSingle();
-
-    if (existing != null) {
-      await c
-          .from('place_ratings')
-          .update({'rating': rating})
-          .eq('place_id', placeId)
-          .eq('user_id', userId);
-      return;
-    }
-
-    await c.from('place_ratings').insert({
-      'place_id': placeId,
-      'user_id': userId,
-      'rating': rating,
-    });
-  }
-
-  // ============================================================
-  // * COMMUTE AI CACHE (L2 shared)
-  // ============================================================
-
-  /// * Returns cached commute AI payload for [cacheKey] if not expired, else null.
-  Future<Map<String, dynamic>?> getCommuteAiCache(String cacheKey) async {
-    final c = client;
-    if (c == null) return null;
-    try {
-      final res = await c
-          .from("commute_ai_cache")
-          .select("payload, expires_at, hit_count")
-          .eq("cache_key", cacheKey)
-          .maybeSingle();
-      if (res == null) return null;
-      final expiresAt = res["expires_at"] != null
-          ? DateTime.tryParse(res["expires_at"] as String)
-          : null;
-      if (expiresAt == null || DateTime.now().isAfter(expiresAt)) return null;
-      final payload = res["payload"];
-      if (payload is! Map<String, dynamic>) return null;
-      final hitCount = (res["hit_count"] as int?) ?? 0;
-      await c
-          .from("commute_ai_cache")
-          .update({"hit_count": hitCount + 1, "updated_at": DateTime.now().toIso8601String()})
-          .eq("cache_key", cacheKey);
-      return payload;
-    } catch (e) {
-      if (kDebugMode) debugPrint("[SupabaseService] getCommuteAiCache error: $e");
-      return null;
-    }
-  }
-
-  /// * Stores or updates commute AI cache entry. [ttlMinutes] from now.
-  Future<void> upsertCommuteAiCache(
-    String cacheKey,
-    Map<String, dynamic> payload, {
-    int ttlMinutes = 60 * 24,
-  }) async {
-    final c = client;
-    if (c == null) return;
-    try {
-      final expiresAt = DateTime.now().add(Duration(minutes: ttlMinutes));
-      await c.from("commute_ai_cache").upsert({
-        "cache_key": cacheKey,
-        "payload": payload,
-        "expires_at": expiresAt.toIso8601String(),
-        "hit_count": 0,
-        "updated_at": DateTime.now().toIso8601String(),
-      }, onConflict: "cache_key");
-    } catch (e) {
-      if (kDebugMode) debugPrint("[SupabaseService] upsertCommuteAiCache error: $e");
-    }
   }
 }

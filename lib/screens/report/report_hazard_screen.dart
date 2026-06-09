@@ -106,14 +106,15 @@ class _ReportHazardScreenState extends ConsumerState<ReportHazardScreen> {
       }
       
       // * Create hazard
-      await SupabaseService().createHazard(
-        type: _selectedType!,
-        description: _descriptionController.text.trim(),
-        severity: _selectedSeverity!,
-        latitude: position.latitude,
-        longitude: position.longitude,
-        imageUrl: imageUrl,
-      );
+      await SupabaseService().createHazard({
+        'user_id': SupabaseService().currentUserId ?? '',
+        'type': _selectedType!.value,
+        'description': _descriptionController.text.trim(),
+        'severity': _selectedSeverity!.value,
+        'lat': position.latitude,
+        'lon': position.longitude,
+        if (imageUrl != null) 'image_url': imageUrl,
+      });
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -1,4 +1,4 @@
-import "package:flutter/material.dart";
+﻿import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:image_picker/image_picker.dart";
@@ -143,7 +143,7 @@ class _MultiFuelUpdateDialogState extends ConsumerState<MultiFuelUpdateDialog> {
         return "demo_photo_url";
       }
 
-      final client = supabaseService.client;
+      final client = supabaseService.client as dynamic;
       if (client == null) {
         throw Exception("Database connection unavailable");
       }
@@ -604,3 +604,4 @@ class _MultiFuelUpdateDialogState extends ConsumerState<MultiFuelUpdateDialog> {
     );
   }
 }
+

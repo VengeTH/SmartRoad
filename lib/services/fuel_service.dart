@@ -1,4 +1,4 @@
-import "dart:math" as math;
+﻿import "dart:math" as math;
 
 import "package:flutter/foundation.dart";
 import "package:flutter_map/flutter_map.dart";
@@ -1471,3 +1471,6 @@ class FuelSubmissionResult {
     this.stationId,
   });
 }
+
+
+

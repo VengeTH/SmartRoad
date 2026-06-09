@@ -1,4 +1,4 @@
-import "dart:io";
+﻿import "dart:io";
 
 import "package:flutter/foundation.dart";
 import "package:flutter/material.dart";
@@ -421,7 +421,7 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
             "Image too large (max ${AppConstants.maxImageSizeBytes ~/ (1024 * 1024)}MB)",
           );
         }
-        url = await service.uploadImageBytes(bytes, fileName);
+        url = (await service.uploadImageBytes(bytes, fileName)) ?? "";
       } else {
         final file = File(picked.path);
         final bytes = await file.readAsBytes();
@@ -430,7 +430,7 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
             "Image too large (max ${AppConstants.maxImageSizeBytes ~/ (1024 * 1024)}MB)",
           );
         }
-        url = await service.uploadImage(file, fileName);
+        url = (await service.uploadImage(file, fileName)) ?? "";
       }
 
       await service.createPlaceImage(placeId: widget.place.id, imageUrl: url);
@@ -1243,3 +1243,4 @@ class _PlaceDetailSheetState extends ConsumerState<PlaceDetailSheet> {
     );
   }
 }
+

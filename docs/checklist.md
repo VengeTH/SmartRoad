@@ -274,6 +274,7 @@
 - [x] Create Route
 - [x] Save Route
 - [ ] Publish Route
+- [ ] Create Route via Follow the current user's location
 
 #### Sharing
 - [ ] Free Route Sharing
@@ -283,6 +284,8 @@
 - [ ] Paid Routes
 - [ ] Route Pricing
 - [ ] Route Categories
+- [ ] Fuel prices
+- [ ] If system detected user near gasoline, prompt/ask for updating the gasoline branch prices / fuel prices
 
 ### 💵 SmartRoad Revenue
 

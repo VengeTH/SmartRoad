@@ -1,4 +1,4 @@
-import "package:flutter/material.dart";
+﻿import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:image_picker/image_picker.dart";
 import "package:latlong2/latlong.dart";
@@ -88,7 +88,7 @@ class _AddFuelStationDialogState extends ConsumerState<AddFuelStationDialog> {
         return "demo_station_photo_url";
       }
 
-      final client = supabaseService.client;
+      final client = supabaseService.client as dynamic;
       if (client == null) {
         throw Exception("Database connection unavailable");
       }
@@ -437,3 +437,4 @@ class _AddFuelStationDialogState extends ConsumerState<AddFuelStationDialog> {
     );
   }
 }
+

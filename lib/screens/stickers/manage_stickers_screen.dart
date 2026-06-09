@@ -478,10 +478,10 @@ class _AddPhysicalStickerDialogState extends ConsumerState<_AddPhysicalStickerDi
       String photoUrl;
       if (kIsWeb && _selectedImageBytes != null) {
         // * On web, upload bytes directly
-        photoUrl = await SupabaseService().uploadImageBytes(_selectedImageBytes!, fileName);
+        photoUrl = (await SupabaseService().uploadImageBytes(_selectedImageBytes!, fileName))!;
       } else if (_selectedImage != null) {
         // * On mobile, upload file
-        photoUrl = await SupabaseService().uploadImage(_selectedImage!, fileName);
+        photoUrl = (await SupabaseService().uploadImage(_selectedImage!, fileName))!;
       } else {
         throw Exception("No image to upload");
       }

@@ -1,4 +1,4 @@
-/// * Database Service
+﻿/// * Database Service
 /// * Provides a PostgreSQL-backed data layer for SmartRoad.
 /// * Communicates with our self-hosted backend API (or runs in demo mode).
 /// * 
@@ -6,6 +6,7 @@
 /// * The backend API is implemented in Phase 5.
 /// * For now, everything works in demo mode with local/in-memory data.
 import "dart:convert";
+import "dart:collection";
 import "package:flutter/foundation.dart";
 import "package:http/http.dart" as http;
 import "../core/config/env.dart";
@@ -17,7 +18,7 @@ import "../models/place_comment.dart";
 import "../models/place_image.dart";
 
 /// * Result from a database query
-class DbResult {
+class DbResult extends IterableBase<Map<String, dynamic>> {
   final List<Map<String, dynamic>> rows;
   final int? count;
   final String? error;
@@ -27,10 +28,16 @@ class DbResult {
   bool get isError => error != null;
   bool get isEmpty => rows.isEmpty;
   int get length => rows.length;
+
+  @override
+  Iterator<Map<String, dynamic>> get iterator => rows.iterator;
+
+  dynamic operator [](String key) => rows.isNotEmpty ? rows.first[key] : null;
 }
 
 /// * Database service singleton
 class DatabaseService {
+  _DbAuth get auth => _DbAuth._();
   static final DatabaseService _instance = DatabaseService._internal();
   factory DatabaseService() => _instance;
   DatabaseService._internal();
@@ -252,4 +259,75 @@ class DatabaseService {
 
   /// * Current user ID (for services that need it)
   String? get currentUserId => null; // * Managed by auth provider
+
+  /// * Start a fluent query on [table] (backward-compat with Supabase SDK).
+  dynamic from(String table) => DbQueryBuilder._(this, table);
+
+  /// * Call a stored procedure / RPC function (backward-compat).
+  Future<DbResult> rpc(String function, {Map<String, dynamic>? params}) async {
+    final p = params?.values.toList() ?? [];
+    return await query("SELECT * FROM $function", p);
+  }
 }
+
+/// * Lightweight fluent query builder — mimics Supabase's `.from().select().eq()...` API.
+class DbQueryBuilder {
+  final DatabaseService _db;
+  final String _table;
+  final List<String> _columns = ["*"];
+  final List<String> _wheres = [];
+  final List<dynamic> _params = [];
+  String? _orderBy;
+  bool _orderAsc = true;
+  int? _limit;
+  int? _offset;
+
+  DbQueryBuilder._(this._db, this._table);
+
+DbQueryBuilder select([String columns = "*"]) {
+    _columns.clear(); _columns.addAll(columns.split(",").map((c) => c.trim())); return this;
+  }
+  DbQueryBuilder eq(String c, dynamic v) { _wheres.add("$c = @${_params.length + 1}"); _params.add(v); return this; }
+  DbQueryBuilder gte(String c, dynamic v) { _wheres.add("$c >= @${_params.length + 1}"); _params.add(v); return this; }
+  DbQueryBuilder lte(String c, dynamic v) { _wheres.add("$c <= @${_params.length + 1}"); _params.add(v); return this; }
+  DbQueryBuilder order(String c, {bool ascending = true}) { _orderBy = c; _orderAsc = ascending; return this; }
+  DbQueryBuilder limit(int l) { _limit = l; return this; }
+  DbQueryBuilder range(int f, int t) { _offset = f; _limit = t - f + 1; return this; }
+  DbQueryBuilder single() { _limit = 1; return this; }
+  DbQueryBuilder maybeSingle() { _limit = 1; return this; }
+
+  Future<List<Map<String, dynamic>>> toList() async => _exec();
+  Future<Map<String, dynamic>?> maybeSingleExecute() async { final r = await _exec(); return r.isNotEmpty ? r.first : null; }
+
+  
+  
+  
+
+  
+
+Future<List<Map<String, dynamic>>> _exec() async {
+    var sql = "SELECT ${_columns.join(", ")} FROM SmartRoad.$_table";
+    if (_wheres.isNotEmpty) sql += " WHERE ${_wheres.join(" AND ")}";
+    if (_orderBy != null) sql += " ORDER BY $_orderBy ${_orderAsc ? "ASC" : "DESC"}";
+    if (_limit != null) sql += " LIMIT $_limit";
+    if (_offset != null) sql += " OFFSET $_offset";
+    final r = await _db.query(sql, _params);
+    return r.rows;
+  }
+}
+
+/// * Stub auth accessor — backward compat with Supabase's client.auth.
+class _DbAuth {
+  _DbAuth._();
+  _DbSession? get currentUser => null;
+}
+
+/// * Stub session — backward compat with Supabase's User.
+class _DbSession {
+  final String? id;
+  _DbSession({this.id});
+}
+
+
+
+

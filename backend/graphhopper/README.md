@@ -63,15 +63,33 @@ GET http://localhost:8989/route
 
 **Parameters:**
 - `point` (required): Start point as `lat,lng` (can specify multiple points)
-- `vehicle` (required): Vehicle type (`motorcycle` for MVP)
+- `vehicle` (required): Vehicle type (`motorcycle`, `car`, `truck`, `foot`)
 - `type` (optional): Response format (`json` or `gpx`, default: `json`)
 - `points_encoded` (optional): `true` (default) or `false`
 - `instructions` (optional): `true` (default) or `false`
 - `calc_points` (optional): `true` (default) or `false`
 
+**Vehicle Profiles:**
+
+| Profile | GraphHopper Vehicle | Description |
+|---------|-------------------|-------------|
+| `motorcycle` | motorcycle | Standard motorcycle (≤399cc) |
+| `big_bike` | motorcycle | Large motorcycle (400cc+) |
+| `car` | car | Private vehicle |
+| `truck` | truck | Large vehicle |
+| `pedestrian` | foot | Walking |
+| `delivery_rider` | motorcycle | Shortcut + delivery entrance priority (Flutter-side) |
+| `flood_safe` | car | Flood-avoidant routing (Flutter-side) |
+| `weather_safe` | car | Weather-aware routing (Flutter-side) |
+| `hoa_access` | car | HOA sticker-based routing (Flutter-side) |
+
 **Example:**
 ```bash
+# Standard route
 curl "http://localhost:8989/route?point=14.5995,120.9842&point=14.6760,121.0437&vehicle=motorcycle&type=json&instructions=true"
+
+# Long distance test
+curl "http://localhost:8989/route?point=14.5995,120.9842&point=13.7563,121.0583&vehicle=car&type=json"
 ```
 
 ### Route Optimization (Future Feature)

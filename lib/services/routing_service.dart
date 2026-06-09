@@ -14,7 +14,11 @@ enum VehicleType {
   motorcycle("Motorcycle (≤399cc)"),
   car("Car (Private)"),
   truck("Truck"),
-  pedestrian("Pedestrian");
+  pedestrian("Pedestrian"),
+  deliveryRider("Delivery Rider"),
+  floodSafe("Flood Safe (No Flood Areas)"),
+  weatherSafe("Weather Safe (Avoid Storms)"),
+  hoaAccess("HOA Access (Sticker Required)");
   
   final String value;
   const VehicleType(this.value);
@@ -24,13 +28,33 @@ enum VehicleType {
     switch (this) {
       case VehicleType.bigBike:
       case VehicleType.motorcycle:
+      case VehicleType.deliveryRider:
         return "motorcycle";
       case VehicleType.car:
+      case VehicleType.floodSafe:
+      case VehicleType.weatherSafe:
+      case VehicleType.hoaAccess:
         return "car";
       case VehicleType.truck:
         return "truck";
       case VehicleType.pedestrian:
         return "foot";
+    }
+  }
+  
+  /// * Get GraphHopper profile name for custom profiles
+  String get graphhopperProfile {
+    switch (this) {
+      case VehicleType.deliveryRider:
+        return "delivery_rider";
+      case VehicleType.floodSafe:
+        return "flood_safe";
+      case VehicleType.weatherSafe:
+        return "weather_safe";
+      case VehicleType.hoaAccess:
+        return "hoa_access";
+      default:
+        return graphhopperParam;
     }
   }
   
@@ -47,6 +71,38 @@ enum VehicleType {
         return Icons.local_shipping;
       case VehicleType.pedestrian:
         return Icons.directions_walk;
+      case VehicleType.deliveryRider:
+        return Icons.inventory_2_outlined;
+      case VehicleType.floodSafe:
+        return Icons.water_drop_outlined;
+      case VehicleType.weatherSafe:
+        return Icons.thunderstorm_outlined;
+      case VehicleType.hoaAccess:
+        return Icons.home_work_outlined;
+    }
+  }
+  
+  /// * Get description for vehicle type
+  String get description {
+    switch (this) {
+      case VehicleType.bigBike:
+        return "400cc+ motorcycles, highway capable";
+      case VehicleType.motorcycle:
+        return "≤399cc, alley-friendly";
+      case VehicleType.car:
+        return "Private vehicles, standard roads";
+      case VehicleType.truck:
+        return "Large vehicles, wide roads only";
+      case VehicleType.pedestrian:
+        return "Walking paths and sidewalks";
+      case VehicleType.deliveryRider:
+        return "Shortcuts + delivery entrances prioritized";
+      case VehicleType.floodSafe:
+        return "Avoids historically flood-prone roads";
+      case VehicleType.weatherSafe:
+        return "Avoids storm/typhoon-affected zones";
+      case VehicleType.hoaAccess:
+        return "Uses sticker-granted village roads";
     }
   }
 }
@@ -280,9 +336,13 @@ class RoutingService {
         avgSpeed = 50.0; // * km/h
         break;
       case VehicleType.motorcycle:
+      case VehicleType.deliveryRider:
         avgSpeed = 40.0;
         break;
       case VehicleType.car:
+      case VehicleType.floodSafe:
+      case VehicleType.weatherSafe:
+      case VehicleType.hoaAccess:
         avgSpeed = 45.0;
         break;
       case VehicleType.truck:

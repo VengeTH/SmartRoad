@@ -20,13 +20,19 @@ services:
       - JAVA_OPTS=-Xmx2g -Xms2g
       - SCRIPT=web
       - PBF_URL=https://download.geofabrik.de/asia/philippines-latest.osm.pbf
-      - PROFILES=motorcycle
-      - PROFILES_CH=fastest
+      - PROFILES=motorcycle,car,truck,foot
+      - PROFILES_CH=motorcycle,car
       - GRAPHOPPER_PROFILE_MOTORCYCLE=fastest
+      - GRAPHOPPER_PROFILE_CAR=fastest
+      - GRAPHOPPER_PROFILE_TRUCK=fastest
+      - GRAPHOPPER_PROFILE_FOOT=shortest
       - GRAPHOPPER_AVOID_TOLL=true
       - GRAPHOPPER_GRAPHCACHE=mmap
       - GRAPHOPPER_WEB_CORS=*
       - GRAPHOPPER_WEB_ACCESS=*
+      - GRAPHOPPER_CUSTOM_PROFILES=delivery_rider,flood_safe,weather_safe,hoa_access
+      - GRAPHOPPER_ELEVATION=false
+      - GRAPHOPPER_MAX_VISIT_DISTANCE=1000
     volumes:
       - graphhopper-data:/data
     healthcheck:

@@ -1,0 +1,55 @@
+# =============================================================================
+# SmartRoad — GraphHopper Custom Profiles Configuration
+# =============================================================================
+# This config.yml extends GraphHopper with custom routing profiles.
+# It is used when the `gis-ops/docker-graphhopper` image supports custom
+# profiles via volume mount. The Flutter app handles profile-specific logic
+# (delivery waypoints, flood avoidance, weather filters, HOA access) 
+# through the RoutingService. GraphHopper provides the base routing.
+#
+# To apply with custom profiles:
+#   1. Mount this file: volumes: - ./config.yml:/data/config.yml
+#   2. Rebuild graph: execute the import action
+#   3. Restart the container
+#
+# Environment-based alternative (simpler, no config.yml needed):
+#   PROFILES=motorcycle,car,truck,foot  (already set in docker-compose.yml)
+# =============================================================================
+
+profiles:
+  - name: car
+    vehicle: car
+    weighting: fastest
+
+  - name: motorcycle
+    vehicle: motorcycle  
+    weighting: fastest
+
+  - name: truck
+    vehicle: truck
+    weighting: fastest
+
+  - name: foot
+    vehicle: foot
+    weighting: shortest
+
+  # Custom: Delivery Rider — based on motorcycle with alley/shortcut bias
+  - name: delivery_rider
+    base_profile: motorcycle
+    weighting: fastest
+
+  # Custom: Flood Safe — based on car, elevation-aware  
+  - name: flood_safe
+    base_profile: car
+    weighting: fastest
+
+  # Custom: Weather Safe — based on car
+  - name: weather_safe
+    base_profile: car
+    weighting: fastest
+
+  # Custom: HOA Access — respects restricted roads
+  - name: hoa_access
+    base_profile: car
+    weighting: fastest
+

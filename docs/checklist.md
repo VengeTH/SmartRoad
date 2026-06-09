@@ -12,7 +12,7 @@
 | 1 | [Infrastructure](#phase-1--infrastructure) | ✅ Implemented |
 | 2 | [Development Environment](#phase-2--development-environment) | ✅ Implemented |
 | 3 | [Database](#phase-3--database) | ✅ Implemented |
-| 4 | [Routing Foundation](#phase-4--routing-foundation) | 🚧 Current priority |
+| 4 | [Routing Foundation](#phase-4--routing-foundation) | ✅ Implemented |
 | 5 | [Backend API](#phase-5--backend-api) | ⏳ Pending |
 | 6 | [Flutter MVP](#phase-6--flutter-mvp) | ⏳ Investor demo goal |
 | 7 | [Core Differentiator — Marketplace](#phase-7--smartroad-core-differentiator) | 🎯 Key differentiator |
@@ -185,8 +185,8 @@
 
 #### Verification
 
-- [ ] Route Testing
-- [ ] Long Distance Testing
+- [x] Route Testing
+- [x] Long Distance Testing
 - [x] Motorcycle Testing
 - [x] Toll Avoidance Testing
 
@@ -200,10 +200,10 @@
 
 #### Future Profiles
 
-- [ ] Delivery Rider
-- [ ] Flood Safe
-- [ ] Weather Safe
-- [ ] HOA Access
+- [x] Delivery Rider
+- [x] Flood Safe
+- [x] Weather Safe
+- [x] HOA Access
 
 ---
 

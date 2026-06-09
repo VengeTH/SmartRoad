@@ -1,5 +1,5 @@
 /// * Route Tests — SmartRoad Routing Service
-/// * Tests route calculation, fallback logic, vehicle profiles, and 
+/// * Tests route calculation, fallback logic, vehicle profiles, and
 /// * permission-based routing (HOA/sticker integration).
 import "package:flutter_test/flutter_test.dart";
 import "package:latlong2/latlong.dart";
@@ -9,22 +9,27 @@ void main() {
   group("VehicleType", () {
     test("all vehicle types have valid graphhopper params", () {
       for (final v in VehicleType.values) {
-        expect(v.graphhopperParam, isNotEmpty,
-            reason: "${v.value} should have a GraphHopper param");
+        expect(
+          v.graphhopperParam,
+          isNotEmpty,
+          reason: "${v.value} should have a GraphHopper param",
+        );
       }
     });
 
     test("all vehicle types have icons", () {
       for (final v in VehicleType.values) {
-        expect(v.icon, isNotNull,
-            reason: "${v.value} should have an icon");
+        expect(v.icon, isNotNull, reason: "${v.value} should have an icon");
       }
     });
 
     test("all vehicle types have descriptions", () {
       for (final v in VehicleType.values) {
-        expect(v.description, isNotEmpty,
-            reason: "${v.value} should have a description");
+        expect(
+          v.description,
+          isNotEmpty,
+          reason: "${v.value} should have a description",
+        );
       }
     });
 
@@ -45,7 +50,10 @@ void main() {
     });
 
     test("custom profiles return correct backend profile names", () {
-      expect(VehicleType.deliveryRider.backendProfile, equals("delivery_rider"));
+      expect(
+        VehicleType.deliveryRider.backendProfile,
+        equals("delivery_rider"),
+      );
       expect(VehicleType.floodSafe.backendProfile, equals("flood_safe"));
       expect(VehicleType.weatherSafe.backendProfile, equals("weather_safe"));
       expect(VehicleType.hoaAccess.backendProfile, equals("hoa_access"));
@@ -55,7 +63,10 @@ void main() {
   group("RouteData", () {
     test("creates route data with required fields", () {
       final route = RouteData(
-        points: [const LatLng(14.5995, 120.9842), const LatLng(14.6760, 121.0437)],
+        points: [
+          const LatLng(14.5995, 120.9842),
+          const LatLng(14.6760, 121.0437),
+        ],
         distance: 10.5,
         duration: const Duration(minutes: 15),
         instructions: "Go north on Taft Ave",
@@ -95,7 +106,7 @@ void main() {
 
     test("fallback route returns points between start and end", () async {
       final start = const LatLng(14.5995, 120.9842); // Manila
-      final end = const LatLng(14.6760, 121.0437);   // Quezon City
+      final end = const LatLng(14.6760, 121.0437); // Quezon City
 
       final route = await service.calculateRoute(
         start: start,
@@ -117,10 +128,15 @@ void main() {
       final wp = [const LatLng(14.5500, 121.0000)]; // Waypoint via Makati
 
       final direct = await service.calculateRoute(
-        start: start, end: end, vehicle: VehicleType.car,
+        start: start,
+        end: end,
+        vehicle: VehicleType.car,
       );
       final viaWp = await service.calculateRoute(
-        start: start, end: end, vehicle: VehicleType.car, waypoints: wp,
+        start: start,
+        end: end,
+        vehicle: VehicleType.car,
+        waypoints: wp,
       );
 
       // Route with waypoints should be at least as long as direct
@@ -132,15 +148,21 @@ void main() {
       final end = const LatLng(14.6, 121.1);
 
       final carRoute = await service.calculateRoute(
-        start: start, end: end, vehicle: VehicleType.car,
+        start: start,
+        end: end,
+        vehicle: VehicleType.car,
       );
       final footRoute = await service.calculateRoute(
-        start: start, end: end, vehicle: VehicleType.pedestrian,
+        start: start,
+        end: end,
+        vehicle: VehicleType.pedestrian,
       );
 
       // Car should be faster than walking for the same distance
-      expect(footRoute.duration.inMinutes,
-          greaterThan(carRoute.duration.inMinutes));
+      expect(
+        footRoute.duration.inMinutes,
+        greaterThan(carRoute.duration.inMinutes),
+      );
     });
   });
 
@@ -154,7 +176,7 @@ void main() {
         start: start,
         end: end,
         vehicle: VehicleType.hoaAccess,
-        userStickerIds: [],       // No stickers
+        userStickerIds: [], // No stickers
         restrictedHoaIds: ["hoa-bf-resort"], // Restricted area
       );
 
@@ -218,12 +240,20 @@ void main() {
 
       for (final v in VehicleType.values) {
         final route = await service.calculateRoute(
-          start: start, end: end, vehicle: v,
+          start: start,
+          end: end,
+          vehicle: v,
         );
-        expect(route.points.length, greaterThanOrEqualTo(2),
-            reason: "${v.value} should produce a route");
-        expect(route.distance, greaterThan(0),
-            reason: "${v.value} should have positive distance");
+        expect(
+          route.points.length,
+          greaterThanOrEqualTo(2),
+          reason: "${v.value} should produce a route",
+        );
+        expect(
+          route.distance,
+          greaterThan(0),
+          reason: "${v.value} should have positive distance",
+        );
       }
     });
   });

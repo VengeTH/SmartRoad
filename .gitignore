@@ -48,6 +48,13 @@ app.*.map.json
 .env
 .env.local
 .env.*.local
+
+# Backend API
+backend/api/node_modules/
+backend/api/coverage/
+backend/api/logs/
+backend/api/.env
+!backend/api/.env.example
 *.env
 .envrc
 

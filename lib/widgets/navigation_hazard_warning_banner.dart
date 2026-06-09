@@ -1,4 +1,4 @@
-import "package:flutter/material.dart";
+﻿import "package:flutter/material.dart";
 
 import "../core/theme/app_theme.dart";
 import "../models/hazard.dart";
@@ -35,6 +35,12 @@ class NavigationHazardWarningBanner extends StatelessWidget {
         return Icons.terrain;
       case HazardType.roadblock:
         return Icons.construction_outlined;
+      case HazardType.fallenTree:
+        return Icons.park_outlined;
+      case HazardType.traffic:
+        return Icons.traffic_outlined;
+      case HazardType.debris:
+        return Icons.cleaning_services_outlined;
     }
   }
 
@@ -52,6 +58,12 @@ class NavigationHazardWarningBanner extends StatelessWidget {
         return "Landslide";
       case HazardType.roadblock:
         return "Roadblock";
+      case HazardType.fallenTree:
+        return "Fallen Tree";
+      case HazardType.traffic:
+        return "Traffic";
+      case HazardType.debris:
+        return "Debris on Road";
     }
   }
 
@@ -154,4 +166,5 @@ class NavigationHazardWarningBanner extends StatelessWidget {
     );
   }
 }
+
 

@@ -19,6 +19,11 @@ const config = {
     maxRetries: parseInt(process.env.GRAPH_HOPPER_MAX_RETRIES, 10) || 2,
   },
 
+  jwt: {
+    secret: process.env.JWT_SECRET || "smartroad-dev-secret-change-in-production",
+    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+  },
+
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 60000,
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10) || 100,

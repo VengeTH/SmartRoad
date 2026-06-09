@@ -12,7 +12,7 @@ const router = express.Router();
 
 /**
  * POST /api/routing/route
- * 
+ *
  * Request body:
  * {
  *   start: { lat: 14.5995, lon: 120.9842 },
@@ -23,7 +23,7 @@ const router = express.Router();
  *   user_sticker_ids?: string[],
  *   restricted_hoa_ids?: string[]
  * }
- * 
+ *
  * Response:
  * {
  *   success: true,

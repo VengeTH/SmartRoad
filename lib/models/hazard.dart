@@ -111,7 +111,10 @@ enum HazardType {
   accident('accident'),
   closure('closure'),
   landslide('landslide'),
-  roadblock('roadblock');
+  roadblock('roadblock'),
+  fallenTree('fallen_tree'),
+  traffic('traffic'),
+  debris('debris');
   
   final String value;
   const HazardType(this.value);

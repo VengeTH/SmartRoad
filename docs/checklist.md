@@ -13,7 +13,7 @@
 | 2 | [Development Environment](#phase-2--development-environment) | ✅ Implemented |
 | 3 | [Database](#phase-3--database) | ✅ Implemented |
 | 4 | [Routing Foundation](#phase-4--routing-foundation) | ✅ Implemented |
-| 5 | [Backend API](#phase-5--backend-api) | ⏳ Pending |
+| 5 | [Backend API](#phase-5--backend-api) | ✅ Implemented |
 | 6 | [Flutter MVP](#phase-6--flutter-mvp) | ⏳ Investor demo goal |
 | 7 | [Core Differentiator — Marketplace](#phase-7--smartroad-core-differentiator) | 🎯 Key differentiator |
 | 8 | [HOA Platform](#phase-8--hoa-platform) | 💼 Strong business opportunity |
@@ -140,11 +140,9 @@
 
 ### ⚠️ Hazards
 
-- [x] Potholes
-- [x] Floods
-- [x] Accidents
-- [x] Closures
-- [x] Roadblocks
+- [x] Fallen Tree
+- [x] Traffic
+- [x] Debris
 
 ### 🏘️ HOA
 
@@ -211,19 +209,19 @@
 
 ### 🔌 Core APIs
 
-- [ ] Authentication API
-- [ ] Profile API
-- [ ] Routing API
-- [ ] Hazard API
-- [ ] Weather API
-- [ ] Community API
+- [x] Authentication API
+- [x] Profile API
+- [x] Routing API
+- [x] Hazard API
+- [x] Weather API
+- [x] Community API
 
 ### 🔄 Realtime
 
-- [ ] WebSockets
+- [x] WebSockets
 - [ ] MQTT
-- [ ] Realtime Hazard Updates
-- [ ] Realtime Route Updates
+- [x] Realtime Hazard Updates
+- [x] Realtime Route Updates
 
 ---
 

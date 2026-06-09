@@ -1,4 +1,4 @@
-import "dart:async";
+﻿import "dart:async";
 import "dart:math" as math;
 
 import "package:flutter/foundation.dart";
@@ -699,7 +699,10 @@ class _MapControlButton extends StatelessWidget {
             height: 52,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: AppTheme.borderColor.withOpacity(0.5), width: 1.0),
+              border: Border.all(
+                color: AppTheme.borderColor.withOpacity(0.5),
+                width: 1.0,
+              ),
             ),
             child: Icon(
               icon,
@@ -741,7 +744,8 @@ class MapScreen extends ConsumerStatefulWidget {
   ConsumerState<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateMixin {
+class _MapScreenState extends ConsumerState<MapScreen>
+    with TickerProviderStateMixin {
   static const double _knownPlacesMinZoom =
       9.0; // * Show curated places earlier as instant POI fallback
   static const double _dynamicPoisMinZoom =
@@ -967,12 +971,27 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
     }
 
     try {
-      final latTween = Tween<double>(begin: _mapController.camera.center.latitude, end: center.latitude);
-      final lngTween = Tween<double>(begin: _mapController.camera.center.longitude, end: center.longitude);
-      final zoomTween = Tween<double>(begin: _mapController.camera.zoom, end: zoom);
+      final latTween = Tween<double>(
+        begin: _mapController.camera.center.latitude,
+        end: center.latitude,
+      );
+      final lngTween = Tween<double>(
+        begin: _mapController.camera.center.longitude,
+        end: center.longitude,
+      );
+      final zoomTween = Tween<double>(
+        begin: _mapController.camera.zoom,
+        end: zoom,
+      );
 
-      final controller = AnimationController(duration: const Duration(milliseconds: 350), vsync: this);
-      final animation = CurvedAnimation(parent: controller, curve: Curves.fastOutSlowIn);
+      final controller = AnimationController(
+        duration: const Duration(milliseconds: 350),
+        vsync: this,
+      );
+      final animation = CurvedAnimation(
+        parent: controller,
+        curve: Curves.fastOutSlowIn,
+      );
 
       controller.addListener(() {
         _mapController.move(
@@ -982,7 +1001,8 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
       });
 
       controller.addStatusListener((status) {
-        if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
+        if (status == AnimationStatus.completed ||
+            status == AnimationStatus.dismissed) {
           controller.dispose();
           if (mounted) {
             setState(() {
@@ -1016,10 +1036,19 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
     }
 
     try {
-      final latTween = Tween<double>(begin: _mapController.camera.center.latitude, end: center.latitude);
-      final lngTween = Tween<double>(begin: _mapController.camera.center.longitude, end: center.longitude);
-      final zoomTween = Tween<double>(begin: _mapController.camera.zoom, end: zoom);
-      
+      final latTween = Tween<double>(
+        begin: _mapController.camera.center.latitude,
+        end: center.latitude,
+      );
+      final lngTween = Tween<double>(
+        begin: _mapController.camera.center.longitude,
+        end: center.longitude,
+      );
+      final zoomTween = Tween<double>(
+        begin: _mapController.camera.zoom,
+        end: zoom,
+      );
+
       // Handle rotation shortest path
       double startRot = _mapController.camera.rotation;
       double endRot = rotationDegrees;
@@ -1029,8 +1058,14 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
 
       final rotTween = Tween<double>(begin: startRot, end: endRot);
 
-      final controller = AnimationController(duration: const Duration(milliseconds: 350), vsync: this);
-      final animation = CurvedAnimation(parent: controller, curve: Curves.fastOutSlowIn);
+      final controller = AnimationController(
+        duration: const Duration(milliseconds: 350),
+        vsync: this,
+      );
+      final animation = CurvedAnimation(
+        parent: controller,
+        curve: Curves.fastOutSlowIn,
+      );
 
       controller.addListener(() {
         _mapController.moveAndRotate(
@@ -1041,7 +1076,8 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
       });
 
       controller.addStatusListener((status) {
-        if (status == AnimationStatus.completed || status == AnimationStatus.dismissed) {
+        if (status == AnimationStatus.completed ||
+            status == AnimationStatus.dismissed) {
           controller.dispose();
         }
       });
@@ -5661,10 +5697,13 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
     // * Use a zoomed-in default when (re)centering, otherwise respect current zoom.
     // * Auto-zoom based on speed: the faster you go, the more it zooms out to show the road ahead.
     double targetZoom;
-    if (_isNavigationFollowing && _currentSpeedKph != null && _currentSpeedKph! > 15.0) {
+    if (_isNavigationFollowing &&
+        _currentSpeedKph != null &&
+        _currentSpeedKph! > 15.0) {
       // Speed from 15 km/h to 90 km/h maps to zoom 18.0 down to 14.5
       final speedFactor = ((_currentSpeedKph! - 15.0) / 75.0).clamp(0.0, 1.0);
-      targetZoom = 18.0 - (speedFactor * (18.0 - 15.0)); // interpolate 18.0 -> 15.0
+      targetZoom =
+          18.0 - (speedFactor * (18.0 - 15.0)); // interpolate 18.0 -> 15.0
     } else {
       targetZoom = force ? _navigationFollowZoom : _mapZoom;
     }
@@ -6076,7 +6115,7 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
 
     await _positionSubscription?.cancel();
     await _compassSubscription?.cancel();
-    
+
     // * Start compass stream for reliable device orientation
     _compassSubscription = FlutterCompass.events?.listen((event) {
       if (!mounted) return;
@@ -7367,7 +7406,9 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
       });
 
       return Scaffold(
-        backgroundColor: const Color(0xFFF2EFE9), // * Match OSM tile background color
+        backgroundColor: const Color(
+          0xFFF2EFE9,
+        ), // * Match OSM tile background color
         body: Stack(
           children: [
             FlutterMap(
@@ -8318,7 +8359,10 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
                     onPressed: () {
                       _safeMoveMap(
                         _mapCenter,
-                        (_mapZoom + 1).clamp(AppConstants.minZoom, AppConstants.maxZoom),
+                        (_mapZoom + 1).clamp(
+                          AppConstants.minZoom,
+                          AppConstants.maxZoom,
+                        ),
                       );
                     },
                     tooltip: "Zoom in",
@@ -8329,7 +8373,10 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
                     onPressed: () {
                       _safeMoveMap(
                         _mapCenter,
-                        (_mapZoom - 1).clamp(AppConstants.minZoom, AppConstants.maxZoom),
+                        (_mapZoom - 1).clamp(
+                          AppConstants.minZoom,
+                          AppConstants.maxZoom,
+                        ),
                       );
                     },
                     tooltip: "Zoom out",
@@ -8376,9 +8423,7 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
                 icon: Icons.local_gas_station_outlined,
                 onPressed: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const FuelPricesScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const FuelPricesScreen()),
                   );
                 },
                 tooltip: "Fuel prices",
@@ -9509,8 +9554,14 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
 
                           // * Check if already centered (within ~10 meters)
                           const double tolerance = 0.0001;
-                          final bool isCentered = (_mapCenter.latitude - _currentLocation.latitude).abs() < tolerance &&
-                                                  (_mapCenter.longitude - _currentLocation.longitude).abs() < tolerance;
+                          final bool isCentered =
+                              (_mapCenter.latitude - _currentLocation.latitude)
+                                      .abs() <
+                                  tolerance &&
+                              (_mapCenter.longitude -
+                                          _currentLocation.longitude)
+                                      .abs() <
+                                  tolerance;
 
                           if (isCentered) {
                             // * Toggle zoom if already centered
@@ -9853,6 +9904,10 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
         return base + 250.0;
       case HazardType.pothole:
         return base;
+      case HazardType.fallenTree:
+      case HazardType.traffic:
+      case HazardType.debris:
+        return base + 150.0;
     }
   }
 
@@ -9986,3 +10041,4 @@ class _MapScreenState extends ConsumerState<MapScreen> with TickerProviderStateM
 }
 
 // * Toolbar button widget removed - no longer used
+

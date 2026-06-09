@@ -1,13 +1,15 @@
 /**
  * SmartRoad Backend API — Entry Point
- * 
- * Starts the Express server with all middleware and routes.
- * 
+ *
+ * Starts the Express server with all middleware, routes, and
+ * WebSocket support for realtime updates.
+ *
  * Architecture:
- *   Flutter App → Express API → RoutingService → GraphHopper
+ *   Flutter App → Express API → Services → GraphHopper / PostgreSQL
  *                   ↓
- *             PostgreSQL (future)
+ *             WebSocket (realtime)
  */
+const http = require("http");
 const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
@@ -16,6 +18,7 @@ const config = require("./config");
 const { logger, httpLogger } = require("./middleware/logger");
 const { notFoundHandler, errorHandler } = require("./middleware/error-handler");
 const routes = require("./routes");
+const realtime = require("./services/realtime");
 
 const app = express();
 
@@ -23,21 +26,17 @@ const app = express();
 // Global Middleware
 // ---------------------------------------------------------------------------
 
-// Security headers
 app.use(helmet());
 
-// CORS — allow Flutter app on all origins in dev
 app.use(cors({
   origin: config.isDev ? "*" : /\.smartroad\.app$/,
-  methods: ["GET", "POST", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   maxAge: 86400,
 }));
 
-// Body parsing
 app.use(express.json({ limit: "100kb" }));
 
-// Rate limiting
 app.use(
   rateLimit({
     windowMs: config.rateLimit.windowMs,
@@ -48,7 +47,6 @@ app.use(
   })
 );
 
-// HTTP request logging
 app.use(httpLogger);
 
 // ---------------------------------------------------------------------------
@@ -63,11 +61,17 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // ---------------------------------------------------------------------------
-// Start Server
+// Start Server with WebSocket
 // ---------------------------------------------------------------------------
-app.listen(config.server.port, () => {
+const server = http.createServer(app);
+
+// Initialize WebSocket on the same HTTP server
+realtime.initialize(server);
+
+server.listen(config.server.port, () => {
   logger.info(`SmartRoad API started on port ${config.server.port} [${config.env}]`);
   logger.info(`GraphHopper URL: ${config.graphhopper.url}`);
+  logger.info(`WebSocket available at ws://localhost:${config.server.port}/ws`);
 });
 
-module.exports = app; // For testing
+module.exports = app;

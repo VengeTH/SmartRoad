@@ -4,6 +4,14 @@
  */
 const express = require("express");
 const routingRoutes = require("./routing");
+const authRoutes = require("./auth");
+const profileRoutes = require("./profile");
+const hazardRoutes = require("./hazards");
+const weatherRoutes = require("./weather");
+const communityRoutes = require("./community");
+const entranceRoutes = require("./entrances");
+const floodZoneRoutes = require("./flood-zones");
+const hoaRoutes = require("./hoas");
 
 const router = express.Router();
 
@@ -14,11 +22,13 @@ router.get("/health", (req, res) => {
 
 // Mount route modules
 router.use("/routing", routingRoutes);
-
-// Future modules will be mounted here:
-// router.use("/auth", authRoutes);
-// router.use("/hazards", hazardRoutes);
-// router.use("/weather", weatherRoutes);
-// router.use("/marketplace", marketplaceRoutes);
+router.use("/auth", authRoutes);
+router.use("/profile", profileRoutes);
+router.use("/hazards", hazardRoutes);
+router.use("/weather", weatherRoutes);
+router.use("/community", communityRoutes);
+router.use("/entrances", entranceRoutes);
+router.use("/flood-zones", floodZoneRoutes);
+router.use("/hoas", hoaRoutes);
 
 module.exports = router;

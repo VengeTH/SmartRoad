@@ -2,7 +2,7 @@ version: "3.8"
 
 # * SmartRoad Backend Services
 # * Unified Docker Compose for all backend services
-# * 
+# *
 # * Services:
 # * - graphhopper: Self-hosted routing engine
 # * - api: SmartRoad API (placeholder - not implemented in MVP)
@@ -89,10 +89,10 @@ services:
   # * PostgreSQL Database + PostGIS
   # * Stores all SmartRoad data (users, routes, hazards, stickers, etc.)
   # * PostGIS extension enables geospatial queries
-  # * 
+  # *
   # * To initialize, apply schema:
   # *   cat supabase_schema_merged.sql | docker exec -i smartroad-postgres psql -U smartroad -d smartroad
-  # * 
+  # *
   # * Supabase is used for cloud deployments; this local Postgres is for
   # * self-hosted setups or local development without Supabase.
   postgres:

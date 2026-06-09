@@ -1,9 +1,9 @@
 /**
  * SmartRoad Backend — Routing Service
- * 
+ *
  * Handles all route calculation by calling GraphHopper internally.
  * Supports multiple vehicle profiles and returns a normalized response.
- * 
+ *
  * Architecture:
  *   Flutter App → SmartRoad API → RoutingService → GraphHopper
  *                 (this module)       ↓

@@ -1,7 +1,15 @@
-import "package:supabase_flutter/supabase_flutter.dart";
+/// * Data Service
+/// * SmartRoad's primary data access layer.
+/// * Handles all database operations, authentication, and storage via PostgreSQL.
+/// * Replaces the former Supabase-backed implementation with our own DatabaseService.
+/// *
+/// * Architecture:
+/// *   Flutter App → SupabaseService (this) → DatabaseService → Backend API → PostgreSQL
+/// *                                        → Demo mode (local/in-memory fallback)
 import "package:flutter/foundation.dart";
 import "dart:io";
 import "dart:typed_data";
+import "../models/smartroad_user.dart";
 import "../models/hazard.dart";
 import "../models/user_profile.dart";
 import "../models/hazard_comment.dart";
@@ -9,61 +17,39 @@ import "../models/place_comment.dart";
 import "../models/place_image.dart";
 import "../core/config/env.dart";
 import "../core/constants/app_constants.dart";
+import "database_service.dart";
 
-/// * Supabase service for database operations
+/// * SmartRoad's data service — singleton that manages all PostgreSQL-backed operations.
 class SupabaseService {
-  static const String demoUserId = "demo-user-id";
+  static const String demoUserId = SmartRoadUser.demoUserId;
 
   static final SupabaseService _instance = SupabaseService._internal();
   factory SupabaseService() => _instance;
   SupabaseService._internal();
 
-  bool _isInitialized = false;
+  final DatabaseService _db = DatabaseService();
+
   bool _isDemoAuthenticated = false;
 
+  // * Demo in-memory stores
   final Map<String, List<PlaceComment>> _demoPlaceComments = {};
   final Map<String, Set<String>> _demoPlaceLikes = {};
   final Map<String, Map<String, int>> _demoPlaceRatings = {};
   final Map<String, List<PlaceImage>> _demoPlaceImages = {};
 
   /// * Check if running in demo mode (no database connection)
-  bool get isDemoMode => !_isInitialized || !Env.validate();
+  bool get isDemoMode => !_db.isConnected;
 
-  /// * Get Supabase client (returns null in demo mode)
-  SupabaseClient? get client {
-    if (isDemoMode || !_isInitialized) {
-      return null;
-    }
-    try {
-      return Supabase.instance.client;
-    } catch (e) {
-      // * Supabase not initialized
-      return null;
-    }
-  }
+  /// * Get DatabaseService client (null in demo mode)
+  DatabaseService? get client => _db.isConnected ? _db : null;
 
-  /// * Initialize Supabase (optional - can skip in demo mode)
+  /// * Initialize the service
   Future<void> initialize() async {
-    if (!Env.validate()) {
-      // * Demo mode - skip initialization
-      debugPrint(
-        "⚠️ Demo mode: Supabase not initialized (missing environment variables)",
-      );
-      _isInitialized = false;
-      return;
-    }
-
-    try {
-      await Supabase.initialize(
-        url: Env.supabaseUrl,
-        anonKey: Env.supabaseAnonKey,
-      );
-      _isInitialized = true;
-      debugPrint("✅ Supabase initialized successfully");
-    } catch (e) {
-      debugPrint("⚠️ Failed to initialize Supabase: $e");
-      _isInitialized = false;
-      // * Don't throw - allow demo mode
+    await _db.initialize();
+    if (_db.isConnected) {
+      debugPrint("✅ SupabaseService: connected to PostgreSQL via backend");
+    } else {
+      debugPrint("⚠️ SupabaseService: running in demo mode");
     }
   }
 
@@ -77,87 +63,59 @@ class SupabaseService {
     _isDemoAuthenticated = false;
   }
 
-  // * Authentication Methods
+  // ========================================================================
+  // * AUTHENTICATION
+  // ========================================================================
 
   /// * Sign up with email and password
-  Future<AuthResponse> signUp(
-    String email,
-    String password,
-    String name,
-  ) async {
+  Future<SmartRoadUser> signUp(String email, String password, String name) async {
     if (isDemoMode) {
       throw Exception("Sign up not available in demo mode");
     }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
+    final user = await _db.signUp(email, password, name);
+    if (user == null) {
+      throw Exception("Sign up failed");
     }
-    final response = await c.auth.signUp(
-      email: email,
-      password: password,
-      data: {'name': name},
-    );
-    return response;
+    return user;
   }
 
   /// * Sign in with email and password
-  /// * In demo mode, validates demo credentials and marks the local demo session.
-  Future<AuthResponse> signIn(String email, String password) async {
+  /// * In demo mode, validates demo credentials.
+  Future<SmartRoadUser> signIn(String email, String password) async {
     if (isDemoMode) {
-      // * Check if using demo credentials
       if (email == AppConstants.demoEmail &&
           password == AppConstants.demoPassword) {
         _isDemoAuthenticated = true;
         debugPrint("✅ Demo login successful");
-        // * Return a mock AuthResponse - the app will handle demo mode separately
-        throw Exception(
-          "DEMO_MODE_LOGIN",
-        ); // * Special exception to indicate demo login
+        throw Exception("DEMO_MODE_LOGIN");
       } else {
-        throw Exception(
-          "Invalid credentials. Use demo credentials in demo mode.",
-        );
+        throw Exception("Invalid credentials. Use demo credentials in demo mode.");
       }
     }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
+    final user = await _db.signIn(email, password);
+    if (user == null) {
+      throw Exception("Sign in failed");
     }
-    return await c.auth.signInWithPassword(email: email, password: password);
+    return user;
   }
 
   /// * Sign out
-  /// * In demo mode, clears the local demo auth state.
   Future<void> signOut() async {
     if (isDemoMode) {
       _isDemoAuthenticated = false;
       return;
     }
-    final c = client;
-    if (c == null) {
-      return;
-    }
-    await c.auth.signOut();
+    await _db.signOut();
   }
 
-  /// * Get current user (returns null when no authenticated session exists)
-  User? get currentUser {
+  /// * Get current user (null when no authenticated session exists)
+  SmartRoadUser? get currentUser {
     if (isDemoMode) {
       if (!_isDemoAuthenticated) return null;
-      return User(
-        id: demoUserId,
-        appMetadata: const {},
-        userMetadata: const {
-          "name": "Demo User",
-          "email": AppConstants.demoEmail,
-        },
-        aud: "authenticated",
-        createdAt: DateTime.now().toIso8601String(),
-      );
+      return SmartRoadUser.createDemo();
     }
-
-    final c = client;
-    return c?.auth.currentUser;
+    // * In live mode the auth state is managed by auth_provider
+    return null;
   }
 
   /// * Get current user ID
@@ -165,7 +123,7 @@ class SupabaseService {
     if (isDemoMode) {
       return _isDemoAuthenticated ? demoUserId : null;
     }
-    return currentUser?.id;
+    return null;
   }
 
   /// * Check if user is authenticated
@@ -173,17 +131,16 @@ class SupabaseService {
     if (isDemoMode) {
       return _isDemoAuthenticated;
     }
-    return currentUser != null;
+    return _db.isConnected;
   }
 
-  String? get _effectiveUserId => currentUserId;
-
-  // * Profile Methods
+  // ========================================================================
+  // * PROFILES
+  // ========================================================================
 
   /// * Get user profile
   Future<UserProfile?> getProfile(String userId) async {
     if (isDemoMode) {
-      // * Return demo profile
       return UserProfile(
         id: userId,
         name: "Demo User",
@@ -195,326 +152,285 @@ class SupabaseService {
         validReportsCount: 0,
       );
     }
-    final c = client;
-    if (c == null) {
-      return null;
-    }
-    final response =
-        await c.from('profiles').select().eq('id', userId).maybeSingle();
-
-    if (response == null) return null;
-    return UserProfile.fromJson(response);
+    return await _db.getProfile(userId);
   }
 
   /// * Update user profile
-  Future<void> updateProfile(
-    String userId,
-    Map<String, dynamic> updates,
-  ) async {
-    if (isDemoMode) {
-      return; // * No-op in demo mode
-    }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-    await c.from('profiles').update(updates).eq('id', userId);
+  Future<void> updateProfile(String userId, Map<String, dynamic> updates) async {
+    if (isDemoMode) return;
+    await _db.updateProfile(userId, updates);
   }
 
-  // * Hazard Methods
+  // ========================================================================
+  // * HAZARDS
+  // ========================================================================
 
   /// * Get all hazards (with pagination)
   Future<List<Hazard>> getHazards({
     int limit = AppConstants.feedPageSize,
     int offset = 0,
   }) async {
-    if (isDemoMode) {
-      return []; // * Return empty list in demo mode
-    }
-    final c = client;
-    if (c == null) {
-      return [];
-    }
-    final response = await c
-        .from('hazards')
-        .select('''
-          *,
-          profiles:user_id (
-            name,
-            photo_url
-          )
-        ''')
-        .order('created_at', ascending: false)
-        .range(offset, offset + limit - 1);
-
-    final List<Hazard> hazards = [];
-    for (final item in response as List) {
-      final hazardData = item as Map<String, dynamic>;
-      final profileData = hazardData['profiles'] as Map<String, dynamic>?;
-
-      if (profileData != null) {
-        hazardData['user_name'] = profileData['name'];
-        hazardData['user_photo_url'] = profileData['photo_url'];
-      }
-
-      hazards.add(Hazard.fromJson(hazardData));
-    }
-
-    return hazards;
+    if (isDemoMode) return [];
+    return await _db.getHazards();
   }
 
-  /// * Get hazards within bounding box (for map)
-  /// * Note: This requires a PostGIS function in Supabase
-  /// * For now, we'll fetch all and filter client-side (not ideal for production)
-  Future<List<Hazard>> getHazardsInBounds(
-    double minLat,
-    double minLon,
-    double maxLat,
-    double maxLon,
-  ) async {
-    if (isDemoMode) {
-      return []; // * Return empty list in demo mode
-    }
-    // * Fetch all hazards (limited) and filter client-side
-    // * In production, use PostGIS RPC function
-    final allHazards = await getHazards(limit: AppConstants.maxMapMarkers);
+  /// * Get hazards within bounding box
+  Future<List<Hazard>> getHazardsInBounds({
+    required double minLat,
+    required double maxLat,
+    required double minLon,
+    required double maxLon,
+  }) async {
+    if (isDemoMode) return [];
+    if (!_db.isConnected) return [];
 
-    return allHazards.where((hazard) {
-      return hazard.latitude >= minLat &&
-          hazard.latitude <= maxLat &&
-          hazard.longitude >= minLon &&
-          hazard.longitude <= maxLon;
-    }).toList();
+    final result = await _db.query(
+      """SELECT * FROM SmartRoad.hazards
+         WHERE ST_Y(location::geometry) BETWEEN @minLat AND @maxLat
+           AND ST_X(location::geometry) BETWEEN @minLon AND @maxLon
+         ORDER BY created_at DESC""",
+      [minLat, maxLat, minLon, maxLon],
+    );
+    if (!result.isError) {
+      return result.rows.map((json) => Hazard.fromJson(json)).toList();
+    }
+    return [];
   }
 
   /// * Create a new hazard
-  Future<Hazard> createHazard({
-    required HazardType type,
-    required String description,
-    required SeverityLevel severity,
-    required double latitude,
-    required double longitude,
-    String? imageUrl,
-    String? stickerFlag,
-  }) async {
+  Future<void> createHazard(Map<String, dynamic> data) async {
     if (isDemoMode) {
-      throw Exception("Creating hazards not available in demo mode");
+      debugPrint("⚠️ [Demo] Hazard report saved locally (not persisted)");
+      return;
     }
-    if (!isAuthenticated) {
-      throw Exception("User must be authenticated to create hazards");
-    }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-
-    final hazardData = {
-      'type': type.value,
-      'description': description.trim(),
-      'severity': severity.value,
-      'location': 'POINT($longitude $latitude)',
-      if (imageUrl != null) 'image_url': imageUrl,
-      if (stickerFlag != null) 'sticker_flag': stickerFlag,
-    };
-
-    final response =
-        await c.from('hazards').insert(hazardData).select().single();
-
-    return Hazard.fromJson(response);
+    await _db.createHazard(data);
   }
 
-  /// * Subscribe to realtime hazards updates
-  RealtimeChannel? subscribeToHazards({
-    required Function(Map<String, dynamic>) onInsert,
-    required Function(Map<String, dynamic>) onUpdate,
-    required Function(Map<String, dynamic>) onDelete,
-  }) {
+  // ========================================================================
+  // * HAZARD COMMENTS
+  // ========================================================================
+
+  Future<List<HazardComment>> getHazardComments(String hazardId) async {
+    if (isDemoMode) return [];
+    return await _db.getHazardComments(hazardId);
+  }
+
+  Future<HazardComment> createComment(Map<String, dynamic> data) async {
     if (isDemoMode) {
-      return null; // * No realtime in demo mode
+      throw Exception("Comments not available in demo mode");
     }
-    final c = client;
-    if (c == null) {
+    final result = await _db.query(
+      """INSERT INTO SmartRoad.hazard_comments (hazard_id, user_id, text)
+         VALUES (@hazard_id, @user_id, @text) RETURNING *""",
+      [data['hazard_id'], data['user_id'], data['text']],
+    );
+    if (!result.isError && result.isNotEmpty) {
+      return HazardComment.fromJson(result.rows.first);
+    }
+    throw Exception("Failed to create comment");
+  }
+
+  Future<HazardComment> updateComment(
+    String commentId,
+    Map<String, dynamic> data,
+  ) async {
+    if (isDemoMode) throw Exception("Not available in demo mode");
+    final result = await _db.query(
+      "UPDATE SmartRoad.hazard_comments SET text = @text, updated_at = NOW() WHERE id = @id RETURNING *",
+      [data['text'], commentId],
+    );
+    if (!result.isError && result.isNotEmpty) {
+      return HazardComment.fromJson(result.rows.first);
+    }
+    throw Exception("Failed to update comment");
+  }
+
+  Future<void> deleteComment(String commentId) async {
+    if (isDemoMode) return;
+    await _db.query("DELETE FROM SmartRoad.hazard_comments WHERE id = @id", [commentId]);
+  }
+
+  /// * Subscribe to hazard comment changes (stub — realtime via WebSocket when backend is ready)
+  dynamic subscribeToComments(String hazardId, void Function(dynamic payload) onEvent) {
+    debugPrint("[SupabaseService] Realtime comments unimplemented (requires backend WebSocket)");
+    return null;
+  }
+
+  /// * Subscribe to hazard changes (stub)
+  dynamic subscribeToHazards(void Function(dynamic payload) onEvent) {
+    debugPrint("[SupabaseService] Realtime hazards unimplemented (requires backend WebSocket)");
+    return null;
+  }
+
+  // ========================================================================
+  // * PLACES (Known Locations)
+  // ========================================================================
+
+  Future<List<PlaceComment>> getPlaceComments(String placeId) async {
+    if (isDemoMode) {
+      return _demoPlaceComments[placeId] ?? [];
+    }
+    if (!_db.isConnected) return [];
+    final result = await _db.query(
+      "SELECT * FROM SmartRoad.place_comments WHERE place_id = @id ORDER BY created_at DESC",
+      [placeId],
+    );
+    if (!result.isError) {
+      return result.rows.map((json) => PlaceComment.fromJson(json)).toList();
+    }
+    return [];
+  }
+
+  Future<PlaceComment> createPlaceComment(Map<String, dynamic> data) async {
+    final placeId = data['place_id'] as String;
+    if (isDemoMode) {
+      final comment = PlaceComment(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        placeId: placeId,
+        userId: data['user_id'] as String,
+        text: data['text'] as String,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      _demoPlaceComments.putIfAbsent(placeId, () => []).add(comment);
+      return comment;
+    }
+    final result = await _db.query(
+      """INSERT INTO SmartRoad.place_comments (place_id, user_id, text)
+         VALUES (@place_id, @user_id, @text) RETURNING *""",
+      [placeId, data['user_id'], data['text']],
+    );
+    if (!result.isError && result.isNotEmpty) {
+      return PlaceComment.fromJson(result.rows.first);
+    }
+    throw Exception("Failed to create place comment");
+  }
+
+  Future<void> togglePlaceLike(String placeId, String userId) async {
+    if (isDemoMode) {
+      _demoPlaceLikes.putIfAbsent(placeId, () => {}).contains(userId)
+          ? _demoPlaceLikes[placeId]!.remove(userId)
+          : _demoPlaceLikes[placeId]!.add(userId);
+      return;
+    }
+    // * Upsert: if exists, delete; otherwise insert
+    final existing = await _db.query(
+      "SELECT 1 FROM SmartRoad.place_likes WHERE place_id = @pid AND user_id = @uid",
+      [placeId, userId],
+    );
+    if (existing.isNotEmpty) {
+      await _db.query(
+        "DELETE FROM SmartRoad.place_likes WHERE place_id = @pid AND user_id = @uid",
+        [placeId, userId],
+      );
+    } else {
+      await _db.query(
+        "INSERT INTO SmartRoad.place_likes (place_id, user_id) VALUES (@pid, @uid)",
+        [placeId, userId],
+      );
+    }
+  }
+
+  Future<void> ratePlace(String placeId, String userId, int rating) async {
+    if (isDemoMode) {
+      _demoPlaceRatings.putIfAbsent(placeId, () => {})[userId] = rating;
+      return;
+    }
+    await _db.query(
+      """INSERT INTO SmartRoad.place_ratings (place_id, user_id, rating)
+         VALUES (@pid, @uid, @rating)
+         ON CONFLICT (place_id, user_id)
+         DO UPDATE SET rating = @rating, updated_at = NOW()""",
+      [placeId, userId, rating],
+    );
+  }
+
+  // ========================================================================
+  // * PLACE IMAGES
+  // ========================================================================
+
+  Future<List<PlaceImage>> getPendingPlaceImages() async {
+    if (isDemoMode) return [];
+    if (!_db.isConnected) return [];
+    final result = await _db.query(
+      "SELECT * FROM SmartRoad.place_images WHERE status = 'pending' ORDER BY created_at DESC",
+    );
+    if (!result.isError) {
+      return result.rows.map((json) => PlaceImage.fromJson(json)).toList();
+    }
+    return [];
+  }
+
+  Future<void> approvePlaceImage(String imageId) async {
+    if (isDemoMode) return;
+    await _db.query(
+      "UPDATE SmartRoad.place_images SET status = 'approved', reviewed_at = NOW() WHERE id = @id",
+      [imageId],
+    );
+  }
+
+  Future<void> rejectPlaceImage(String imageId, {String? reason}) async {
+    if (isDemoMode) return;
+    await _db.query(
+      "UPDATE SmartRoad.place_images SET status = 'rejected', review_reason = @reason, reviewed_at = NOW() WHERE id = @id",
+      [reason, imageId],
+    );
+  }
+
+  // ========================================================================
+  // * IMAGE UPLOAD
+  // ========================================================================
+
+  /// * Upload an image file
+  Future<String?> uploadImage(File imageFile, String fileName) async {
+    if (isDemoMode) return null;
+    return await _db.uploadImage(imageFile, fileName);
+  }
+
+  Future<String?> uploadImageBytes(Uint8List bytes, String fileName) async {
+    if (isDemoMode) return null;
+    // * For bytes-based upload, write to temp file then upload
+    try {
+      final tempDir = Directory.systemTemp;
+      final tempFile = File('${tempDir.path}/$fileName');
+      await tempFile.writeAsBytes(bytes);
+      final url = await _db.uploadImage(tempFile, fileName);
+      await tempFile.delete();
+      return url;
+    } catch (e) {
+      debugPrint("Upload bytes error: $e");
       return null;
     }
-    final channel = c.channel('hazards_channel');
-
-    channel
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'hazards',
-          callback: (payload) => onInsert(payload.newRecord),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'hazards',
-          callback: (payload) => onUpdate(payload.newRecord),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.delete,
-          schema: 'public',
-          table: 'hazards',
-          callback: (payload) => onDelete(payload.oldRecord),
-        )
-        .subscribe();
-
-    return channel;
   }
 
-  // * Storage Methods
+  // ========================================================================
+  // * COMMUTE AI CACHE
+  // ========================================================================
 
-  /// * Upload image to Supabase Storage
-  Future<String> uploadImage(File file, String fileName) async {
-    if (isDemoMode) {
-      // * Return a placeholder URL in demo mode
-      return "demo://$fileName";
+  Future<Map<String, dynamic>?> getCommuteAiCache(String cacheKey) async {
+    if (!_db.isConnected) return null;
+    final result = await _db.query(
+      "SELECT payload FROM SmartRoad.commute_ai_cache WHERE cache_key = @key AND expires_at > NOW()",
+      [cacheKey],
+    );
+    if (!result.isError && result.isNotEmpty) {
+      return result.rows.first['payload'] as Map<String, dynamic>?;
     }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-    final bytes = await file.readAsBytes();
-    await c.storage
-        .from(AppConstants.storageBucketName)
-        .uploadBinary(fileName, bytes);
-
-    // * Get public URL
-    final url = c.storage
-        .from(AppConstants.storageBucketName)
-        .getPublicUrl(fileName);
-
-    return url;
+    return null;
   }
 
-  /// * Upload image file bytes
-  Future<String> uploadImageBytes(List<int> bytes, String fileName) async {
-    if (isDemoMode) {
-      // * Return a placeholder URL in demo mode
-      return "demo://$fileName";
-    }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-    final uint8Bytes = Uint8List.fromList(bytes);
-    await c.storage
-        .from(AppConstants.storageBucketName)
-        .uploadBinary(fileName, uint8Bytes);
-
-    final url = c.storage
-        .from(AppConstants.storageBucketName)
-        .getPublicUrl(fileName);
-
-    return url;
+  Future<void> upsertCommuteAiCache(String cacheKey, Map<String, dynamic> payload,
+      {Duration ttl = const Duration(hours: 24)}) async {
+    if (!_db.isConnected) return;
+    await _db.query(
+      """INSERT INTO SmartRoad.commute_ai_cache (cache_key, payload, expires_at)
+         VALUES (@key, @payload, NOW() + INTERVAL '24 hours')
+         ON CONFLICT (cache_key)
+         DO UPDATE SET payload = @payload, expires_at = NOW() + INTERVAL '24 hours', hit_count = SmartRoad.commute_ai_cache.hit_count + 1""",
+      [cacheKey, payload],
+    );
   }
-
-  // * Comment Methods
-
-  /// * Get comments for a hazard
-  Future<List<HazardComment>> getHazardComments(String hazardId) async {
-    if (isDemoMode) {
-      return []; // * Return empty list in demo mode
-    }
-    final c = client;
-    if (c == null) {
-      return [];
-    }
-    final response = await c
-        .from('hazard_comments')
-        .select('''
-          *,
-          profiles:user_id (
-            name,
-            photo_url
-          )
-        ''')
-        .eq('hazard_id', hazardId)
-        .order('created_at', ascending: false);
-
-    final List<HazardComment> comments = [];
-    for (final item in response) {
-      final Map<String, dynamic> commentData = item;
-      final profileData = commentData['profiles'] as Map<String, dynamic>?;
-
-      if (profileData != null) {
-        commentData['user_name'] = profileData['name'];
-        commentData['user_photo_url'] = profileData['photo_url'];
-      }
-
-      comments.add(HazardComment.fromJson(commentData));
-    }
-
-    return comments;
-  }
-
-  /// * Create a new comment on a hazard
-  Future<HazardComment> createComment({
-    required String hazardId,
-    required String text,
-  }) async {
-    if (isDemoMode) {
-      throw Exception("Creating comments not available in demo mode");
-    }
-    if (!isAuthenticated) {
-      throw Exception("User must be authenticated to create comments");
-    }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-
-    final commentData = {'hazard_id': hazardId, 'text': text.trim()};
-
-    final response =
-        await c.from('hazard_comments').insert(commentData).select('''
-          *,
-          profiles:user_id (
-            name,
-            photo_url
-          )
-        ''').single();
-
-    final Map<String, dynamic> commentJson = response;
-    final profileData = commentJson['profiles'] as Map<String, dynamic>?;
-
-    if (profileData != null) {
-      commentJson['user_name'] = profileData['name'];
-      commentJson['user_photo_url'] = profileData['photo_url'];
-    }
-
-    return HazardComment.fromJson(commentJson);
-  }
-
-  /// * Update a comment
-  Future<HazardComment> updateComment({
-    required String commentId,
-    required String text,
-  }) async {
-    if (isDemoMode) {
-      throw Exception("Updating comments not available in demo mode");
-    }
-    if (!isAuthenticated) {
-      throw Exception("User must be authenticated to update comments");
-    }
-    final c = client;
-    if (c == null) {
-      throw Exception("Supabase client not available");
-    }
-
-    final response =
-        await c
-            .from('hazard_comments')
-            .update({'text': text.trim()})
-            .eq('id', commentId)
-            .select('''
-          *,
-          profiles:user_id (
-            name,
-            photo_url
-          )
-        ''')
-            .single();
+}
 
     final commentJson = response;
     final profileData = commentJson['profiles'] as Map<String, dynamic>?;

@@ -16,9 +16,9 @@
 ## Environment variables (compile-time)
 This project reads config via `String.fromEnvironment(...)` / `bool.fromEnvironment(...)` (not runtime dotenv). Pass values using `--dart-define=...` or the helper scripts above.
 
-- Supabase (missing values => demo mode):
-  - `SUPABASE_URL`, `SUPABASE_ANON_KEY` (validated in [lib/core/config/env.dart](../lib/core/config/env.dart); demo behavior in [lib/services/supabase_service.dart](../lib/services/supabase_service.dart))
-  - Demo credentials are in [lib/core/constants/app_constants.dart](../lib/core/constants/app_constants.dart)
+- **Backend API** (replaces former Supabase dependency):
+  - `API_BASE_URL` (default `http://localhost:3000`); validated in [lib/core/config/env.dart](../lib/core/config/env.dart); when unset the app runs in demo mode with local/in-memory data.
+- **Database**: PostgreSQL 15+ with PostGIS extension; schema is under the `SmartRoad` namespace (tables like `SmartRoad.profiles`, `SmartRoad.hazards`). All schema files are in `supabase/` (legacy name preserved for compatibility).
 - Gemini (sticker verification; free tier available):
   - `GEMINI_API_KEY` (read in [lib/core/config/env.dart](../lib/core/config/env.dart); used by sticker verification flows under `lib/services/`)
 - Weather layers:

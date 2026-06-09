@@ -1,7 +1,6 @@
 import "dart:async";
 
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "package:supabase_flutter/supabase_flutter.dart";
 import "../models/place_comment.dart";
 import "../services/supabase_service.dart";
 
@@ -16,7 +15,7 @@ final placeCommentsProvider = StateNotifierProvider.family<
 class PlaceCommentsNotifier extends StateNotifier<AsyncValue<List<PlaceComment>>> {
   final String placeId;
   final _supabaseService = SupabaseService();
-  RealtimeChannel? _channel;
+  dynamic _channel; // * Realtime channel (backend WebSocket)
 
   PlaceCommentsNotifier(this.placeId) : super(const AsyncValue.loading()) {
     loadComments();

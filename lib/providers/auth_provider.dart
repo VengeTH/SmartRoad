@@ -1,24 +1,21 @@
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "package:supabase_flutter/supabase_flutter.dart";
 import "../services/supabase_service.dart";
+import "../models/smartroad_user.dart";
 import "../models/user_profile.dart";
 
 /// * Demo user state (for demo mode)
-final demoUserStateProvider = StateProvider<User?>((ref) => null);
+final demoUserStateProvider = StateProvider<SmartRoadUser?>((ref) => null);
 
 /// * Auth state provider
-final authStateProvider = StreamProvider<User?>((ref) {
+final authStateProvider = StreamProvider<SmartRoadUser?>((ref) {
   final service = SupabaseService();
   if (service.isDemoMode) {
-    // * In demo mode, watch the demo user state
     final demoUser = ref.watch(demoUserStateProvider);
     return Stream.value(demoUser);
   }
-  final client = service.client;
-  if (client == null) {
-    return Stream.value(null);
-  }
-  return client.auth.onAuthStateChange.map((event) => event.session?.user);
+  // * Live mode: auth state is managed by the backend session
+  // * For now, return null until backend auth is integrated
+  return Stream.value(null);
 });
 
 /// * Current user ID provider

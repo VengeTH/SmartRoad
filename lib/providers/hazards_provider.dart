@@ -1,9 +1,8 @@
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "package:supabase_flutter/supabase_flutter.dart";
+import "dart:async";
 import "../services/supabase_service.dart";
 import "../services/offline_cache_service.dart";
 import "../models/hazard.dart";
-import "dart:async";
 
 /// * Hazards list provider (for feed)
 final hazardsProvider = StateNotifierProvider<HazardsNotifier, AsyncValue<List<Hazard>>>((ref) {
@@ -79,7 +78,7 @@ class MapHazardsNotifier extends StateNotifier<List<Hazard>> {
   MapHazardsNotifier() : super([]);
   
   final _supabaseService = SupabaseService();
-  RealtimeChannel? _channel;
+  dynamic _channel; // * Realtime channel (backend WebSocket)
   
   Future<void> loadHazardsInBounds(
     double minLat,

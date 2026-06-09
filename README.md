@@ -1,6 +1,6 @@
 # SmartRoad
 
-A Flutter mobile application for reporting and viewing road hazards in real-time, built with Supabase backend and self-hosted GraphHopper routing engine. Features comprehensive navigation with multiple vehicle types, location search, and real-time hazard tracking.
+A Flutter mobile application for reporting and viewing road hazards in real-time, powered by a self-hosted PostgreSQL backend and GraphHopper routing engine. Features comprehensive navigation with multiple vehicle types, location search, and real-time hazard tracking.
 
 ## Project Structure
 
@@ -20,14 +20,15 @@ smartroad/
 
 ## ⚠️ Current Status: Demo Mode Only
 
-**Important:** As of now, SmartRoad is running in **demo mode only**. No database has been set up on the server yet, and database integration has not been implemented. All features work with local/demo data.
+**Important:** As of now, SmartRoad is running in **demo mode only**. No database has been set up on the server yet, and backend API integration has not been implemented. All features work with local/demo data.
 
-**Database integration will be added in the future** after the server infrastructure is fully set up. Until then, the app operates completely offline with sample data, making it perfect for testing and demos.
+**Database integration will be added in the future** after the backend API (Phase 5) is built. Until then, the app operates completely offline with sample data, making it perfect for testing and demos.
 
 **What this means:**
 - All user data (profiles, hazards, routes, place photos/comments/ratings) is stored locally or uses demo data
 - No persistent storage across devices
 - No real-time sync between users
+- The `DatabaseService` is ready to connect to the backend API when deployed
 - Full functionality available for testing without backend setup
 
 ## Features

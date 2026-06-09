@@ -1,8 +1,7 @@
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "package:supabase_flutter/supabase_flutter.dart";
+import "dart:async";
 import "../services/supabase_service.dart";
 import "../models/hazard_comment.dart";
-import "dart:async";
 
 /// * Comments provider for a specific hazard
 final hazardCommentsProvider = StateNotifierProvider.family<HazardCommentsNotifier, AsyncValue<List<HazardComment>>, String>((ref, hazardId) {
@@ -12,7 +11,7 @@ final hazardCommentsProvider = StateNotifierProvider.family<HazardCommentsNotifi
 class HazardCommentsNotifier extends StateNotifier<AsyncValue<List<HazardComment>>> {
   final String hazardId;
   final _supabaseService = SupabaseService();
-  RealtimeChannel? _channel;
+  dynamic _channel; // * Realtime channel (backend WebSocket)
   
   HazardCommentsNotifier(this.hazardId) : super(const AsyncValue.loading()) {
     loadComments();

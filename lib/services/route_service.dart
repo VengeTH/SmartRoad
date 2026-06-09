@@ -1,8 +1,9 @@
 import "dart:math" as math;
-import "package:supabase_flutter/supabase_flutter.dart";
 import "package:flutter/foundation.dart";
 import "../models/saved_route.dart";
 import "../core/config/env.dart";
+import "../services/supabase_service.dart";
+import "../services/database_service.dart";
 import "../services/routing_service.dart";
 import "package:latlong2/latlong.dart";
 
@@ -17,13 +18,13 @@ class RouteService {
   /// * Check if running in demo mode
   bool get isDemoMode => !_isInitialized || !Env.validate();
   
-  /// * Get Supabase client
-  SupabaseClient? get client {
+  /// * Get database service client (null in demo mode)
+  DatabaseService? get client {
     if (isDemoMode || !_isInitialized) {
       return null;
     }
     try {
-      return Supabase.instance.client;
+      return SupabaseService().client;
     } catch (e) {
       return null;
     }

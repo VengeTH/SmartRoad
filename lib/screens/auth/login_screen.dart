@@ -1,8 +1,8 @@
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "package:supabase_flutter/supabase_flutter.dart";
 import "../../services/supabase_service.dart";
+import "../../models/smartroad_user.dart";
 import "../../core/constants/app_constants.dart";
 import "../../core/theme/app_theme.dart";
 import "../../providers/auth_provider.dart";
@@ -155,12 +155,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         service.markDemoAuthenticated();
 
         // * Create a demo user
-        final demoUser = User(
+        final demoUser = SmartRoadUser(
           id: SupabaseService.demoUserId,
-          appMetadata: {},
-          userMetadata: {'name': 'Demo User', 'email': AppConstants.demoEmail},
-          aud: 'authenticated',
-          createdAt: DateTime.now().toIso8601String(),
+          email: AppConstants.demoEmail,
+          name: "Demo User",
+          createdAt: DateTime.now(),
         );
 
         // * Set demo user in state
@@ -217,12 +216,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       if (e.toString().contains("DEMO_MODE_LOGIN")) {
         // * This shouldn't happen, but handle it just in case
         SupabaseService().markDemoAuthenticated();
-        final demoUser = User(
+        final demoUser = SmartRoadUser(
           id: SupabaseService.demoUserId,
-          appMetadata: {},
-          userMetadata: {'name': 'Demo User', 'email': AppConstants.demoEmail},
-          aud: 'authenticated',
-          createdAt: DateTime.now().toIso8601String(),
+          email: AppConstants.demoEmail,
+          name: "Demo User",
+          createdAt: DateTime.now(),
         );
         ref.read(demoUserStateProvider.notifier).state = demoUser;
 

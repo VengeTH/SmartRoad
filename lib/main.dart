@@ -16,6 +16,7 @@ import "services/location_service.dart";
 import "providers/auth_provider.dart";
 import "screens/auth/login_screen.dart";
 import "screens/auth/signup_screen.dart";
+import "screens/legal/legal_screen.dart";
 import "screens/main_navigation_screen.dart";
 import "screens/splash/splash_screen.dart";
 import "widgets/music_app_picker_sheet.dart";
@@ -185,6 +186,16 @@ class _SmartRoadAppState extends ConsumerState<SmartRoadApp> {
       routes: {
         "/login": (context) => const LoginScreen(),
         "/signup": (context) => const SignUpScreen(),
+        "/legal/privacy": (context) => const LegalScreen(
+          initialDocument: LegalDocumentType.privacyPolicy,
+        ),
+        "/legal/terms": (context) => const LegalScreen(
+          initialDocument: LegalDocumentType.termsAndConditions,
+        ),
+        "/legal/guidelines": (context) => const LegalScreen(
+          initialDocument: LegalDocumentType.communityGuidelines,
+        ),
+        "/legal": (context) => const LegalScreen(),
       },
     );
   }

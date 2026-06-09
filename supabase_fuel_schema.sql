@@ -1,4 +1,4 @@
--- ============================================================================
+﻿-- ============================================================================
 -- * FUEL STATIONS MODULE (Community Fuel Pricing with Anonymous Submissions)
 -- ============================================================================
 -- Run this after the main supabase_schema.sql (and after profiles table exists)
@@ -16,12 +16,12 @@
 -- - Confidence scoring based on report counts
 --
 -- Admin check:
--- - Uses `public.profiles.reporter_level = 'Admin'`
+-- - Uses `SmartRoad.profiles.reporter_level = 'Admin'`
 
 -- ============================================================================
 -- * FUEL STATIONS TABLE
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.fuel_stations (
+CREATE TABLE IF NOT EXISTS SmartRoad.fuel_stations (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   latitude DOUBLE PRECISION NOT NULL,
@@ -42,43 +42,43 @@ CREATE TABLE IF NOT EXISTS public.fuel_stations (
 );
 
 -- * Geospatial index for location queries
-CREATE INDEX IF NOT EXISTS idx_fuel_stations_location ON public.fuel_stations USING GIST (
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_location ON SmartRoad.fuel_stations USING GIST (
   ll_to_earth(latitude, longitude)
 );
 
-CREATE INDEX IF NOT EXISTS idx_fuel_stations_province ON public.fuel_stations(province);
-CREATE INDEX IF NOT EXISTS idx_fuel_stations_city ON public.fuel_stations(city);
-CREATE INDEX IF NOT EXISTS idx_fuel_stations_verified ON public.fuel_stations(verified);
-CREATE INDEX IF NOT EXISTS idx_fuel_stations_source ON public.fuel_stations(source);
-CREATE INDEX IF NOT EXISTS idx_fuel_stations_created_at ON public.fuel_stations(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_province ON SmartRoad.fuel_stations(province);
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_city ON SmartRoad.fuel_stations(city);
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_verified ON SmartRoad.fuel_stations(verified);
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_source ON SmartRoad.fuel_stations(source);
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_created_at ON SmartRoad.fuel_stations(created_at DESC);
 
-ALTER TABLE public.fuel_stations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.fuel_stations ENABLE ROW LEVEL SECURITY;
 
 -- * Everyone can read fuel stations
 CREATE POLICY "Fuel stations are viewable by everyone"
-  ON public.fuel_stations FOR SELECT
+  ON SmartRoad.fuel_stations FOR SELECT
   USING (true);
 
 -- * Anyone can insert (anonymous submissions allowed via RPC)
 CREATE POLICY "Anyone can submit fuel stations"
-  ON public.fuel_stations FOR INSERT
+  ON SmartRoad.fuel_stations FOR INSERT
   WITH CHECK (true);
 
 -- * Only Admin can update/delete
 CREATE POLICY "Admins can update fuel stations"
-  ON public.fuel_stations FOR UPDATE
+  ON SmartRoad.fuel_stations FOR UPDATE
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
 
 CREATE POLICY "Admins can delete fuel stations"
-  ON public.fuel_stations FOR DELETE
+  ON SmartRoad.fuel_stations FOR DELETE
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
@@ -90,19 +90,19 @@ BEGIN
     FROM pg_proc
     WHERE proname = 'handle_updated_at'
   ) THEN
-    DROP TRIGGER IF EXISTS update_fuel_stations_updated_at ON public.fuel_stations;
+    DROP TRIGGER IF EXISTS update_fuel_stations_updated_at ON SmartRoad.fuel_stations;
     CREATE TRIGGER update_fuel_stations_updated_at
-      BEFORE UPDATE ON public.fuel_stations
-      FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+      BEFORE UPDATE ON SmartRoad.fuel_stations
+      FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
   END IF;
 END $$;
 
 -- ============================================================================
 -- * FUEL PRICE UPDATES TABLE
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.fuel_price_updates (
+CREATE TABLE IF NOT EXISTS SmartRoad.fuel_price_updates (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  station_id UUID REFERENCES public.fuel_stations(id) ON DELETE CASCADE NOT NULL,
+  station_id UUID REFERENCES SmartRoad.fuel_stations(id) ON DELETE CASCADE NOT NULL,
   fuel_type TEXT NOT NULL,
   price DOUBLE PRECISION NOT NULL,
   reporter_latitude DOUBLE PRECISION NOT NULL,
@@ -120,39 +120,39 @@ CREATE TABLE IF NOT EXISTS public.fuel_price_updates (
   CONSTRAINT source_valid CHECK (source IN ('community', 'official', 'osm', 'smartroad', 'verified'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_station_id ON public.fuel_price_updates(station_id);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_fuel_type ON public.fuel_price_updates(fuel_type);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_created_at ON public.fuel_price_updates(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_device_id ON public.fuel_price_updates(device_id);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_user_id ON public.fuel_price_updates(user_id);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_station_id ON SmartRoad.fuel_price_updates(station_id);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_fuel_type ON SmartRoad.fuel_price_updates(fuel_type);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_created_at ON SmartRoad.fuel_price_updates(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_device_id ON SmartRoad.fuel_price_updates(device_id);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_user_id ON SmartRoad.fuel_price_updates(user_id);
 
 -- * Composite index for latest price queries
 CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_station_fuel_time
-  ON public.fuel_price_updates(station_id, fuel_type, created_at DESC);
+  ON SmartRoad.fuel_price_updates(station_id, fuel_type, created_at DESC);
 
 -- * Migration: allow source values 'smartroad' and 'verified' (for existing DBs)
-ALTER TABLE public.fuel_price_updates DROP CONSTRAINT IF EXISTS source_valid;
-ALTER TABLE public.fuel_price_updates ADD CONSTRAINT source_valid
+ALTER TABLE SmartRoad.fuel_price_updates DROP CONSTRAINT IF EXISTS source_valid;
+ALTER TABLE SmartRoad.fuel_price_updates ADD CONSTRAINT source_valid
   CHECK (source IN ('community', 'official', 'osm', 'smartroad', 'verified'));
 
-ALTER TABLE public.fuel_price_updates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.fuel_price_updates ENABLE ROW LEVEL SECURITY;
 
 -- * Everyone can read price updates
 CREATE POLICY "Fuel price updates are viewable by everyone"
-  ON public.fuel_price_updates FOR SELECT
+  ON SmartRoad.fuel_price_updates FOR SELECT
   USING (true);
 
 -- * Insert via RPC only (enforces rate limiting)
 CREATE POLICY "Anyone can submit price updates via RPC"
-  ON public.fuel_price_updates FOR INSERT
+  ON SmartRoad.fuel_price_updates FOR INSERT
   WITH CHECK (true);
 
 -- ============================================================================
 -- * FUEL PRICE REPORTS TABLE (Incorrect Price Flagging)
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.fuel_price_reports (
+CREATE TABLE IF NOT EXISTS SmartRoad.fuel_price_reports (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  station_id UUID REFERENCES public.fuel_stations(id) ON DELETE CASCADE NOT NULL,
+  station_id UUID REFERENCES SmartRoad.fuel_stations(id) ON DELETE CASCADE NOT NULL,
   fuel_type TEXT NOT NULL,
   reported_incorrect_price DOUBLE PRECISION NOT NULL,
   reason TEXT,
@@ -166,29 +166,29 @@ CREATE TABLE IF NOT EXISTS public.fuel_price_reports (
   CONSTRAINT status_valid CHECK (status IN ('pending', 'reviewed', 'dismissed'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_station_id ON public.fuel_price_reports(station_id);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_fuel_type ON public.fuel_price_reports(fuel_type);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_status ON public.fuel_price_reports(status);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_created_at ON public.fuel_price_reports(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_station_id ON SmartRoad.fuel_price_reports(station_id);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_fuel_type ON SmartRoad.fuel_price_reports(fuel_type);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_status ON SmartRoad.fuel_price_reports(status);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_created_at ON SmartRoad.fuel_price_reports(created_at DESC);
 
-ALTER TABLE public.fuel_price_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.fuel_price_reports ENABLE ROW LEVEL SECURITY;
 
 -- * Everyone can read reports (for transparency)
 CREATE POLICY "Fuel price reports are viewable by everyone"
-  ON public.fuel_price_reports FOR SELECT
+  ON SmartRoad.fuel_price_reports FOR SELECT
   USING (true);
 
 -- * Anyone can submit reports
 CREATE POLICY "Anyone can submit price reports"
-  ON public.fuel_price_reports FOR INSERT
+  ON SmartRoad.fuel_price_reports FOR INSERT
   WITH CHECK (true);
 
 -- * Only Admin can update
 CREATE POLICY "Admins can update price reports"
-  ON public.fuel_price_reports FOR UPDATE
+  ON SmartRoad.fuel_price_reports FOR UPDATE
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
@@ -207,7 +207,7 @@ DECLARE
 BEGIN
   SELECT COUNT(*)
   INTO submission_count
-  FROM public.fuel_price_updates
+  FROM SmartRoad.fuel_price_updates
   WHERE device_id = p_device_id
     AND fuel_type = p_fuel_type
     AND created_at > NOW() - INTERVAL '10 minutes';
@@ -227,7 +227,7 @@ DECLARE
 BEGIN
   SELECT MAX(created_at)
   INTO last_submission
-  FROM public.fuel_price_updates
+  FROM SmartRoad.fuel_price_updates
   WHERE device_id = p_device_id
     AND station_id = p_station_id
     AND fuel_type = p_fuel_type;
@@ -272,7 +272,7 @@ BEGIN
 
   -- * Get station location and calculate distance
   SELECT latitude, longitude INTO v_station_lat, v_station_lon
-  FROM public.fuel_stations
+  FROM SmartRoad.fuel_stations
   WHERE id = p_station_id;
 
   IF v_station_lat IS NULL THEN
@@ -294,7 +294,7 @@ BEGIN
   END IF;
 
   -- * Insert the price update (source and confidence_score set explicitly)
-  INSERT INTO public.fuel_price_updates (
+  INSERT INTO SmartRoad.fuel_price_updates (
     station_id,
     fuel_type,
     price,
@@ -321,7 +321,7 @@ BEGIN
   ) RETURNING id INTO v_new_update_id;
 
   -- * Update station timestamp
-  UPDATE public.fuel_stations
+  UPDATE SmartRoad.fuel_stations
   SET updated_at = NOW()
   WHERE id = p_station_id;
 
@@ -358,7 +358,7 @@ BEGIN
   END IF;
 
   -- * Insert the station (unverified)
-  INSERT INTO public.fuel_stations (
+  INSERT INTO SmartRoad.fuel_stations (
     name,
     latitude,
     longitude,
@@ -411,7 +411,7 @@ BEGIN
     fpu.created_at AS updated_at,
     fpu.source,
     fpu.confidence_score
-  FROM public.fuel_price_updates fpu
+  FROM SmartRoad.fuel_price_updates fpu
   WHERE fpu.station_id = p_station_id
   ORDER BY fpu.fuel_type, fpu.created_at DESC;
 END;
@@ -433,7 +433,7 @@ BEGIN
   -- * Count recent incorrect-price reports (last 7 days)
   SELECT COUNT(*)
   INTO v_report_count
-  FROM public.fuel_price_reports
+  FROM SmartRoad.fuel_price_reports
   WHERE station_id = p_station_id
     AND fuel_type = p_fuel_type
     AND status = 'pending'
@@ -443,11 +443,11 @@ BEGIN
   v_new_confidence := GREATEST(0.1, 1.0 - (v_report_count * 0.2));
 
   -- * Update the latest price update
-  UPDATE public.fuel_price_updates
+  UPDATE SmartRoad.fuel_price_updates
   SET confidence_score = v_new_confidence
   WHERE id = (
     SELECT id
-    FROM public.fuel_price_updates
+    FROM SmartRoad.fuel_price_updates
     WHERE station_id = p_station_id
       AND fuel_type = p_fuel_type
     ORDER BY created_at DESC
@@ -468,9 +468,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS fuel_price_report_confidence_update ON public.fuel_price_reports;
+DROP TRIGGER IF EXISTS fuel_price_report_confidence_update ON SmartRoad.fuel_price_reports;
 CREATE TRIGGER fuel_price_report_confidence_update
-  AFTER INSERT ON public.fuel_price_reports
+  AFTER INSERT ON SmartRoad.fuel_price_reports
   FOR EACH ROW EXECUTE FUNCTION trigger_recalculate_confidence();
 
 -- ============================================================================
@@ -495,8 +495,8 @@ RETURNS TABLE (
 BEGIN
   -- * Only allow Admin
   IF NOT EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE public.profiles.id = auth.uid() AND reporter_level = 'Admin'
+    SELECT 1 FROM SmartRoad.profiles
+    WHERE SmartRoad.profiles.id = auth.uid() AND reporter_level = 'Admin'
   ) THEN
     RAISE EXCEPTION 'Admin access required';
   END IF;
@@ -514,7 +514,7 @@ BEGIN
     fs.photo_url,
     fs.created_at,
     fs.created_by_device_id
-  FROM public.fuel_stations fs
+  FROM SmartRoad.fuel_stations fs
   WHERE fs.verified = FALSE
     AND fs.source = 'community'
   ORDER BY fs.created_at DESC;
@@ -527,13 +527,13 @@ RETURNS JSON AS $$
 BEGIN
   -- * Only allow Admin
   IF NOT EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE public.profiles.id = auth.uid() AND reporter_level = 'Admin'
+    SELECT 1 FROM SmartRoad.profiles
+    WHERE SmartRoad.profiles.id = auth.uid() AND reporter_level = 'Admin'
   ) THEN
     RETURN json_build_object('success', false, 'error', 'UNAUTHORIZED', 'message', 'Admin access required.');
   END IF;
 
-  UPDATE public.fuel_stations
+  UPDATE SmartRoad.fuel_stations
   SET verified = TRUE, updated_at = NOW()
   WHERE id = p_station_id;
 
@@ -551,13 +551,13 @@ RETURNS JSON AS $$
 BEGIN
   -- * Only allow Admin
   IF NOT EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE public.profiles.id = auth.uid() AND reporter_level = 'Admin'
+    SELECT 1 FROM SmartRoad.profiles
+    WHERE SmartRoad.profiles.id = auth.uid() AND reporter_level = 'Admin'
   ) THEN
     RETURN json_build_object('success', false, 'error', 'UNAUTHORIZED', 'message', 'Admin access required.');
   END IF;
 
-  DELETE FROM public.fuel_stations
+  DELETE FROM SmartRoad.fuel_stations
   WHERE id = p_station_id AND verified = FALSE;
 
   IF FOUND THEN
@@ -567,3 +567,4 @@ BEGIN
   END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+

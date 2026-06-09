@@ -1,0 +1,44 @@
+name: Branch Protection
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  validate-pr:
+    name: Validate Pull Request
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze code
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Check for merge conflicts
+        run: |
+          if [[ "${{ github.event.pull_request.mergeable }}" == "false" ]]; then
+            echo "❌ This PR has merge conflicts. Please resolve them first."
+            exit 1
+          fi
+          echo "✅ No merge conflicts detected."
+
+      - name: Validate branch naming
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          if [[ ! "$BRANCH" =~ ^(feat|fix|hotfix|docs|refactor|test|chore|release)/ ]]; then
+            echo "❌ Branch name '$BRANCH' does not follow convention."
+            echo "   Expected: feat/description, fix/description, docs/description, etc."
+            exit 1
+          fi
+          echo "✅ Branch naming convention validated."

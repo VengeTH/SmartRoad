@@ -810,6 +810,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               textAlign: TextAlign.center,
             ),
             SizedBox(height: sectionSpacing),
+            // * Legal links
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).pushNamed("/legal/privacy");
+                  },
+                  child: Text(
+                    "Privacy Policy",
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppTheme.primaryColor,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+                Text(
+                  "  ·  ",
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppTheme.textTertiary,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).pushNamed("/legal/terms");
+                  },
+                  child: Text(
+                    "Terms of Service",
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppTheme.primaryColor,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: sectionSpacing),
             // * Sign Up Link
             Row(
               mainAxisAlignment: MainAxisAlignment.center,

@@ -1,5 +1,6 @@
 import "package:flutter/material.dart";
 import "package:flutter/services.dart";
+import "package:flutter/gestures.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "../../services/supabase_service.dart";
 import "../../core/theme/app_theme.dart";
@@ -28,6 +29,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _acceptedTerms = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -83,6 +85,26 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
   
   Future<void> _handleSignUp() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    if (!_acceptedTerms) {
+      if (mounted) {
+        HapticFeedback.heavyImpact();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(child: Text("Please accept the Terms & Conditions and Privacy Policy")),
+              ],
+            ),
+            backgroundColor: AppTheme.warningColor,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
     
     // * Dismiss keyboard
     FocusScope.of(context).unfocus();
@@ -360,7 +382,71 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
                           return null;
                         },
                       ),
-                      const SizedBox(height: AppTheme.spacingLG),
+                      // * Terms & Privacy Checkbox
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingSM),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: Checkbox(
+                                value: _acceptedTerms,
+                                onChanged: (v) {
+                                  setState(() => _acceptedTerms = v ?? false);
+                                },
+                                activeColor: AppTheme.primaryColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: AppTheme.spacingSM),
+                            Expanded(
+                              child: Text.rich(
+                                TextSpan(
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textSecondary,
+                                    height: 1.4,
+                                  ),
+                                  children: [
+                                    const TextSpan(
+                                      text: "I accept the ",
+                                    ),
+                                    TextSpan(
+                                      text: "Terms & Conditions",
+                                      style: TextStyle(
+                                        color: AppTheme.primaryColor,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                      recognizer: TapGestureRecognizer()
+                                        ..onTap = () {
+                                          Navigator.of(context).pushNamed("/legal/terms");
+                                        },
+                                    ),
+                                    const TextSpan(
+                                      text: " and ",
+                                    ),
+                                    TextSpan(
+                                      text: "Privacy Policy",
+                                      style: TextStyle(
+                                        color: AppTheme.primaryColor,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                      recognizer: TapGestureRecognizer()
+                                        ..onTap = () {
+                                          Navigator.of(context).pushNamed("/legal/privacy");
+                                        },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingSM),
                       // * Sign Up Button
                       ElevatedButton(
                           onPressed: _isLoading ? null : _handleSignUp,
@@ -407,6 +493,39 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
                               Navigator.of(context).pop();
                             },
                             child: const Text("Login"),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppTheme.spacingSM),
+                      // * Legal links
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).pushNamed("/legal/privacy"),
+                            child: Text(
+                              "Privacy Policy",
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppTheme.primaryColor,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            "  ·  ",
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppTheme.textTertiary,
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).pushNamed("/legal/terms"),
+                            child: Text(
+                              "Terms of Service",
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppTheme.primaryColor,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
                           ),
                         ],
                       ),

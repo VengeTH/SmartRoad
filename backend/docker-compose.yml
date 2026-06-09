@@ -77,33 +77,70 @@ services:
   #     - smartroad-backend
   #   restart: unless-stopped
 
-  # * PostgreSQL Database
-  # * FUTURE FEATURE - Not implemented in MVP
-  # * Will be used for:
-  # * - User data
-  # * - Route cache
-  # * - Analytics
-  #
-  # postgres:
-  #   image: postgres:15-alpine
-  #   container_name: smartroad-postgres
-  #   environment:
-  #     - POSTGRES_DB=smartroad
-  #     - POSTGRES_USER=smartroad
-  #     - POSTGRES_PASSWORD=change_me_in_production
-  #   volumes:
-  #     - postgres-data:/var/lib/postgresql/data
-  #   ports:
-  #     - "5432:5432"
-  #   networks:
-  #     - smartroad-backend
-  #   restart: unless-stopped
+  # * PostgreSQL Database + PostGIS
+  # * Stores all SmartRoad data (users, routes, hazards, stickers, etc.)
+  # * PostGIS extension enables geospatial queries
+  # * 
+  # * To initialize, apply schema:
+  # *   cat supabase_schema_merged.sql | docker exec -i smartroad-postgres psql -U smartroad -d smartroad
+  # * 
+  # * Supabase is used for cloud deployments; this local Postgres is for
+  # * self-hosted setups or local development without Supabase.
+  postgres:
+    image: postgis/postgis:15-3.4
+    container_name: smartroad-postgres
+    environment:
+      - POSTGRES_DB=smartroad
+      - POSTGRES_USER=smartroad
+      - POSTGRES_PASSWORD=${PG_PASSWORD:-smartroad_dev}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - smartroad-backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartroad -d smartroad"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # * Redis Cache
+  # * Used for:
+  # * - Session caching
+  # * - Weather data TTL cache
+  # * - Rate limiting counters
+  # * - Realtime pub/sub (future)
+  redis:
+    image: redis:7-alpine
+    container_name: smartroad-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - smartroad-backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
   graphhopper-data:
     driver: local
-  # postgres-data:
-  #   driver: local
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
 
 networks:
   smartroad-backend:

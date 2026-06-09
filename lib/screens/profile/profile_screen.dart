@@ -15,6 +15,7 @@ import "../admin/fuel_station_review_screen.dart";
 import "../admin/fuel_price_report_review_screen.dart";
 import "../fuel/fuel_prices_screen.dart";
 import "../about/about_screen.dart";
+import "../legal/legal_screen.dart";
 import "navigation_settings_screen.dart";
 import "../../widgets/music_control_settings_card.dart";
 
@@ -337,6 +338,65 @@ class _GuestProfileContent extends StatelessWidget {
                               const SizedBox(height: 4),
                               Text(
                                 "Learn more about the app",
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: AppTheme.textTertiary,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacingMD),
+              // * Legal & Policies
+              Card(
+                child: InkWell(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const LegalScreen(),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingMD),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(AppTheme.spacingMD),
+                          decoration: BoxDecoration(
+                            color: AppTheme.warningColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                          ),
+                          child: Icon(
+                            Icons.gavel,
+                            color: AppTheme.warningColor,
+                            size: 32,
+                          ),
+                        ),
+                        const SizedBox(width: AppTheme.spacingMD),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Legal & Policies",
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                "Privacy Policy, Terms, and more",
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: AppTheme.textSecondary,
                                 ),

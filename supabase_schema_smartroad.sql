@@ -1,0 +1,301 @@
+﻿-- SmartRoad MVP - Supabase Schema
+-- Run this script in your Supabase SQL Editor
+
+-- * Enable PostGIS extension for geospatial queries
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+-- * Create enum for hazard types
+CREATE TYPE hazard_type AS ENUM (
+  'pothole',
+  'flood',
+  'accident',
+  'closure',
+  'landslide',
+  'roadblock'
+);
+
+-- * Create enum for severity levels
+CREATE TYPE severity_level AS ENUM (
+  'Low',
+  'Medium',
+  'High'
+);
+
+-- * Create enum for reporter levels
+CREATE TYPE reporter_level AS ENUM (
+  'Novice',
+  'Verified',
+  'Expert',
+  'Admin'
+);
+
+-- * Create profiles table (extends Supabase auth.users)
+CREATE TABLE SmartRoad.profiles (
+  id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  name TEXT,
+  email TEXT,
+  photo_url TEXT,
+  reporter_level reporter_level DEFAULT 'Novice',
+  valid_reports_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- * Create hazards table with PostGIS geometry
+CREATE TABLE SmartRoad.hazards (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  type hazard_type NOT NULL,
+  description TEXT NOT NULL,
+  severity severity_level NOT NULL,
+  location GEOGRAPHY(POINT, 4326) NOT NULL,
+  image_url TEXT,
+  sticker_flag TEXT, -- * Optional sticker metadata
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- * Create indexes for performance
+CREATE INDEX idx_hazards_location ON SmartRoad.hazards USING GIST(location);
+CREATE INDEX idx_hazards_created_at ON SmartRoad.hazards(created_at DESC);
+CREATE INDEX idx_hazards_type ON SmartRoad.hazards(type);
+CREATE INDEX idx_hazards_user_id ON SmartRoad.hazards(user_id);
+CREATE INDEX idx_profiles_email ON SmartRoad.profiles(email);
+
+-- * Enable Row Level Security (RLS)
+ALTER TABLE SmartRoad.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.hazards ENABLE ROW LEVEL SECURITY;
+
+-- * RLS Policies for profiles table
+-- * Anyone can read profiles
+CREATE POLICY "Profiles are viewable by everyone"
+  ON SmartRoad.profiles FOR SELECT
+  USING (true);
+
+-- * Users can update their own profile
+CREATE POLICY "Users can update own profile"
+  ON SmartRoad.profiles FOR UPDATE
+  USING (auth.uid() = id);
+
+-- * Users can insert their own profile
+CREATE POLICY "Users can insert own profile"
+  ON SmartRoad.profiles FOR INSERT
+  WITH CHECK (auth.uid() = id);
+
+-- * RLS Policies for hazards table
+-- * Anyone can read hazards (guests can view map/feed)
+CREATE POLICY "Hazards are viewable by everyone"
+  ON SmartRoad.hazards FOR SELECT
+  USING (true);
+
+-- * Only authenticated users can insert hazards
+CREATE POLICY "Authenticated users can insert hazards"
+  ON SmartRoad.hazards FOR INSERT
+  WITH CHECK (auth.role() = 'authenticated');
+
+-- * Only owner or admin can update their hazard
+CREATE POLICY "Users can update own hazards"
+  ON SmartRoad.hazards FOR UPDATE
+  USING (
+    auth.uid() = user_id OR
+    EXISTS (
+      SELECT 1 FROM SmartRoad.profiles
+      WHERE id = auth.uid() AND reporter_level = 'Admin'
+    )
+  );
+
+-- * Only owner or admin can delete their hazard
+CREATE POLICY "Users can delete own hazards"
+  ON SmartRoad.hazards FOR DELETE
+  USING (
+    auth.uid() = user_id OR
+    EXISTS (
+      SELECT 1 FROM SmartRoad.profiles
+      WHERE id = auth.uid() AND reporter_level = 'Admin'
+    )
+  );
+
+-- * Function to automatically create profile on user signup
+CREATE OR REPLACE FUNCTION SmartRoad.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO SmartRoad.profiles (id, name, email)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'name', 'User'),
+    NEW.email
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- * Trigger to create profile on user signup
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_new_user();
+
+-- * Function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION SmartRoad.handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- * Triggers for updated_at
+CREATE TRIGGER update_profiles_updated_at
+  BEFORE UPDATE ON SmartRoad.profiles
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
+
+CREATE TRIGGER update_hazards_updated_at
+  BEFORE UPDATE ON SmartRoad.hazards
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
+
+-- * Function to increment valid_reports_count (can be called when a report is validated)
+CREATE OR REPLACE FUNCTION SmartRoad.increment_valid_reports(user_uuid UUID)
+RETURNS void AS $$
+BEGIN
+  UPDATE SmartRoad.profiles
+  SET valid_reports_count = valid_reports_count + 1
+  WHERE id = user_uuid;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- * Create storage bucket for hazard images (run in Supabase Dashboard Storage section)
+-- * Bucket name: hazard-images
+-- * Public: true
+-- * Allowed MIME types: image/jpeg, image/png, image/webp
+-- * File size limit: 5MB
+
+-- * Demo user seed (optional - for investor demos)
+-- * Password should be set via Supabase Auth dashboard
+-- * INSERT INTO auth.users (email, encrypted_password, email_confirmed_at)
+-- * VALUES ('demo@smartroad.app', crypt('DemoPass123!', gen_salt('bf')), NOW());
+
+-- ============================================================================
+-- * STICKER & GATE SECURITY MODULE
+-- ============================================================================
+
+-- * Create enum for HOA access types
+CREATE TYPE hoa_access_type AS ENUM (
+  'public_shortcut',  -- * Outsiders can buy a pass
+  'residents_only'    -- * Outsiders CANNOT buy a pass
+);
+
+-- * Create HOAs (Homeowners Associations) table
+-- * Represents gates/communities that require stickers for access
+CREATE TABLE SmartRoad.hoas (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
+  access_type hoa_access_type DEFAULT 'public_shortcut',
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- * Create user_stickers table
+-- * Represents digital stickers/permit that users can purchase from HOAs
+CREATE TABLE SmartRoad.user_stickers (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  hoa_id UUID REFERENCES SmartRoad.hoas(id) ON DELETE CASCADE NOT NULL,
+  issued_at TIMESTAMPTZ NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  is_physical_sticker BOOLEAN DEFAULT false, -- * True for uploaded physical stickers, False for in-app QR purchases
+  verified_by_ai BOOLEAN DEFAULT false, -- * True if Gemini AI confirms the image looks like a sticker
+  sticker_photo_url TEXT, -- * Path to the uploaded sticker image
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  -- * Prevent duplicate active stickers for same user + HOA
+  CONSTRAINT unique_active_user_hoa_sticker 
+    UNIQUE NULLS NOT DISTINCT (user_id, hoa_id, is_active)
+    WHERE is_active = true
+);
+
+-- * Create indexes for stickers
+CREATE INDEX idx_user_stickers_user_id ON SmartRoad.user_stickers(user_id);
+CREATE INDEX idx_user_stickers_hoa_id ON SmartRoad.user_stickers(hoa_id);
+CREATE INDEX idx_user_stickers_expires_at ON SmartRoad.user_stickers(expires_at);
+CREATE INDEX idx_user_stickers_is_active ON SmartRoad.user_stickers(is_active);
+CREATE INDEX idx_hoas_is_active ON SmartRoad.hoas(is_active);
+
+-- * Enable Row Level Security for new tables
+ALTER TABLE SmartRoad.hoas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.user_stickers ENABLE ROW LEVEL SECURITY;
+
+-- * RLS Policies for HOAs table
+-- * Anyone can read active HOAs (for gate pass display)
+CREATE POLICY "HOAs are viewable by everyone"
+  ON SmartRoad.hoas FOR SELECT
+  USING (is_active = true);
+
+-- * Only admins can manage HOAs (insert/update/delete)
+CREATE POLICY "Admins can manage HOAs"
+  ON SmartRoad.hoas FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM SmartRoad.profiles
+      WHERE id = auth.uid() AND reporter_level = 'Admin'
+    )
+  );
+
+-- * RLS Policies for user_stickers table
+-- * Users can read their own stickers
+CREATE POLICY "Users can view own stickers"
+  ON SmartRoad.user_stickers FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- * Guards/admins can read all stickers (for validation)
+CREATE POLICY "Guards can view all stickers for validation"
+  ON SmartRoad.user_stickers FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM SmartRoad.profiles
+      WHERE id = auth.uid() AND reporter_level IN ('Admin', 'Expert')
+    )
+  );
+
+-- * Only admins can insert/update/delete stickers (HOAs sell stickers)
+CREATE POLICY "Admins can manage stickers"
+  ON SmartRoad.user_stickers FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM SmartRoad.profiles
+      WHERE id = auth.uid() AND reporter_level = 'Admin'
+    )
+  );
+
+-- * Users can insert their own physical stickers (after AI verification)
+CREATE POLICY "Users can insert physical stickers"
+  ON SmartRoad.user_stickers FOR INSERT
+  WITH CHECK (
+    auth.uid() = user_id 
+    AND is_physical_sticker = true 
+    AND verified_by_ai = true
+  );
+
+-- * Users can update their own physical stickers
+CREATE POLICY "Users can update own physical stickers"
+  ON SmartRoad.user_stickers FOR UPDATE
+  USING (auth.uid() = user_id AND is_physical_sticker = true)
+  WITH CHECK (auth.uid() = user_id AND is_physical_sticker = true);
+
+-- * Trigger for updated_at on new tables
+CREATE TRIGGER update_hoas_updated_at
+  BEFORE UPDATE ON SmartRoad.hoas
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
+
+CREATE TRIGGER update_user_stickers_updated_at
+  BEFORE UPDATE ON SmartRoad.user_stickers
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
+
+-- * Sample HOA data (optional - for testing)
+-- * INSERT INTO SmartRoad.hoas (name, description, latitude, longitude)
+-- * VALUES 
+-- *   ('BF Resort', 'BF Resort Village', 14.4244, 120.9883),
+-- *   ('BF Homes', 'BF Homes Parañaque', 14.5000, 121.0000);

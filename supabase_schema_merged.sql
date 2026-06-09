@@ -1,4 +1,4 @@
--- ============================================================================
+﻿-- ============================================================================
 -- SmartRoad - SINGLE MERGED SCHEMA (run once in Supabase SQL Editor)
 -- ============================================================================
 -- This file merges, in dependency order:
@@ -44,7 +44,7 @@ CREATE TYPE reporter_level AS ENUM (
 );
 
 -- * Create profiles table (extends Supabase auth.users)
-CREATE TABLE public.profiles (
+CREATE TABLE SmartRoad.profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   name TEXT,
   email TEXT,
@@ -56,7 +56,7 @@ CREATE TABLE public.profiles (
 );
 
 -- * Create hazards table with PostGIS geometry
-CREATE TABLE public.hazards (
+CREATE TABLE SmartRoad.hazards (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   type hazard_type NOT NULL,
@@ -70,70 +70,70 @@ CREATE TABLE public.hazards (
 );
 
 -- * Create indexes for performance
-CREATE INDEX idx_hazards_location ON public.hazards USING GIST(location);
-CREATE INDEX idx_hazards_created_at ON public.hazards(created_at DESC);
-CREATE INDEX idx_hazards_type ON public.hazards(type);
-CREATE INDEX idx_hazards_user_id ON public.hazards(user_id);
-CREATE INDEX idx_profiles_email ON public.profiles(email);
+CREATE INDEX idx_hazards_location ON SmartRoad.hazards USING GIST(location);
+CREATE INDEX idx_hazards_created_at ON SmartRoad.hazards(created_at DESC);
+CREATE INDEX idx_hazards_type ON SmartRoad.hazards(type);
+CREATE INDEX idx_hazards_user_id ON SmartRoad.hazards(user_id);
+CREATE INDEX idx_profiles_email ON SmartRoad.profiles(email);
 
 -- * Enable Row Level Security (RLS)
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.hazards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.hazards ENABLE ROW LEVEL SECURITY;
 
 -- * RLS Policies for profiles table
 -- * Anyone can read profiles
 CREATE POLICY "Profiles are viewable by everyone"
-  ON public.profiles FOR SELECT
+  ON SmartRoad.profiles FOR SELECT
   USING (true);
 
 -- * Users can update their own profile
 CREATE POLICY "Users can update own profile"
-  ON public.profiles FOR UPDATE
+  ON SmartRoad.profiles FOR UPDATE
   USING (auth.uid() = id);
 
 -- * Users can insert their own profile
 CREATE POLICY "Users can insert own profile"
-  ON public.profiles FOR INSERT
+  ON SmartRoad.profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
 
 -- * RLS Policies for hazards table
 -- * Anyone can read hazards (guests can view map/feed)
 CREATE POLICY "Hazards are viewable by everyone"
-  ON public.hazards FOR SELECT
+  ON SmartRoad.hazards FOR SELECT
   USING (true);
 
 -- * Only authenticated users can insert hazards
 CREATE POLICY "Authenticated users can insert hazards"
-  ON public.hazards FOR INSERT
+  ON SmartRoad.hazards FOR INSERT
   WITH CHECK (auth.role() = 'authenticated');
 
 -- * Only owner or admin can update their hazard
 CREATE POLICY "Users can update own hazards"
-  ON public.hazards FOR UPDATE
+  ON SmartRoad.hazards FOR UPDATE
   USING (
     auth.uid() = user_id OR
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
 
 -- * Only owner or admin can delete their hazard
 CREATE POLICY "Users can delete own hazards"
-  ON public.hazards FOR DELETE
+  ON SmartRoad.hazards FOR DELETE
   USING (
     auth.uid() = user_id OR
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
 
 -- * Function to automatically create profile on user signup
-CREATE OR REPLACE FUNCTION public.handle_new_user()
+CREATE OR REPLACE FUNCTION SmartRoad.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, name, email)
+  INSERT INTO SmartRoad.profiles (id, name, email)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'name', 'User'),
@@ -146,10 +146,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- * Trigger to create profile on user signup
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_new_user();
 
 -- * Function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION public.handle_updated_at()
+CREATE OR REPLACE FUNCTION SmartRoad.handle_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = NOW();
@@ -159,18 +159,18 @@ $$ LANGUAGE plpgsql;
 
 -- * Triggers for updated_at
 CREATE TRIGGER update_profiles_updated_at
-  BEFORE UPDATE ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+  BEFORE UPDATE ON SmartRoad.profiles
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
 
 CREATE TRIGGER update_hazards_updated_at
-  BEFORE UPDATE ON public.hazards
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+  BEFORE UPDATE ON SmartRoad.hazards
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
 
 -- * Function to increment valid_reports_count (can be called when a report is validated)
-CREATE OR REPLACE FUNCTION public.increment_valid_reports(user_uuid UUID)
+CREATE OR REPLACE FUNCTION SmartRoad.increment_valid_reports(user_uuid UUID)
 RETURNS void AS $$
 BEGIN
-  UPDATE public.profiles
+  UPDATE SmartRoad.profiles
   SET valid_reports_count = valid_reports_count + 1
   WHERE id = user_uuid;
 END;
@@ -199,7 +199,7 @@ CREATE TYPE hoa_access_type AS ENUM (
 
 -- * Create HOAs (Homeowners Associations) table
 -- * Represents gates/communities that require stickers for access
-CREATE TABLE public.hoas (
+CREATE TABLE SmartRoad.hoas (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
@@ -213,10 +213,10 @@ CREATE TABLE public.hoas (
 
 -- * Create user_stickers table
 -- * Represents digital stickers/permit that users can purchase from HOAs
-CREATE TABLE public.user_stickers (
+CREATE TABLE SmartRoad.user_stickers (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  hoa_id UUID REFERENCES public.hoas(id) ON DELETE CASCADE NOT NULL,
+  hoa_id UUID REFERENCES SmartRoad.hoas(id) ON DELETE CASCADE NOT NULL,
   issued_at TIMESTAMPTZ NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   is_active BOOLEAN DEFAULT true,
@@ -232,28 +232,28 @@ CREATE TABLE public.user_stickers (
 );
 
 -- * Create indexes for stickers
-CREATE INDEX idx_user_stickers_user_id ON public.user_stickers(user_id);
-CREATE INDEX idx_user_stickers_hoa_id ON public.user_stickers(hoa_id);
-CREATE INDEX idx_user_stickers_expires_at ON public.user_stickers(expires_at);
-CREATE INDEX idx_user_stickers_is_active ON public.user_stickers(is_active);
-CREATE INDEX idx_hoas_is_active ON public.hoas(is_active);
+CREATE INDEX idx_user_stickers_user_id ON SmartRoad.user_stickers(user_id);
+CREATE INDEX idx_user_stickers_hoa_id ON SmartRoad.user_stickers(hoa_id);
+CREATE INDEX idx_user_stickers_expires_at ON SmartRoad.user_stickers(expires_at);
+CREATE INDEX idx_user_stickers_is_active ON SmartRoad.user_stickers(is_active);
+CREATE INDEX idx_hoas_is_active ON SmartRoad.hoas(is_active);
 
 -- * Enable Row Level Security for new tables
-ALTER TABLE public.hoas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_stickers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.hoas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.user_stickers ENABLE ROW LEVEL SECURITY;
 
 -- * RLS Policies for HOAs table
 -- * Anyone can read active HOAs (for gate pass display)
 CREATE POLICY "HOAs are viewable by everyone"
-  ON public.hoas FOR SELECT
+  ON SmartRoad.hoas FOR SELECT
   USING (is_active = true);
 
 -- * Only admins can manage HOAs (insert/update/delete)
 CREATE POLICY "Admins can manage HOAs"
-  ON public.hoas FOR ALL
+  ON SmartRoad.hoas FOR ALL
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
@@ -261,32 +261,32 @@ CREATE POLICY "Admins can manage HOAs"
 -- * RLS Policies for user_stickers table
 -- * Users can read their own stickers
 CREATE POLICY "Users can view own stickers"
-  ON public.user_stickers FOR SELECT
+  ON SmartRoad.user_stickers FOR SELECT
   USING (auth.uid() = user_id);
 
 -- * Guards/admins can read all stickers (for validation)
 CREATE POLICY "Guards can view all stickers for validation"
-  ON public.user_stickers FOR SELECT
+  ON SmartRoad.user_stickers FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level IN ('Admin', 'Expert')
     )
   );
 
 -- * Only admins can insert/update/delete stickers (HOAs sell stickers)
 CREATE POLICY "Admins can manage stickers"
-  ON public.user_stickers FOR ALL
+  ON SmartRoad.user_stickers FOR ALL
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
 
 -- * Users can insert their own physical stickers (after AI verification)
 CREATE POLICY "Users can insert physical stickers"
-  ON public.user_stickers FOR INSERT
+  ON SmartRoad.user_stickers FOR INSERT
   WITH CHECK (
     auth.uid() = user_id 
     AND is_physical_sticker = true 
@@ -295,21 +295,21 @@ CREATE POLICY "Users can insert physical stickers"
 
 -- * Users can update their own physical stickers
 CREATE POLICY "Users can update own physical stickers"
-  ON public.user_stickers FOR UPDATE
+  ON SmartRoad.user_stickers FOR UPDATE
   USING (auth.uid() = user_id AND is_physical_sticker = true)
   WITH CHECK (auth.uid() = user_id AND is_physical_sticker = true);
 
 -- * Trigger for updated_at on new tables
 CREATE TRIGGER update_hoas_updated_at
-  BEFORE UPDATE ON public.hoas
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+  BEFORE UPDATE ON SmartRoad.hoas
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
 
 CREATE TRIGGER update_user_stickers_updated_at
-  BEFORE UPDATE ON public.user_stickers
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+  BEFORE UPDATE ON SmartRoad.user_stickers
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
 
 -- * Sample HOA data (optional - for testing)
--- * INSERT INTO public.hoas (name, description, latitude, longitude)
+-- * INSERT INTO SmartRoad.hoas (name, description, latitude, longitude)
 -- * VALUES 
 -- *   ('BF Resort', 'BF Resort Village', 14.4244, 120.9883),
 -- *   ('BF Homes', 'BF Homes ParaÃ±aque', 14.5000, 121.0000);
@@ -323,14 +323,14 @@ CREATE TRIGGER update_user_stickers_updated_at
 -- ============================================================================
 
 -- * Add pass_mode and geofence radius to hoas table
-ALTER TABLE public.hoas
+ALTER TABLE SmartRoad.hoas
   ADD COLUMN IF NOT EXISTS pass_mode TEXT DEFAULT 'location_bound'
     CHECK (pass_mode IN ('location_bound', 'full_day', 'both')),
   ADD COLUMN IF NOT EXISTS radius_meters INTEGER DEFAULT 500;
 
-COMMENT ON COLUMN public.hoas.pass_mode IS
+COMMENT ON COLUMN SmartRoad.hoas.pass_mode IS
   'location_bound: pass nullified when user exits geofence | full_day: valid all day after first scan | both: guard chooses';
-COMMENT ON COLUMN public.hoas.radius_meters IS
+COMMENT ON COLUMN SmartRoad.hoas.radius_meters IS
   'Radius of HOA geofence in meters used for location_bound mode';
 
 -- * Create enum-like check for pass mode (text column with CHECK is simpler)
@@ -340,10 +340,10 @@ COMMENT ON COLUMN public.hoas.radius_meters IS
 -- * gate_access_logs
 -- * One row per guard scan event â€” serves as the transaction/proof record
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.gate_access_logs (
+CREATE TABLE IF NOT EXISTS SmartRoad.gate_access_logs (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  sticker_id      UUID REFERENCES public.user_stickers(id) ON DELETE SET NULL,
-  hoa_id          UUID REFERENCES public.hoas(id) ON DELETE CASCADE NOT NULL,
+  sticker_id      UUID REFERENCES SmartRoad.user_stickers(id) ON DELETE SET NULL,
+  hoa_id          UUID REFERENCES SmartRoad.hoas(id) ON DELETE CASCADE NOT NULL,
   user_id         UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   scanned_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL, -- guard user id (nullable for system scans)
   scan_time       TIMESTAMPTZ DEFAULT NOW() NOT NULL,
@@ -354,19 +354,19 @@ CREATE TABLE IF NOT EXISTS public.gate_access_logs (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_gate_access_logs_user_id  ON public.gate_access_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_gate_access_logs_hoa_id   ON public.gate_access_logs(hoa_id);
-CREATE INDEX IF NOT EXISTS idx_gate_access_logs_scan_time ON public.gate_access_logs(scan_time DESC);
-CREATE INDEX IF NOT EXISTS idx_gate_access_logs_sticker  ON public.gate_access_logs(sticker_id);
+CREATE INDEX IF NOT EXISTS idx_gate_access_logs_user_id  ON SmartRoad.gate_access_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_gate_access_logs_hoa_id   ON SmartRoad.gate_access_logs(hoa_id);
+CREATE INDEX IF NOT EXISTS idx_gate_access_logs_scan_time ON SmartRoad.gate_access_logs(scan_time DESC);
+CREATE INDEX IF NOT EXISTS idx_gate_access_logs_sticker  ON SmartRoad.gate_access_logs(sticker_id);
 
 -- ============================================================================
 -- * hoa_day_passes
 -- * Pay-per-day passes for non-residents or public-shortcut HOAs
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.hoa_day_passes (
+CREATE TABLE IF NOT EXISTS SmartRoad.hoa_day_passes (
   id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id       UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  hoa_id        UUID REFERENCES public.hoas(id) ON DELETE CASCADE NOT NULL,
+  hoa_id        UUID REFERENCES SmartRoad.hoas(id) ON DELETE CASCADE NOT NULL,
   valid_date    DATE NOT NULL,
   pass_mode     TEXT DEFAULT 'full_day'
                   CHECK (pass_mode IN ('location_bound', 'full_day')),
@@ -377,15 +377,15 @@ CREATE TABLE IF NOT EXISTS public.hoa_day_passes (
   CONSTRAINT unique_user_hoa_day_pass UNIQUE (user_id, hoa_id, valid_date)
 );
 
-CREATE INDEX IF NOT EXISTS idx_hoa_day_passes_user_id    ON public.hoa_day_passes(user_id);
-CREATE INDEX IF NOT EXISTS idx_hoa_day_passes_hoa_id     ON public.hoa_day_passes(hoa_id);
-CREATE INDEX IF NOT EXISTS idx_hoa_day_passes_valid_date ON public.hoa_day_passes(valid_date);
+CREATE INDEX IF NOT EXISTS idx_hoa_day_passes_user_id    ON SmartRoad.hoa_day_passes(user_id);
+CREATE INDEX IF NOT EXISTS idx_hoa_day_passes_hoa_id     ON SmartRoad.hoa_day_passes(hoa_id);
+CREATE INDEX IF NOT EXISTS idx_hoa_day_passes_valid_date ON SmartRoad.hoa_day_passes(valid_date);
 
 -- ============================================================================
 -- * Enable RLS
 -- ============================================================================
-ALTER TABLE public.gate_access_logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.hoa_day_passes   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.gate_access_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.hoa_day_passes   ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================================
 -- * RLS Policies: gate_access_logs
@@ -393,27 +393,27 @@ ALTER TABLE public.hoa_day_passes   ENABLE ROW LEVEL SECURITY;
 
 -- Users can read their own access logs (transaction history)
 CREATE POLICY "Users can view own access logs"
-  ON public.gate_access_logs FOR SELECT
+  ON SmartRoad.gate_access_logs FOR SELECT
   USING (auth.uid() = user_id);
 
 -- Guards/Admins (Expert or Admin reporter level) can read all logs
 CREATE POLICY "Guards can view all access logs"
-  ON public.gate_access_logs FOR SELECT
+  ON SmartRoad.gate_access_logs FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level IN ('Admin', 'Expert')
     )
   );
 
 -- Guards/Admins can insert (log) gate access events
 CREATE POLICY "Guards can insert access logs"
-  ON public.gate_access_logs FOR INSERT
+  ON SmartRoad.gate_access_logs FOR INSERT
   WITH CHECK (
     auth.role() = 'authenticated' AND (
       auth.uid() = scanned_by OR
       EXISTS (
-        SELECT 1 FROM public.profiles
+        SELECT 1 FROM SmartRoad.profiles
         WHERE id = auth.uid() AND reporter_level IN ('Admin', 'Expert')
       )
     )
@@ -421,10 +421,10 @@ CREATE POLICY "Guards can insert access logs"
 
 -- Admins can delete logs (for GDPR / cleanup)
 CREATE POLICY "Admins can delete access logs"
-  ON public.gate_access_logs FOR DELETE
+  ON SmartRoad.gate_access_logs FOR DELETE
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
@@ -435,36 +435,36 @@ CREATE POLICY "Admins can delete access logs"
 
 -- Users can read their own day passes
 CREATE POLICY "Users can view own day passes"
-  ON public.hoa_day_passes FOR SELECT
+  ON SmartRoad.hoa_day_passes FOR SELECT
   USING (auth.uid() = user_id);
 
 -- Guards/Admins can view all day passes (for validation)
 CREATE POLICY "Guards can view all day passes"
-  ON public.hoa_day_passes FOR SELECT
+  ON SmartRoad.hoa_day_passes FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level IN ('Admin', 'Expert')
     )
   );
 
 -- Authenticated users can purchase day passes for themselves
 CREATE POLICY "Users can purchase day passes"
-  ON public.hoa_day_passes FOR INSERT
+  ON SmartRoad.hoa_day_passes FOR INSERT
   WITH CHECK (auth.uid() = user_id AND auth.role() = 'authenticated');
 
 -- Users can deactivate their own day pass
 CREATE POLICY "Users can update own day passes"
-  ON public.hoa_day_passes FOR UPDATE
+  ON SmartRoad.hoa_day_passes FOR UPDATE
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
 -- Admins can manage all day passes
 CREATE POLICY "Admins can manage day passes"
-  ON public.hoa_day_passes FOR ALL
+  ON SmartRoad.hoa_day_passes FOR ALL
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
@@ -473,13 +473,13 @@ CREATE POLICY "Admins can manage day passes"
 -- * Updated_at triggers
 -- ============================================================================
 CREATE TRIGGER update_hoa_day_passes_updated_at
-  BEFORE UPDATE ON public.hoa_day_passes
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+  BEFORE UPDATE ON SmartRoad.hoa_day_passes
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
 
 -- ============================================================================
 -- * Sample HOA update (adds pass_mode to existing HOA seed data)
 -- ============================================================================
--- UPDATE public.hoas SET pass_mode = 'both', radius_meters = 500
+-- UPDATE SmartRoad.hoas SET pass_mode = 'both', radius_meters = 500
 -- WHERE name IN ('BF Resort', 'BF Homes');
 
 
@@ -489,9 +489,9 @@ CREATE TRIGGER update_hoa_day_passes_updated_at
 -- Run this after the main supabase_schema.sql
 
 -- * Create hazard_comments table
-CREATE TABLE public.hazard_comments (
+CREATE TABLE SmartRoad.hazard_comments (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  hazard_id UUID REFERENCES public.hazards(id) ON DELETE CASCADE NOT NULL,
+  hazard_id UUID REFERENCES SmartRoad.hazards(id) ON DELETE CASCADE NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   text TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -501,45 +501,45 @@ CREATE TABLE public.hazard_comments (
 );
 
 -- * Create indexes for comments
-CREATE INDEX idx_hazard_comments_hazard_id ON public.hazard_comments(hazard_id);
-CREATE INDEX idx_hazard_comments_user_id ON public.hazard_comments(user_id);
-CREATE INDEX idx_hazard_comments_created_at ON public.hazard_comments(created_at DESC);
+CREATE INDEX idx_hazard_comments_hazard_id ON SmartRoad.hazard_comments(hazard_id);
+CREATE INDEX idx_hazard_comments_user_id ON SmartRoad.hazard_comments(user_id);
+CREATE INDEX idx_hazard_comments_created_at ON SmartRoad.hazard_comments(created_at DESC);
 
 -- * Enable Row Level Security for comments
-ALTER TABLE public.hazard_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.hazard_comments ENABLE ROW LEVEL SECURITY;
 
 -- * RLS Policies for hazard_comments table
 -- * Anyone can read comments
 CREATE POLICY "Comments are viewable by everyone"
-  ON public.hazard_comments FOR SELECT
+  ON SmartRoad.hazard_comments FOR SELECT
   USING (true);
 
 -- * Only authenticated users can insert comments
 CREATE POLICY "Authenticated users can insert comments"
-  ON public.hazard_comments FOR INSERT
+  ON SmartRoad.hazard_comments FOR INSERT
   WITH CHECK (auth.role() = 'authenticated');
 
 -- * Only owner can update their comment
 CREATE POLICY "Users can update own comments"
-  ON public.hazard_comments FOR UPDATE
+  ON SmartRoad.hazard_comments FOR UPDATE
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
 -- * Only owner or admin can delete their comment
 CREATE POLICY "Users can delete own comments"
-  ON public.hazard_comments FOR DELETE
+  ON SmartRoad.hazard_comments FOR DELETE
   USING (
     auth.uid() = user_id OR
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
 
 -- * Trigger for updated_at on comments
 CREATE TRIGGER update_hazard_comments_updated_at
-  BEFORE UPDATE ON public.hazard_comments
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+  BEFORE UPDATE ON SmartRoad.hazard_comments
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
 
 
 -- ============================================================================
@@ -558,12 +558,12 @@ CREATE TRIGGER update_hazard_comments_updated_at
 -- - Place ratings (1â€“5 stars)
 --
 -- Admin check:
--- - Uses `public.profiles.reporter_level = 'Admin'`
+-- - Uses `SmartRoad.profiles.reporter_level = 'Admin'`
 
 -- ============================================================================
 -- * PLACE COMMENTS
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.place_comments (
+CREATE TABLE IF NOT EXISTS SmartRoad.place_comments (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   place_id TEXT NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -573,31 +573,31 @@ CREATE TABLE IF NOT EXISTS public.place_comments (
   CONSTRAINT place_comment_text_not_empty CHECK (length(trim(text)) > 0)
 );
 
-CREATE INDEX IF NOT EXISTS idx_place_comments_place_id ON public.place_comments(place_id);
-CREATE INDEX IF NOT EXISTS idx_place_comments_user_id ON public.place_comments(user_id);
-CREATE INDEX IF NOT EXISTS idx_place_comments_created_at ON public.place_comments(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_place_comments_place_id ON SmartRoad.place_comments(place_id);
+CREATE INDEX IF NOT EXISTS idx_place_comments_user_id ON SmartRoad.place_comments(user_id);
+CREATE INDEX IF NOT EXISTS idx_place_comments_created_at ON SmartRoad.place_comments(created_at DESC);
 
-ALTER TABLE public.place_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.place_comments ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Place comments are viewable by everyone"
-  ON public.place_comments FOR SELECT
+  ON SmartRoad.place_comments FOR SELECT
   USING (true);
 
 CREATE POLICY "Authenticated users can insert place comments"
-  ON public.place_comments FOR INSERT
+  ON SmartRoad.place_comments FOR INSERT
   WITH CHECK (auth.role() = 'authenticated');
 
 CREATE POLICY "Users can update own place comments"
-  ON public.place_comments FOR UPDATE
+  ON SmartRoad.place_comments FOR UPDATE
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete own place comments"
-  ON public.place_comments FOR DELETE
+  ON SmartRoad.place_comments FOR DELETE
   USING (
     auth.uid() = user_id OR
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
@@ -609,17 +609,17 @@ BEGIN
     FROM pg_proc
     WHERE proname = 'handle_updated_at'
   ) THEN
-    DROP TRIGGER IF EXISTS update_place_comments_updated_at ON public.place_comments;
+    DROP TRIGGER IF EXISTS update_place_comments_updated_at ON SmartRoad.place_comments;
     CREATE TRIGGER update_place_comments_updated_at
-      BEFORE UPDATE ON public.place_comments
-      FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+      BEFORE UPDATE ON SmartRoad.place_comments
+      FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
   END IF;
 END $$;
 
 -- ============================================================================
 -- * PLACE PHOTOS (WITH MODERATION)
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.place_images (
+CREATE TABLE IF NOT EXISTS SmartRoad.place_images (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   place_id TEXT NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -633,53 +633,53 @@ CREATE TABLE IF NOT EXISTS public.place_images (
   CONSTRAINT place_image_status_valid CHECK (status IN ('pending', 'approved', 'rejected'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_place_images_place_id ON public.place_images(place_id);
-CREATE INDEX IF NOT EXISTS idx_place_images_status ON public.place_images(status);
-CREATE INDEX IF NOT EXISTS idx_place_images_created_at ON public.place_images(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_place_images_place_id ON SmartRoad.place_images(place_id);
+CREATE INDEX IF NOT EXISTS idx_place_images_status ON SmartRoad.place_images(status);
+CREATE INDEX IF NOT EXISTS idx_place_images_created_at ON SmartRoad.place_images(created_at DESC);
 
-ALTER TABLE public.place_images ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.place_images ENABLE ROW LEVEL SECURITY;
 
 -- * Anyone can read approved images.
 -- * Owners can read their own submissions (including pending/rejected).
 -- * Admin can read everything.
 CREATE POLICY "Place images readable with moderation rules"
-  ON public.place_images FOR SELECT
+  ON SmartRoad.place_images FOR SELECT
   USING (
     status = 'approved' OR
     auth.uid() = user_id OR
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
 
 CREATE POLICY "Authenticated users can submit place images"
-  ON public.place_images FOR INSERT
+  ON SmartRoad.place_images FOR INSERT
   WITH CHECK (auth.role() = 'authenticated');
 
 -- * Only Admin can update moderation fields/status.
 CREATE POLICY "Admins can update place images"
-  ON public.place_images FOR UPDATE
+  ON SmartRoad.place_images FOR UPDATE
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   )
   WITH CHECK (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
 
 -- * Owner can delete their own submissions; Admin can delete anything.
 CREATE POLICY "Users can delete own place images"
-  ON public.place_images FOR DELETE
+  ON SmartRoad.place_images FOR DELETE
   USING (
     auth.uid() = user_id OR
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
@@ -691,44 +691,44 @@ BEGIN
     FROM pg_proc
     WHERE proname = 'handle_updated_at'
   ) THEN
-    DROP TRIGGER IF EXISTS update_place_images_updated_at ON public.place_images;
+    DROP TRIGGER IF EXISTS update_place_images_updated_at ON SmartRoad.place_images;
     CREATE TRIGGER update_place_images_updated_at
-      BEFORE UPDATE ON public.place_images
-      FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+      BEFORE UPDATE ON SmartRoad.place_images
+      FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
   END IF;
 END $$;
 
 -- ============================================================================
 -- * PLACE LIKES
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.place_likes (
+CREATE TABLE IF NOT EXISTS SmartRoad.place_likes (
   place_id TEXT NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (place_id, user_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_place_likes_place_id ON public.place_likes(place_id);
-CREATE INDEX IF NOT EXISTS idx_place_likes_user_id ON public.place_likes(user_id);
+CREATE INDEX IF NOT EXISTS idx_place_likes_place_id ON SmartRoad.place_likes(place_id);
+CREATE INDEX IF NOT EXISTS idx_place_likes_user_id ON SmartRoad.place_likes(user_id);
 
-ALTER TABLE public.place_likes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.place_likes ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Place likes are viewable by everyone"
-  ON public.place_likes FOR SELECT
+  ON SmartRoad.place_likes FOR SELECT
   USING (true);
 
 CREATE POLICY "Authenticated users can like places"
-  ON public.place_likes FOR INSERT
+  ON SmartRoad.place_likes FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can unlike their own likes"
-  ON public.place_likes FOR DELETE
+  ON SmartRoad.place_likes FOR DELETE
   USING (auth.uid() = user_id);
 
 -- ============================================================================
 -- * PLACE RATINGS (1â€“5 STARS)
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.place_ratings (
+CREATE TABLE IF NOT EXISTS SmartRoad.place_ratings (
   place_id TEXT NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   rating INTEGER NOT NULL,
@@ -738,26 +738,26 @@ CREATE TABLE IF NOT EXISTS public.place_ratings (
   CONSTRAINT place_rating_valid CHECK (rating >= 1 AND rating <= 5)
 );
 
-CREATE INDEX IF NOT EXISTS idx_place_ratings_place_id ON public.place_ratings(place_id);
-CREATE INDEX IF NOT EXISTS idx_place_ratings_created_at ON public.place_ratings(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_place_ratings_place_id ON SmartRoad.place_ratings(place_id);
+CREATE INDEX IF NOT EXISTS idx_place_ratings_created_at ON SmartRoad.place_ratings(created_at DESC);
 
-ALTER TABLE public.place_ratings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.place_ratings ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Place ratings are viewable by everyone"
-  ON public.place_ratings FOR SELECT
+  ON SmartRoad.place_ratings FOR SELECT
   USING (true);
 
 CREATE POLICY "Authenticated users can rate places"
-  ON public.place_ratings FOR INSERT
+  ON SmartRoad.place_ratings FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can update own place ratings"
-  ON public.place_ratings FOR UPDATE
+  ON SmartRoad.place_ratings FOR UPDATE
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete own place ratings"
-  ON public.place_ratings FOR DELETE
+  ON SmartRoad.place_ratings FOR DELETE
   USING (auth.uid() = user_id);
 
 DO $$
@@ -767,10 +767,10 @@ BEGIN
     FROM pg_proc
     WHERE proname = 'handle_updated_at'
   ) THEN
-    DROP TRIGGER IF EXISTS update_place_ratings_updated_at ON public.place_ratings;
+    DROP TRIGGER IF EXISTS update_place_ratings_updated_at ON SmartRoad.place_ratings;
     CREATE TRIGGER update_place_ratings_updated_at
-      BEFORE UPDATE ON public.place_ratings
-      FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+      BEFORE UPDATE ON SmartRoad.place_ratings
+      FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
   END IF;
 END $$;
 
@@ -800,12 +800,12 @@ CREATE EXTENSION IF NOT EXISTS earthdistance;
 -- - Confidence scoring based on report counts
 --
 -- Admin check:
--- - Uses `public.profiles.reporter_level = 'Admin'`
+-- - Uses `SmartRoad.profiles.reporter_level = 'Admin'`
 
 -- ============================================================================
 -- * FUEL STATIONS TABLE
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.fuel_stations (
+CREATE TABLE IF NOT EXISTS SmartRoad.fuel_stations (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   latitude DOUBLE PRECISION NOT NULL,
@@ -826,43 +826,43 @@ CREATE TABLE IF NOT EXISTS public.fuel_stations (
 );
 
 -- * Geospatial index for location queries
-CREATE INDEX IF NOT EXISTS idx_fuel_stations_location ON public.fuel_stations USING GIST (
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_location ON SmartRoad.fuel_stations USING GIST (
   ll_to_earth(latitude, longitude)
 );
 
-CREATE INDEX IF NOT EXISTS idx_fuel_stations_province ON public.fuel_stations(province);
-CREATE INDEX IF NOT EXISTS idx_fuel_stations_city ON public.fuel_stations(city);
-CREATE INDEX IF NOT EXISTS idx_fuel_stations_verified ON public.fuel_stations(verified);
-CREATE INDEX IF NOT EXISTS idx_fuel_stations_source ON public.fuel_stations(source);
-CREATE INDEX IF NOT EXISTS idx_fuel_stations_created_at ON public.fuel_stations(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_province ON SmartRoad.fuel_stations(province);
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_city ON SmartRoad.fuel_stations(city);
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_verified ON SmartRoad.fuel_stations(verified);
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_source ON SmartRoad.fuel_stations(source);
+CREATE INDEX IF NOT EXISTS idx_fuel_stations_created_at ON SmartRoad.fuel_stations(created_at DESC);
 
-ALTER TABLE public.fuel_stations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.fuel_stations ENABLE ROW LEVEL SECURITY;
 
 -- * Everyone can read fuel stations
 CREATE POLICY "Fuel stations are viewable by everyone"
-  ON public.fuel_stations FOR SELECT
+  ON SmartRoad.fuel_stations FOR SELECT
   USING (true);
 
 -- * Anyone can insert (anonymous submissions allowed via RPC)
 CREATE POLICY "Anyone can submit fuel stations"
-  ON public.fuel_stations FOR INSERT
+  ON SmartRoad.fuel_stations FOR INSERT
   WITH CHECK (true);
 
 -- * Only Admin can update/delete
 CREATE POLICY "Admins can update fuel stations"
-  ON public.fuel_stations FOR UPDATE
+  ON SmartRoad.fuel_stations FOR UPDATE
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
 
 CREATE POLICY "Admins can delete fuel stations"
-  ON public.fuel_stations FOR DELETE
+  ON SmartRoad.fuel_stations FOR DELETE
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
@@ -874,19 +874,19 @@ BEGIN
     FROM pg_proc
     WHERE proname = 'handle_updated_at'
   ) THEN
-    DROP TRIGGER IF EXISTS update_fuel_stations_updated_at ON public.fuel_stations;
+    DROP TRIGGER IF EXISTS update_fuel_stations_updated_at ON SmartRoad.fuel_stations;
     CREATE TRIGGER update_fuel_stations_updated_at
-      BEFORE UPDATE ON public.fuel_stations
-      FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+      BEFORE UPDATE ON SmartRoad.fuel_stations
+      FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
   END IF;
 END $$;
 
 -- ============================================================================
 -- * FUEL PRICE UPDATES TABLE
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.fuel_price_updates (
+CREATE TABLE IF NOT EXISTS SmartRoad.fuel_price_updates (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  station_id UUID REFERENCES public.fuel_stations(id) ON DELETE CASCADE NOT NULL,
+  station_id UUID REFERENCES SmartRoad.fuel_stations(id) ON DELETE CASCADE NOT NULL,
   fuel_type TEXT NOT NULL,
   price DOUBLE PRECISION NOT NULL,
   reporter_latitude DOUBLE PRECISION NOT NULL,
@@ -904,39 +904,39 @@ CREATE TABLE IF NOT EXISTS public.fuel_price_updates (
   CONSTRAINT source_valid CHECK (source IN ('community', 'official', 'osm', 'smartroad', 'verified'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_station_id ON public.fuel_price_updates(station_id);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_fuel_type ON public.fuel_price_updates(fuel_type);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_created_at ON public.fuel_price_updates(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_device_id ON public.fuel_price_updates(device_id);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_user_id ON public.fuel_price_updates(user_id);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_station_id ON SmartRoad.fuel_price_updates(station_id);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_fuel_type ON SmartRoad.fuel_price_updates(fuel_type);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_created_at ON SmartRoad.fuel_price_updates(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_device_id ON SmartRoad.fuel_price_updates(device_id);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_user_id ON SmartRoad.fuel_price_updates(user_id);
 
 -- * Composite index for latest price queries
 CREATE INDEX IF NOT EXISTS idx_fuel_price_updates_station_fuel_time
-  ON public.fuel_price_updates(station_id, fuel_type, created_at DESC);
+  ON SmartRoad.fuel_price_updates(station_id, fuel_type, created_at DESC);
 
 -- * Migration: allow source values 'smartroad' and 'verified' (for existing DBs)
-ALTER TABLE public.fuel_price_updates DROP CONSTRAINT IF EXISTS source_valid;
-ALTER TABLE public.fuel_price_updates ADD CONSTRAINT source_valid
+ALTER TABLE SmartRoad.fuel_price_updates DROP CONSTRAINT IF EXISTS source_valid;
+ALTER TABLE SmartRoad.fuel_price_updates ADD CONSTRAINT source_valid
   CHECK (source IN ('community', 'official', 'osm', 'smartroad', 'verified'));
 
-ALTER TABLE public.fuel_price_updates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.fuel_price_updates ENABLE ROW LEVEL SECURITY;
 
 -- * Everyone can read price updates
 CREATE POLICY "Fuel price updates are viewable by everyone"
-  ON public.fuel_price_updates FOR SELECT
+  ON SmartRoad.fuel_price_updates FOR SELECT
   USING (true);
 
 -- * Insert via RPC only (enforces rate limiting)
 CREATE POLICY "Anyone can submit price updates via RPC"
-  ON public.fuel_price_updates FOR INSERT
+  ON SmartRoad.fuel_price_updates FOR INSERT
   WITH CHECK (true);
 
 -- ============================================================================
 -- * FUEL PRICE REPORTS TABLE (Incorrect Price Flagging)
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS public.fuel_price_reports (
+CREATE TABLE IF NOT EXISTS SmartRoad.fuel_price_reports (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  station_id UUID REFERENCES public.fuel_stations(id) ON DELETE CASCADE NOT NULL,
+  station_id UUID REFERENCES SmartRoad.fuel_stations(id) ON DELETE CASCADE NOT NULL,
   fuel_type TEXT NOT NULL,
   reported_incorrect_price DOUBLE PRECISION NOT NULL,
   reason TEXT,
@@ -950,29 +950,29 @@ CREATE TABLE IF NOT EXISTS public.fuel_price_reports (
   CONSTRAINT status_valid CHECK (status IN ('pending', 'reviewed', 'dismissed'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_station_id ON public.fuel_price_reports(station_id);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_fuel_type ON public.fuel_price_reports(fuel_type);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_status ON public.fuel_price_reports(status);
-CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_created_at ON public.fuel_price_reports(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_station_id ON SmartRoad.fuel_price_reports(station_id);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_fuel_type ON SmartRoad.fuel_price_reports(fuel_type);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_status ON SmartRoad.fuel_price_reports(status);
+CREATE INDEX IF NOT EXISTS idx_fuel_price_reports_created_at ON SmartRoad.fuel_price_reports(created_at DESC);
 
-ALTER TABLE public.fuel_price_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.fuel_price_reports ENABLE ROW LEVEL SECURITY;
 
 -- * Everyone can read reports (for transparency)
 CREATE POLICY "Fuel price reports are viewable by everyone"
-  ON public.fuel_price_reports FOR SELECT
+  ON SmartRoad.fuel_price_reports FOR SELECT
   USING (true);
 
 -- * Anyone can submit reports
 CREATE POLICY "Anyone can submit price reports"
-  ON public.fuel_price_reports FOR INSERT
+  ON SmartRoad.fuel_price_reports FOR INSERT
   WITH CHECK (true);
 
 -- * Only Admin can update
 CREATE POLICY "Admins can update price reports"
-  ON public.fuel_price_reports FOR UPDATE
+  ON SmartRoad.fuel_price_reports FOR UPDATE
   USING (
     EXISTS (
-      SELECT 1 FROM public.profiles
+      SELECT 1 FROM SmartRoad.profiles
       WHERE id = auth.uid() AND reporter_level = 'Admin'
     )
   );
@@ -991,7 +991,7 @@ DECLARE
 BEGIN
   SELECT COUNT(*)
   INTO submission_count
-  FROM public.fuel_price_updates
+  FROM SmartRoad.fuel_price_updates
   WHERE device_id = p_device_id
     AND fuel_type = p_fuel_type
     AND created_at > NOW() - INTERVAL '10 minutes';
@@ -1011,7 +1011,7 @@ DECLARE
 BEGIN
   SELECT MAX(created_at)
   INTO last_submission
-  FROM public.fuel_price_updates
+  FROM SmartRoad.fuel_price_updates
   WHERE device_id = p_device_id
     AND station_id = p_station_id
     AND fuel_type = p_fuel_type;
@@ -1056,7 +1056,7 @@ BEGIN
 
   -- * Get station location and calculate distance
   SELECT latitude, longitude INTO v_station_lat, v_station_lon
-  FROM public.fuel_stations
+  FROM SmartRoad.fuel_stations
   WHERE id = p_station_id;
 
   IF v_station_lat IS NULL THEN
@@ -1078,7 +1078,7 @@ BEGIN
   END IF;
 
   -- * Insert the price update (source and confidence_score set explicitly)
-  INSERT INTO public.fuel_price_updates (
+  INSERT INTO SmartRoad.fuel_price_updates (
     station_id,
     fuel_type,
     price,
@@ -1105,7 +1105,7 @@ BEGIN
   ) RETURNING id INTO v_new_update_id;
 
   -- * Update station timestamp
-  UPDATE public.fuel_stations
+  UPDATE SmartRoad.fuel_stations
   SET updated_at = NOW()
   WHERE id = p_station_id;
 
@@ -1142,7 +1142,7 @@ BEGIN
   END IF;
 
   -- * Insert the station (unverified)
-  INSERT INTO public.fuel_stations (
+  INSERT INTO SmartRoad.fuel_stations (
     name,
     latitude,
     longitude,
@@ -1195,7 +1195,7 @@ BEGIN
     fpu.created_at AS updated_at,
     fpu.source,
     fpu.confidence_score
-  FROM public.fuel_price_updates fpu
+  FROM SmartRoad.fuel_price_updates fpu
   WHERE fpu.station_id = p_station_id
   ORDER BY fpu.fuel_type, fpu.created_at DESC;
 END;
@@ -1217,7 +1217,7 @@ BEGIN
   -- * Count recent incorrect-price reports (last 7 days)
   SELECT COUNT(*)
   INTO v_report_count
-  FROM public.fuel_price_reports
+  FROM SmartRoad.fuel_price_reports
   WHERE station_id = p_station_id
     AND fuel_type = p_fuel_type
     AND status = 'pending'
@@ -1227,11 +1227,11 @@ BEGIN
   v_new_confidence := GREATEST(0.1, 1.0 - (v_report_count * 0.2));
 
   -- * Update the latest price update
-  UPDATE public.fuel_price_updates
+  UPDATE SmartRoad.fuel_price_updates
   SET confidence_score = v_new_confidence
   WHERE id = (
     SELECT id
-    FROM public.fuel_price_updates
+    FROM SmartRoad.fuel_price_updates
     WHERE station_id = p_station_id
       AND fuel_type = p_fuel_type
     ORDER BY created_at DESC
@@ -1252,9 +1252,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS fuel_price_report_confidence_update ON public.fuel_price_reports;
+DROP TRIGGER IF EXISTS fuel_price_report_confidence_update ON SmartRoad.fuel_price_reports;
 CREATE TRIGGER fuel_price_report_confidence_update
-  AFTER INSERT ON public.fuel_price_reports
+  AFTER INSERT ON SmartRoad.fuel_price_reports
   FOR EACH ROW EXECUTE FUNCTION trigger_recalculate_confidence();
 
 -- ============================================================================
@@ -1279,8 +1279,8 @@ RETURNS TABLE (
 BEGIN
   -- * Only allow Admin
   IF NOT EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE public.profiles.id = auth.uid() AND reporter_level = 'Admin'
+    SELECT 1 FROM SmartRoad.profiles
+    WHERE SmartRoad.profiles.id = auth.uid() AND reporter_level = 'Admin'
   ) THEN
     RAISE EXCEPTION 'Admin access required';
   END IF;
@@ -1298,7 +1298,7 @@ BEGIN
     fs.photo_url,
     fs.created_at,
     fs.created_by_device_id
-  FROM public.fuel_stations fs
+  FROM SmartRoad.fuel_stations fs
   WHERE fs.verified = FALSE
     AND fs.source = 'community'
   ORDER BY fs.created_at DESC;
@@ -1311,13 +1311,13 @@ RETURNS JSON AS $$
 BEGIN
   -- * Only allow Admin
   IF NOT EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE public.profiles.id = auth.uid() AND reporter_level = 'Admin'
+    SELECT 1 FROM SmartRoad.profiles
+    WHERE SmartRoad.profiles.id = auth.uid() AND reporter_level = 'Admin'
   ) THEN
     RETURN json_build_object('success', false, 'error', 'UNAUTHORIZED', 'message', 'Admin access required.');
   END IF;
 
-  UPDATE public.fuel_stations
+  UPDATE SmartRoad.fuel_stations
   SET verified = TRUE, updated_at = NOW()
   WHERE id = p_station_id;
 
@@ -1335,13 +1335,13 @@ RETURNS JSON AS $$
 BEGIN
   -- * Only allow Admin
   IF NOT EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE public.profiles.id = auth.uid() AND reporter_level = 'Admin'
+    SELECT 1 FROM SmartRoad.profiles
+    WHERE SmartRoad.profiles.id = auth.uid() AND reporter_level = 'Admin'
   ) THEN
     RETURN json_build_object('success', false, 'error', 'UNAUTHORIZED', 'message', 'Admin access required.');
   END IF;
 
-  DELETE FROM public.fuel_stations
+  DELETE FROM SmartRoad.fuel_stations
   WHERE id = p_station_id AND verified = FALSE;
 
   IF FOUND THEN
@@ -1384,7 +1384,7 @@ CREATE TYPE route_sharing_mode AS ENUM (
 );
 
 -- * Create saved_routes table
-CREATE TABLE public.saved_routes (
+CREATE TABLE SmartRoad.saved_routes (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   creator_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   
@@ -1451,25 +1451,25 @@ CREATE TABLE public.saved_routes (
 );
 
 -- * Create indexes for performance
-CREATE INDEX idx_saved_routes_creator_id ON public.saved_routes(creator_id);
-CREATE INDEX idx_saved_routes_geometry ON public.saved_routes USING GIST(geometry);
-CREATE INDEX idx_saved_routes_start_point ON public.saved_routes USING GIST(start_point);
-CREATE INDEX idx_saved_routes_end_point ON public.saved_routes USING GIST(end_point);
-CREATE INDEX idx_saved_routes_vehicle_type ON public.saved_routes(vehicle_type);
-CREATE INDEX idx_saved_routes_country_code ON public.saved_routes(country_code);
-CREATE INDEX idx_saved_routes_city ON public.saved_routes(city);
-CREATE INDEX idx_saved_routes_is_public ON public.saved_routes(is_public) WHERE is_public = true;
-CREATE INDEX idx_saved_routes_is_active ON public.saved_routes(is_active) WHERE is_active = true;
-CREATE INDEX idx_saved_routes_price ON public.saved_routes(price_cents) WHERE price_cents = 0; -- * Free routes
-CREATE INDEX idx_saved_routes_trust_score ON public.saved_routes(trust_score DESC);
-CREATE INDEX idx_saved_routes_usage_count ON public.saved_routes(usage_count DESC);
-CREATE INDEX idx_saved_routes_created_at ON public.saved_routes(created_at DESC);
-CREATE INDEX idx_saved_routes_tags ON public.saved_routes USING GIN(tags); -- * GIN index for JSONB queries
+CREATE INDEX idx_saved_routes_creator_id ON SmartRoad.saved_routes(creator_id);
+CREATE INDEX idx_saved_routes_geometry ON SmartRoad.saved_routes USING GIST(geometry);
+CREATE INDEX idx_saved_routes_start_point ON SmartRoad.saved_routes USING GIST(start_point);
+CREATE INDEX idx_saved_routes_end_point ON SmartRoad.saved_routes USING GIST(end_point);
+CREATE INDEX idx_saved_routes_vehicle_type ON SmartRoad.saved_routes(vehicle_type);
+CREATE INDEX idx_saved_routes_country_code ON SmartRoad.saved_routes(country_code);
+CREATE INDEX idx_saved_routes_city ON SmartRoad.saved_routes(city);
+CREATE INDEX idx_saved_routes_is_public ON SmartRoad.saved_routes(is_public) WHERE is_public = true;
+CREATE INDEX idx_saved_routes_is_active ON SmartRoad.saved_routes(is_active) WHERE is_active = true;
+CREATE INDEX idx_saved_routes_price ON SmartRoad.saved_routes(price_cents) WHERE price_cents = 0; -- * Free routes
+CREATE INDEX idx_saved_routes_trust_score ON SmartRoad.saved_routes(trust_score DESC);
+CREATE INDEX idx_saved_routes_usage_count ON SmartRoad.saved_routes(usage_count DESC);
+CREATE INDEX idx_saved_routes_created_at ON SmartRoad.saved_routes(created_at DESC);
+CREATE INDEX idx_saved_routes_tags ON SmartRoad.saved_routes USING GIN(tags); -- * GIN index for JSONB queries
 
 -- * Create route_purchases table (tracks who bought which routes)
-CREATE TABLE public.route_purchases (
+CREATE TABLE SmartRoad.route_purchases (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  route_id UUID REFERENCES public.saved_routes(id) ON DELETE CASCADE NOT NULL,
+  route_id UUID REFERENCES SmartRoad.saved_routes(id) ON DELETE CASCADE NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   price_paid_cents INTEGER NOT NULL,
   currency_code CHAR(3) DEFAULT 'USD',
@@ -1478,14 +1478,14 @@ CREATE TABLE public.route_purchases (
   CONSTRAINT unique_route_purchase UNIQUE (route_id, user_id)
 );
 
-CREATE INDEX idx_route_purchases_user_id ON public.route_purchases(user_id);
-CREATE INDEX idx_route_purchases_route_id ON public.route_purchases(route_id);
-CREATE INDEX idx_route_purchases_purchased_at ON public.route_purchases(purchased_at DESC);
+CREATE INDEX idx_route_purchases_user_id ON SmartRoad.route_purchases(user_id);
+CREATE INDEX idx_route_purchases_route_id ON SmartRoad.route_purchases(route_id);
+CREATE INDEX idx_route_purchases_purchased_at ON SmartRoad.route_purchases(purchased_at DESC);
 
 -- * Create route_ratings table
-CREATE TABLE public.route_ratings (
+CREATE TABLE SmartRoad.route_ratings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  route_id UUID REFERENCES public.saved_routes(id) ON DELETE CASCADE NOT NULL,
+  route_id UUID REFERENCES SmartRoad.saved_routes(id) ON DELETE CASCADE NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
   comment TEXT,
@@ -1495,14 +1495,14 @@ CREATE TABLE public.route_ratings (
   CONSTRAINT unique_route_rating UNIQUE (route_id, user_id)
 );
 
-CREATE INDEX idx_route_ratings_route_id ON public.route_ratings(route_id);
-CREATE INDEX idx_route_ratings_user_id ON public.route_ratings(user_id);
-CREATE INDEX idx_route_ratings_rating ON public.route_ratings(rating);
+CREATE INDEX idx_route_ratings_route_id ON SmartRoad.route_ratings(route_id);
+CREATE INDEX idx_route_ratings_user_id ON SmartRoad.route_ratings(user_id);
+CREATE INDEX idx_route_ratings_rating ON SmartRoad.route_ratings(rating);
 
 -- * Create route_shares table (tracks shared route links)
-CREATE TABLE public.route_shares (
+CREATE TABLE SmartRoad.route_shares (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  route_id UUID REFERENCES public.saved_routes(id) ON DELETE CASCADE NOT NULL,
+  route_id UUID REFERENCES SmartRoad.saved_routes(id) ON DELETE CASCADE NOT NULL,
   share_token TEXT UNIQUE NOT NULL, -- * Unique token for shareable link
   sharing_mode route_sharing_mode DEFAULT 'flexible',
   expires_at TIMESTAMPTZ, -- * Optional expiration
@@ -1511,13 +1511,13 @@ CREATE TABLE public.route_shares (
   created_by UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL
 );
 
-CREATE INDEX idx_route_shares_token ON public.route_shares(share_token);
-CREATE INDEX idx_route_shares_route_id ON public.route_shares(route_id);
+CREATE INDEX idx_route_shares_token ON SmartRoad.route_shares(share_token);
+CREATE INDEX idx_route_shares_route_id ON SmartRoad.route_shares(route_id);
 
 -- * Create route_usage_log table (tracks when routes are used)
-CREATE TABLE public.route_usage_log (
+CREATE TABLE SmartRoad.route_usage_log (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  route_id UUID REFERENCES public.saved_routes(id) ON DELETE CASCADE NOT NULL,
+  route_id UUID REFERENCES SmartRoad.saved_routes(id) ON DELETE CASCADE NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   started_at TIMESTAMPTZ DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
@@ -1528,106 +1528,106 @@ CREATE TABLE public.route_usage_log (
   was_valid BOOLEAN DEFAULT true
 );
 
-CREATE INDEX idx_route_usage_log_route_id ON public.route_usage_log(route_id);
-CREATE INDEX idx_route_usage_log_user_id ON public.route_usage_log(user_id);
-CREATE INDEX idx_route_usage_log_started_at ON public.route_usage_log(started_at DESC);
+CREATE INDEX idx_route_usage_log_route_id ON SmartRoad.route_usage_log(route_id);
+CREATE INDEX idx_route_usage_log_user_id ON SmartRoad.route_usage_log(user_id);
+CREATE INDEX idx_route_usage_log_started_at ON SmartRoad.route_usage_log(started_at DESC);
 
 -- * Enable Row Level Security
-ALTER TABLE public.saved_routes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.route_purchases ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.route_ratings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.route_shares ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.route_usage_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.saved_routes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.route_purchases ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.route_ratings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.route_shares ENABLE ROW LEVEL SECURITY;
+ALTER TABLE SmartRoad.route_usage_log ENABLE ROW LEVEL SECURITY;
 
 -- * RLS Policies for saved_routes
 -- * Anyone can read public routes
 CREATE POLICY "Public routes are viewable by everyone"
-  ON public.saved_routes FOR SELECT
+  ON SmartRoad.saved_routes FOR SELECT
   USING (is_public = true AND is_active = true);
 
 -- * Users can read their own routes
 CREATE POLICY "Users can view own routes"
-  ON public.saved_routes FOR SELECT
+  ON SmartRoad.saved_routes FOR SELECT
   USING (auth.uid() = creator_id);
 
 -- * Authenticated users can create routes
 CREATE POLICY "Authenticated users can create routes"
-  ON public.saved_routes FOR INSERT
+  ON SmartRoad.saved_routes FOR INSERT
   WITH CHECK (auth.role() = 'authenticated' AND auth.uid() = creator_id);
 
 -- * Users can update their own routes
 CREATE POLICY "Users can update own routes"
-  ON public.saved_routes FOR UPDATE
+  ON SmartRoad.saved_routes FOR UPDATE
   USING (auth.uid() = creator_id)
   WITH CHECK (auth.uid() = creator_id);
 
 -- * Users can delete their own routes
 CREATE POLICY "Users can delete own routes"
-  ON public.saved_routes FOR DELETE
+  ON SmartRoad.saved_routes FOR DELETE
   USING (auth.uid() = creator_id);
 
 -- * RLS Policies for route_purchases
 -- * Users can view their own purchases
 CREATE POLICY "Users can view own purchases"
-  ON public.route_purchases FOR SELECT
+  ON SmartRoad.route_purchases FOR SELECT
   USING (auth.uid() = user_id);
 
 -- * Route creators can view purchases of their routes
 CREATE POLICY "Route creators can view purchases"
-  ON public.route_purchases FOR SELECT
+  ON SmartRoad.route_purchases FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM public.saved_routes
+      SELECT 1 FROM SmartRoad.saved_routes
       WHERE id = route_id AND creator_id = auth.uid()
     )
   );
 
 -- * Authenticated users can purchase routes
 CREATE POLICY "Authenticated users can purchase routes"
-  ON public.route_purchases FOR INSERT
+  ON SmartRoad.route_purchases FOR INSERT
   WITH CHECK (auth.role() = 'authenticated' AND auth.uid() = user_id);
 
 -- * RLS Policies for route_ratings
 -- * Anyone can read ratings for public routes
 CREATE POLICY "Ratings are viewable for public routes"
-  ON public.route_ratings FOR SELECT
+  ON SmartRoad.route_ratings FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM public.saved_routes
+      SELECT 1 FROM SmartRoad.saved_routes
       WHERE id = route_id AND is_public = true
     )
   );
 
 -- * Users can view their own ratings
 CREATE POLICY "Users can view own ratings"
-  ON public.route_ratings FOR SELECT
+  ON SmartRoad.route_ratings FOR SELECT
   USING (auth.uid() = user_id);
 
 -- * Authenticated users can create/update ratings
 CREATE POLICY "Authenticated users can rate routes"
-  ON public.route_ratings FOR ALL
+  ON SmartRoad.route_ratings FOR ALL
   USING (auth.role() = 'authenticated' AND auth.uid() = user_id)
   WITH CHECK (auth.role() = 'authenticated' AND auth.uid() = user_id);
 
 -- * RLS Policies for route_shares
 -- * Anyone can read active shares (for link validation)
 CREATE POLICY "Active shares are viewable"
-  ON public.route_shares FOR SELECT
+  ON SmartRoad.route_shares FOR SELECT
   USING (expires_at IS NULL OR expires_at > NOW());
 
 -- * Users can view their own shares
 CREATE POLICY "Users can view own shares"
-  ON public.route_shares FOR SELECT
+  ON SmartRoad.route_shares FOR SELECT
   USING (auth.uid() = created_by);
 
 -- * Authenticated users can create shares
 CREATE POLICY "Authenticated users can share routes"
-  ON public.route_shares FOR INSERT
+  ON SmartRoad.route_shares FOR INSERT
   WITH CHECK (
     auth.role() = 'authenticated' 
     AND auth.uid() = created_by
     AND EXISTS (
-      SELECT 1 FROM public.saved_routes
+      SELECT 1 FROM SmartRoad.saved_routes
       WHERE id = route_id AND creator_id = auth.uid()
     )
   );
@@ -1635,22 +1635,22 @@ CREATE POLICY "Authenticated users can share routes"
 -- * RLS Policies for route_usage_log
 -- * Users can view their own usage logs
 CREATE POLICY "Users can view own usage logs"
-  ON public.route_usage_log FOR SELECT
+  ON SmartRoad.route_usage_log FOR SELECT
   USING (auth.uid() = user_id);
 
 -- * Route creators can view usage logs for their routes
 CREATE POLICY "Route creators can view route usage"
-  ON public.route_usage_log FOR SELECT
+  ON SmartRoad.route_usage_log FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM public.saved_routes
+      SELECT 1 FROM SmartRoad.saved_routes
       WHERE id = route_id AND creator_id = auth.uid()
     )
   );
 
 -- * Authenticated users can log route usage
 CREATE POLICY "Authenticated users can log route usage"
-  ON public.route_usage_log FOR INSERT
+  ON SmartRoad.route_usage_log FOR INSERT
   WITH CHECK (auth.role() = 'authenticated');
 
 -- * Functions
@@ -1659,7 +1659,7 @@ CREATE POLICY "Authenticated users can log route usage"
 -- * Formula: (usage_count * 0.3) + (recency_score * 0.3) + (rating_score * 0.4)
 -- * recency_score: 100 if verified < 30 days ago, decreases linearly to 0 after 365 days
 -- * rating_score: (rating_avg / 5.0) * 100
-CREATE OR REPLACE FUNCTION public.calculate_route_trust_score(route_uuid UUID)
+CREATE OR REPLACE FUNCTION SmartRoad.calculate_route_trust_score(route_uuid UUID)
 RETURNS NUMERIC AS $$
 DECLARE
   v_usage_count INTEGER;
@@ -1681,7 +1681,7 @@ BEGIN
     v_rating_avg,
     v_rating_count,
     v_last_verified_at
-  FROM public.saved_routes
+  FROM SmartRoad.saved_routes
   WHERE id = route_uuid;
   
   -- * Usage score: min(usage_count * 2, 30) - caps at 30 points
@@ -1717,7 +1717,7 @@ BEGIN
   v_trust_score := v_usage_score + v_recency_score + v_rating_score;
   
   -- * Update the route
-  UPDATE public.saved_routes
+  UPDATE SmartRoad.saved_routes
   SET trust_score = v_trust_score
   WHERE id = route_uuid;
   
@@ -1726,48 +1726,48 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- * Function to update route rating averages
-CREATE OR REPLACE FUNCTION public.update_route_rating_stats()
+CREATE OR REPLACE FUNCTION SmartRoad.update_route_rating_stats()
 RETURNS TRIGGER AS $$
 BEGIN
-  UPDATE public.saved_routes
+  UPDATE SmartRoad.saved_routes
   SET 
     rating_avg = (
       SELECT COALESCE(AVG(rating)::NUMERIC(3,2), 0)
-      FROM public.route_ratings
+      FROM SmartRoad.route_ratings
       WHERE route_id = COALESCE(NEW.route_id, OLD.route_id)
     ),
     rating_count = (
       SELECT COUNT(*)
-      FROM public.route_ratings
+      FROM SmartRoad.route_ratings
       WHERE route_id = COALESCE(NEW.route_id, OLD.route_id)
     )
   WHERE id = COALESCE(NEW.route_id, OLD.route_id);
   
   -- * Recalculate trust score
-  PERFORM public.calculate_route_trust_score(COALESCE(NEW.route_id, OLD.route_id));
+  PERFORM SmartRoad.calculate_route_trust_score(COALESCE(NEW.route_id, OLD.route_id));
   
   RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
 
 -- * Function to increment route usage count
-CREATE OR REPLACE FUNCTION public.increment_route_usage(route_uuid UUID)
+CREATE OR REPLACE FUNCTION SmartRoad.increment_route_usage(route_uuid UUID)
 RETURNS void AS $$
 BEGIN
-  UPDATE public.saved_routes
+  UPDATE SmartRoad.saved_routes
   SET 
     usage_count = usage_count + 1,
     last_used_at = NOW()
   WHERE id = route_uuid;
   
   -- * Recalculate trust score
-  PERFORM public.calculate_route_trust_score(route_uuid);
+  PERFORM SmartRoad.calculate_route_trust_score(route_uuid);
 END;
 $$ LANGUAGE plpgsql;
 
 -- * Function to auto-downgrade trust if hazards reported
 -- * Called when hazards are created near a route
-CREATE OR REPLACE FUNCTION public.check_route_hazard_impact()
+CREATE OR REPLACE FUNCTION SmartRoad.check_route_hazard_impact()
 RETURNS TRIGGER AS $$
 DECLARE
   affected_routes UUID[];
@@ -1775,7 +1775,7 @@ BEGIN
   -- * Find routes within 100m of the new hazard
   SELECT ARRAY_AGG(id)
   INTO affected_routes
-  FROM public.saved_routes
+  FROM SmartRoad.saved_routes
   WHERE ST_DWithin(
     geometry::geography,
     ST_GeomFromText(
@@ -1787,7 +1787,7 @@ BEGIN
   
   -- * Decrease trust score for affected routes
   IF affected_routes IS NOT NULL THEN
-    UPDATE public.saved_routes
+    UPDATE SmartRoad.saved_routes
     SET 
       trust_score = GREATEST(trust_score - 5, 0), -- * Decrease by 5 points, minimum 0
       last_verified_at = NULL -- * Mark as needing verification
@@ -1802,27 +1802,27 @@ $$ LANGUAGE plpgsql;
 
 -- * Update route rating stats when ratings change
 CREATE TRIGGER update_route_rating_on_rating_change
-  AFTER INSERT OR UPDATE OR DELETE ON public.route_ratings
-  FOR EACH ROW EXECUTE FUNCTION public.update_route_rating_stats();
+  AFTER INSERT OR UPDATE OR DELETE ON SmartRoad.route_ratings
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.update_route_rating_stats();
 
 -- * Update updated_at timestamp
 CREATE TRIGGER update_saved_routes_updated_at
-  BEFORE UPDATE ON public.saved_routes
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+  BEFORE UPDATE ON SmartRoad.saved_routes
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
 
 CREATE TRIGGER update_route_ratings_updated_at
-  BEFORE UPDATE ON public.route_ratings
-  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+  BEFORE UPDATE ON SmartRoad.route_ratings
+  FOR EACH ROW EXECUTE FUNCTION SmartRoad.handle_updated_at();
 
 -- * Auto-downgrade trust when hazards are created near routes
 -- * Note: This requires the hazards table to have a location field
 -- * Uncomment when hazards table is confirmed to have PostGIS geometry
 -- CREATE TRIGGER check_route_hazard_impact_on_hazard_create
---   AFTER INSERT ON public.hazards
---   FOR EACH ROW EXECUTE FUNCTION public.check_route_hazard_impact();
+--   AFTER INSERT ON SmartRoad.hazards
+--   FOR EACH ROW EXECUTE FUNCTION SmartRoad.check_route_hazard_impact();
 
 -- * Helper function to generate share token
-CREATE OR REPLACE FUNCTION public.generate_route_share_token()
+CREATE OR REPLACE FUNCTION SmartRoad.generate_route_share_token()
 RETURNS TEXT AS $$
 BEGIN
   RETURN encode(gen_random_bytes(16), 'base64')
@@ -1874,7 +1874,7 @@ $$ LANGUAGE plpgsql;
 
 -- * Commute AI response cache for SmartRoad (shared across users).
 -- * Used to reuse Gemini guide augmentation by normalized key (destination + vehicle + distance band).
-CREATE TABLE IF NOT EXISTS public.commute_ai_cache (
+CREATE TABLE IF NOT EXISTS SmartRoad.commute_ai_cache (
   cache_key TEXT PRIMARY KEY,
   payload JSONB NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
@@ -1882,7 +1882,8 @@ CREATE TABLE IF NOT EXISTS public.commute_ai_cache (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_commute_ai_cache_expires_at ON public.commute_ai_cache (expires_at);
+CREATE INDEX IF NOT EXISTS idx_commute_ai_cache_expires_at ON SmartRoad.commute_ai_cache (expires_at);
 
-COMMENT ON TABLE public.commute_ai_cache IS 'Cached Gemini commute guide augmentation; key = normalized dest+vehicle+distance band';
+COMMENT ON TABLE SmartRoad.commute_ai_cache IS 'Cached Gemini commute guide augmentation; key = normalized dest+vehicle+distance band';
+
 

@@ -1,5 +1,6 @@
 import "package:flutter/material.dart";
 import "../../core/theme/app_theme.dart";
+import "../legal/legal_screen.dart";
 
 /// * About SmartRoad screen
 /// Displays app information, company details, and motto
@@ -107,6 +108,79 @@ class AboutScreen extends StatelessWidget {
                       color: AppTheme.textTertiary,
                       letterSpacing: 0.3,
                     ),
+                  ),
+                  const SizedBox(height: AppTheme.spacingLG),
+                  // * Legal links
+                  Wrap(
+                    spacing: AppTheme.spacingSM,
+                    runSpacing: AppTheme.spacingSM,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const LegalScreen(
+                                initialDocument: LegalDocumentType.privacyPolicy,
+                              ),
+                            ),
+                          );
+                        },
+                        child: const Text("Privacy Policy"),
+                      ),
+                      Text(
+                        "·",
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppTheme.textTertiary,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const LegalScreen(
+                                initialDocument: LegalDocumentType.termsAndConditions,
+                              ),
+                            ),
+                          );
+                        },
+                        child: const Text("Terms of Service"),
+                      ),
+                      Text(
+                        "·",
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppTheme.textTertiary,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const LegalScreen(
+                                initialDocument: LegalDocumentType.communityGuidelines,
+                              ),
+                            ),
+                          );
+                        },
+                        child: const Text("Guidelines"),
+                      ),
+                      Text(
+                        "·",
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppTheme.textTertiary,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const LegalScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text("All Policies"),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: AppTheme.spacingXL),
                 ],

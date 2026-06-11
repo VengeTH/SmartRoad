@@ -13,11 +13,11 @@ class Hazard {
   final String? stickerFlag;
   final DateTime createdAt;
   final DateTime updatedAt;
-  
+
   // * Optional user info (from join)
   final String? userName;
   final String? userPhotoUrl;
-  
+
   Hazard({
     required this.id,
     required this.userId,
@@ -33,13 +33,13 @@ class Hazard {
     this.userName,
     this.userPhotoUrl,
   });
-  
+
   /// * Create Hazard from Supabase JSON
   factory Hazard.fromJson(Map<String, dynamic> json) {
     // * Parse location (PostGIS geography point)
     double lat = 0.0;
     double lon = 0.0;
-    
+
     if (json['location'] != null) {
       if (json['location'] is Map) {
         // * PostGIS returns as {"type": "Point", "coordinates": [lon, lat]}
@@ -58,7 +58,7 @@ class Hazard {
         }
       }
     }
-    
+
     return Hazard(
       id: json['id'] as String,
       userId: json['user_id'] as String,
@@ -75,7 +75,7 @@ class Hazard {
       userPhotoUrl: json['user_photo_url'] as String?,
     );
   }
-  
+
   /// * Convert Hazard to JSON for Supabase insert
   Map<String, dynamic> toJson() {
     return {
@@ -87,20 +87,22 @@ class Hazard {
       if (stickerFlag != null) 'sticker_flag': stickerFlag,
     };
   }
-  
+
   /// * Calculate distance to another point (Haversine formula)
   double distanceTo(double lat, double lon) {
     const double earthRadiusKm = 6371.0;
     final double dLat = _toRadians(lat - latitude);
     final double dLon = _toRadians(lon - longitude);
-    final double a = 
-      math.sin(dLat / 2) * math.sin(dLat / 2) +
-      math.cos(_toRadians(latitude)) * math.cos(_toRadians(lat)) *
-      math.sin(dLon / 2) * math.sin(dLon / 2);
+    final double a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_toRadians(latitude)) *
+            math.cos(_toRadians(lat)) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
     final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
     return earthRadiusKm * c;
   }
-  
+
   double _toRadians(double degrees) => degrees * (math.pi / 180.0);
 }
 
@@ -115,10 +117,10 @@ enum HazardType {
   fallenTree('fallen_tree'),
   traffic('traffic'),
   debris('debris');
-  
+
   final String value;
   const HazardType(this.value);
-  
+
   static HazardType fromString(String value) {
     return HazardType.values.firstWhere(
       (e) => e.value == value,
@@ -132,10 +134,10 @@ enum SeverityLevel {
   low('Low'),
   medium('Medium'),
   high('High');
-  
+
   final String value;
   const SeverityLevel(this.value);
-  
+
   static SeverityLevel fromString(String value) {
     return SeverityLevel.values.firstWhere(
       (e) => e.value == value,
@@ -143,4 +145,3 @@ enum SeverityLevel {
     );
   }
 }
-

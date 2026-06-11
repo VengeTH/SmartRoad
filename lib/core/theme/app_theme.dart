@@ -1,28 +1,47 @@
 import "package:flutter/material.dart";
 
 /// * Application theme configuration
-/// Dark-friendly, neutral palette
+/// Heedful brand-aligned: dark graphite foundations, yellow emphasis, neutral gray support.
+/// Yellow stays an accent, never a blanket fill — interface remains premium and readable.
 class AppTheme {
-  // * Color Palette
-  static const Color primaryColor = Color(0xFF6366F1); // Indigo
-  static const Color secondaryColor = Color(0xFF8B5CF6); // Purple
-  static const Color backgroundColor = Color(0xFF0F172A); // Dark slate
-  static const Color surfaceColor = Color(0xFF1E293B); // Lighter slate
+  // * Heedful Brand Colors
+  // Background: main canvas (dark graphite)
+  static const Color backgroundColor = Color(0xFF0F0F0F);
+  // Surface: cards and panels
+  static const Color surfaceColor = Color(0xFF1A1A1A);
+  // Secondary Surface: layered depth
+  static const Color surfaceVariant = Color(0xFF2B2B2B);
+  // Primary Gray: neutral structural support
+  static const Color borderColor = Color(0xFF424242);
+
+  // * Functional Colors
+  // Primary: indigo for interactive elements (buttons, nav indicators, links)
+  static const Color primaryColor = Color(0xFF6366F1);
+  // Secondary: purple for secondary interactive elements
+  static const Color secondaryColor = Color(0xFF8B5CF6);
+  // Brand Accent: Heedful yellow — reserved for emphasis, active states, key metrics
+  static const Color brandAccentColor = Color(0xFFFFC107);
+  // Brand Accent Dark: deeper yellow for gradients/hover
+  static const Color brandAccentDarkColor = Color(0xFFFFB300);
+
+  // * Semantic Colors
   static const Color errorColor = Color(0xFFEF4444); // Red
   static const Color successColor = Color(0xFF10B981); // Green
   static const Color warningColor = Color(0xFFF59E0B); // Amber
   static const Color infoColor = Color(0xFF3B82F6); // Blue
   static const Color accentColor = Color(0xFFEC4899); // Pink
-  
-  // * Text Colors
-  static const Color textPrimary = Color(0xFFF1F5F9);
-  static const Color textSecondary = Color(0xFF94A3B8);
-  static const Color textTertiary = Color(0xFF64748B);
-  
-  // * Border & Surface
-  static const Color borderColor = Color(0xFF334155);
-  static const Color surfaceVariant = Color(0xFF334155);
-  
+
+  // * Text Colors (Heedful spec)
+  static const Color textPrimary = Color(0xFFFFFFFF);
+  static const Color textSecondary = Color(0xFFBDBDBD);
+  static const Color textTertiary = Color(0xFF757575);
+
+  // * Extended Surface Colors
+  // Tertiary Surface: elevated cards, modals, dialogs
+  static const Color surfaceElevated = Color(0xFF2B2B2B);
+  // Overlay: glass/blur surfaces
+  static const Color surfaceOverlay = Color(0x1A0F0F0F);
+
   // * Spacing
   static const double spacingXS = 4.0;
   static const double spacingSM = 8.0;
@@ -65,10 +84,17 @@ class AppTheme {
   
   static const List<BoxShadow> shadowGlow = [
     BoxShadow(
-      color: Color(0x336366F1),
+      color: Color(0x33FFC107),
       blurRadius: 20,
       spreadRadius: 2,
     ),
+  ];
+
+  // * Brand gradient colors (Heedful: yellow → deep yellow → gray)
+  static const List<Color> brandGradientColors = [
+    Color(0xFFFFC107),
+    Color(0xFFFFB300),
+    Color(0xFF6B6B6B),
   ];
   
   // * Animation Constants
@@ -82,42 +108,51 @@ class AppTheme {
   // * Responsive Breakpoints
   static const double breakpointMobile = 600.0;
   static const double breakpointTablet = 900.0;
-  static const double breakpointDesktop = 1200.0;
-  
+  static const double breakpointDesktop = 1024.0;
+  static const double breakpointWideDesktop = 1440.0;
+
   // * Responsive Helpers
   static bool isMobile(BuildContext context) {
     return MediaQuery.of(context).size.width < breakpointMobile;
   }
-  
+
   static bool isTablet(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     return width >= breakpointMobile && width < breakpointDesktop;
   }
-  
+
   static bool isDesktop(BuildContext context) {
     return MediaQuery.of(context).size.width >= breakpointDesktop;
   }
-  
+
+  static bool isWideDesktop(BuildContext context) {
+    return MediaQuery.of(context).size.width >= breakpointWideDesktop;
+  }
+
   static double responsivePadding(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     if (width < breakpointMobile) {
       return spacingMD; // 16px for mobile
     } else if (width < breakpointTablet) {
       return spacingLG; // 24px for tablet
+    } else if (width < breakpointDesktop) {
+      return spacingXL; // 32px for small desktop
     } else {
-      return spacingXL; // 32px for desktop
+      return spacingXXL; // 48px for wide desktop
     }
   }
-  
+
   static double responsiveButtonHeight(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     if (width < breakpointMobile) {
-      return 52.0; // Slightly smaller for mobile
+      return 48.0; // Compact for mobile
+    } else if (width < breakpointDesktop) {
+      return 52.0; // Standard for tablet
     } else {
-      return 56.0; // Standard size for tablet/desktop
+      return 56.0; // Full size for desktop
     }
   }
-  
+
   static double responsiveFontSize(BuildContext context, {required double mobile, required double desktop}) {
     final width = MediaQuery.of(context).size.width;
     if (width < breakpointMobile) {
@@ -126,13 +161,35 @@ class AppTheme {
       return desktop;
     }
   }
-  
+
   static double maxContentWidth(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     if (width < breakpointDesktop) {
       return double.infinity;
+    } else if (width < breakpointWideDesktop) {
+      return 900.0; // Standard desktop
     } else {
-      return 800.0; // Max width for forms on desktop
+      return 1100.0; // Wide desktop
+    }
+  }
+
+  /// * Max width for narrow content (forms, auth cards)
+  static double maxNarrowWidth(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < breakpointDesktop) {
+      return double.infinity;
+    } else {
+      return 520.0;
+    }
+  }
+
+  /// * Sidebar width for desktop navigation
+  static double sidebarWidth(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    if (width < breakpointWideDesktop) {
+      return 72.0; // Icon-only rail
+    } else {
+      return 260.0; // Full sidebar with labels
     }
   }
   
@@ -151,7 +208,7 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: const ColorScheme.dark(
-        primary: primaryColor,
+        primary: brandAccentColor,
         secondary: secondaryColor,
         surface: surfaceColor,
         error: errorColor,
@@ -201,7 +258,7 @@ class AppTheme {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMD),
           borderSide: BorderSide(
-            color: primaryColor,
+            color: brandAccentColor,
             width: 2.0,
           ),
         ),
@@ -215,21 +272,21 @@ class AppTheme {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: surfaceColor.withOpacity(0.94),
-        indicatorColor: primaryColor.withOpacity(0.18),
+        backgroundColor: surfaceColor.withOpacity(0.96),
+        indicatorColor: brandAccentColor.withOpacity(0.15),
         labelTextStyle: MaterialStateProperty.resolveWith((states) {
           final isSelected = states.contains(MaterialState.selected);
           return TextStyle(
             color: isSelected ? textPrimary : textSecondary,
-            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             fontSize: 12,
-            letterSpacing: 0.2,
+            letterSpacing: 0.3,
           );
         }),
         iconTheme: MaterialStateProperty.resolveWith((states) {
           final isSelected = states.contains(MaterialState.selected);
           return IconThemeData(
-            color: isSelected ? primaryColor : textSecondary,
+            color: isSelected ? brandAccentColor : textSecondary,
             size: 24,
           );
         }),
@@ -237,7 +294,7 @@ class AppTheme {
       tabBarTheme: const TabBarThemeData(
         labelColor: textPrimary,
         unselectedLabelColor: textSecondary,
-        indicatorColor: primaryColor,
+        indicatorColor: brandAccentColor,
         dividerColor: borderColor,
       ),
       snackBarTheme: SnackBarThemeData(
@@ -257,7 +314,7 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: surfaceVariant,
-        selectedColor: primaryColor.withOpacity(0.22),
+        selectedColor: brandAccentColor.withOpacity(0.20),
         side: const BorderSide(color: borderColor, width: 1),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusFull),
@@ -274,8 +331,8 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: primaryColor,
-          foregroundColor: Colors.white,
+          backgroundColor: brandAccentColor,
+          foregroundColor: Color(0xFF0F0F0F), // Dark text on yellow (Heedful spec)
           elevation: 2,
           padding: const EdgeInsets.symmetric(
             horizontal: 32,
@@ -287,21 +344,21 @@ class AppTheme {
           ),
           textStyle: const TextStyle(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             letterSpacing: 0.5,
           ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: textPrimary,
+          foregroundColor: brandAccentColor,
           padding: const EdgeInsets.symmetric(
             horizontal: 32,
             vertical: 20,
           ),
           minimumSize: const Size(120, 56),
           side: BorderSide(
-            color: borderColor,
+            color: brandAccentColor,
             width: 1.5,
           ),
           shape: RoundedRectangleBorder(
@@ -316,7 +373,7 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: primaryColor,
+          foregroundColor: brandAccentColor,
           padding: const EdgeInsets.symmetric(
             horizontal: 24,
             vertical: 16,

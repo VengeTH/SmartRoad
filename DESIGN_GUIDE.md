@@ -58,18 +58,28 @@ This design guide establishes the visual identity, branding guidelines, and UI/U
 
 ## Color Palette
 
-### Primary Colors
+### Heedful Brand Colors (v2.0 — aligned with [theheedful.me/brand-guide](https://theheedful.me/brand-guide))
 
-- **Primary**: `#6366F1` (Indigo) - Main brand color
-- **Secondary**: `#8B5CF6` (Purple) - Accent color
-- **Background**: `#0F172A` (Dark slate) - Main background
-- **Surface**: `#1E293B` (Lighter slate) - Card/surface background
+The palette is built for trust and contrast: dark graphite foundations, bright yellow emphasis, and neutral gray support colors. Yellow stays an accent, never a blanket fill, so the interface remains premium and readable.
+
+- **Background**: `#0F0F0F` — Main canvas (dark graphite)
+- **Surface**: `#1A1A1A` — Cards and panels
+- **Surface Variant**: `#2B2B2B` — Layered depth, elevated surfaces
+- **Border**: `#424242` — Neutral structural support
+- **Brand Accent**: `#FFC107` — Primary action and emphasis (Heedful yellow)
+- **Brand Accent Dark**: `#FFB300` — Deeper yellow for gradients/hover
+- **Brand Gradient**: `linear-gradient(135deg, #FFC107, #FFB300, #6B6B6B)`
+
+### Functional Colors
+
+- **Primary**: `#6366F1` (Indigo) — Interactive elements (links, nav indicators)
+- **Secondary**: `#8B5CF6` (Purple) — Secondary interactive elements
 
 ### Text Colors
 
-- **Primary Text**: `#F1F5F9` - Main content
-- **Secondary Text**: `#94A3B8` - Supporting content
-- **Tertiary Text**: `#64748B` - Subtle text (branding, hints)
+- **Primary Text**: `#FFFFFF` — Main content
+- **Secondary Text**: `#BDBDBD` — Supporting content
+- **Tertiary Text**: `#757575` — Subtle text (branding, hints)
 
 ### Semantic Colors
 
@@ -80,25 +90,32 @@ This design guide establishes the visual identity, branding guidelines, and UI/U
 
 ### Branding Color Usage
 
+- Use **yellow (`#FFC107`)** for actions, signals, highlights, and active states
 - Use **Tertiary Text** color for secondary branding elements
 - Apply **reduced opacity (0.7)** for footer branding
-- Never use bright marketing colors for branding
+- Never flood entire layouts with yellow or use it as a base page background
+- Keep surfaces dark or neutral so accent yellow retains meaning
 - Maintain neutral, calm appearance
 
 ## Typography
 
 ### Font Family
 
-- Use system default or Material Design fonts
-- Clean, modern, readable
+- **Interface text**: Inter (clean, readable, the workhorse for UI text, tables, forms, documentation)
+- **Headlines / wordmarks**: Space Grotesk (technical, recognisable voice for product framing)
+- Fallback: system default or Material Design fonts
 - No decorative or script fonts
+
+### Font Weights
+
+- Light 300, Regular 400, Medium 500, SemiBold 600, Bold 700
 
 ### Font Sizes
 
-- **App Name (Splash)**: 42px, Bold
-- **Company Name**: 18px, Regular (400)
-- **Motto**: 16px, Light (300), Italic
-- **Footer Branding**: 14px, Regular, Reduced opacity
+- **App Name (Splash)**: 42px, Bold (Space Grotesk)
+- **Company Name**: 18px, Regular (400) (Inter)
+- **Motto**: 16px, Light (300), Italic (Inter)
+- **Footer Branding**: 14px, Regular, Reduced opacity (Inter)
 
 ### Letter Spacing
 
@@ -178,24 +195,91 @@ Based on 8px grid system:
 - **No page scrolling**: The auth layout must fit within **one viewport** on most devices. Avoid full-page `SingleChildScrollView` for auth screens.
 - **Responsive layout**:
   - **Desktop / Wide**: Use a split layout
-    - Left: story/brand panel (value proposition)
+    - Left: story/brand panel (value proposition) with Heedful yellow badge
     - Right: auth card with max width ≈ 520px
   - **Mobile / Narrow**: Show only the auth card to avoid vertical overflow
     - Keep branding compact (small header row)
-    - Move “extra” information into modals (e.g., demo credentials)
+    - Move "extra" information into modals (e.g., demo credentials)
 - **Demo credentials UX**:
   - Show demo credentials inside a **dialog/modal**, not as a permanently expanded card
-  - Provide “Copy” actions for quick testing
+  - Provide "Copy" actions for quick testing
 - **Background**:
   - Use a subtle dark gradient background (no loud marketing colors)
   - Avoid noisy patterns that distract from form completion
+- **Branding**: "THE HEEDFUL" badge uses yellow (`#FFC107`) text on yellow-tinted background
+
+### Navigation Bar / Rail
+
+- **Mobile**: Bottom `NavigationBar` with Heedful yellow selected indicator and icons
+- **Desktop**: Left `NavigationRail` with:
+  - Report hazard button (yellow icon) in leading position
+  - Nav destinations with yellow selected icon + subtle yellow indicator
+  - "SmartRoad" label in trailing position (tertiary text color)
+  - Vertical divider between rail and content area
+
+### Desktop Content Layout
+
+All screens use a centered, max-width constrained layout on desktop to avoid stretched mobile-looking UI:
+
+- **Gate Pass**: Max 700px, centered QR card with proper padding
+- **Profile**: Max 700px, profile info in a card container
+- **Navigation Settings**: Max 800px, settings grouped in cards with toggle rows (not SwitchListTile)
+- **Stickers**: 2-column grid on desktop, cards with proper aspect ratio
+- **Fuel Prices**: 2-column grid on desktop
+- **Feed**: 2-3 column grid on desktop
+- **Routes**: 2-column grid on desktop
+- **About**: Max content width, centered
+
+### Settings Card Pattern
+
+Desktop settings screens use card-based sections instead of mobile-style list tiles:
+
+```dart
+Container(
+  padding: EdgeInsets.all(AppTheme.spacingLG),
+  decoration: BoxDecoration(
+    color: AppTheme.surfaceColor,
+    borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+    border: Border.all(color: AppTheme.borderColor, width: 1),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(title, style: ...),  // Section title
+      SizedBox(height: spacingMD),
+      child,  // Section content (toggles, inputs, etc.)
+    ],
+  ),
+)
+```
+
+### Toggle Row Pattern
+
+Replaces `SwitchListTile` for desktop settings:
+
+```dart
+Row(
+  children: [
+    Expanded(child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: bold),
+        Text(subtitle, style: secondary),
+      ],
+    )),
+    SizedBox(width: spacingMD),
+    Switch(value: value, onChanged: onChanged),
+  ],
+)
+```
 
 ### Map Screen HUD (Search + Controls)
 
-- **Goal**: The map UI must feel modern and “lightweight” while keeping safety-first clarity.
+- **Goal**: The map UI must feel modern and "lightweight" while keeping safety-first clarity.
 - **Glass HUD**:
   - Use a subtle blurred/glass surface for the top search bar and right-side control dock
   - Keep borders thin and contrast high (avoid washed-out overlays)
+  - **Desktop**: Search bar constrained to 900px max width, centered
 - **Search behavior**:
   - When the search field is focused and empty, show **Recents**:
     - Recent searches (selected places)
@@ -225,15 +309,54 @@ Based on 8px grid system:
   - SmartRoad registers `smartroad://map`, `smartroad://music`, and `smartroad://music/open` so other apps can open SmartRoad (e.g. to map tab or music picker).
   - Keep deep-link behavior **non-blocking** and safety-first (no noisy popups during navigation).
 
+### Feed Screen UX
+
+- **Goal**: The hazards feed must be scannable and actionable.
+- **Layout**:
+  - **Mobile / Tablet**: Single-column list of hazard cards
+  - **Desktop**: 2-column grid of hazard cards
+  - **Wide Desktop**: 3-column grid of hazard cards
+- **Card content**: Hazard marker icon, type label, truncated description, severity chip, time ago
+- **Empty state**: Centered "All clear!" message with success icon
+
 ### Routes Screen UX
 
 - **Goal**: Routes must feel like a product surface, not a placeholder screen.
 - **Empty states**:
   - Use a centered premium empty-state card with clear hierarchy
-  - Avoid duplicate CTAs (only one “Create Route” entry point visible at a time)
+  - Avoid duplicate CTAs (only one "Create Route" entry point visible at a time)
+- **Layout**:
+  - **Mobile / Tablet**: Single-column list of route cards
+  - **Desktop**: 2-column grid of route cards
+  - **Wide Desktop**: 2-column grid (same as desktop, wider cards)
 - **Create Route dialog**:
   - Use a modern dialog with two option tiles (Draw Route / Use Navigation)
   - Clear descriptions and large tap targets
+
+### Gate Pass Screen UX
+
+- **Goal**: QR code must be prominent and scannable.
+- **Layout**:
+  - **Mobile**: Full-width QR card
+  - **Desktop**: Constrained to max content width (900px), centered
+  - QR code size: 280px on mobile, 320px on desktop
+- **Tabs**: My Pass / History tabs at top
+
+### Stickers Screen UX
+
+- **Goal**: Manage physical and digital HOA stickers.
+- **Layout**:
+  - **Mobile / Tablet**: Single-column list of sticker cards
+  - **Desktop**: 2-column grid of sticker cards
+- **Add button**: Yellow primary button at top
+
+### Fuel Prices Screen UX
+
+- **Goal**: Compare fuel prices at nearby stations.
+- **Layout**:
+  - **Mobile / Tablet**: Single-column list of station cards
+  - **Desktop**: 2-column grid of station cards
+- **Controls**: Radius slider and sort chips at top
 
 ## Location Previews (Known Places)
 
@@ -490,6 +613,69 @@ When adding branding:
 - Animated logos during navigation
 - Branding in emergency screens
 
+## Responsive Layout System
+
+### Breakpoints
+
+| Breakpoint | Width | Target |
+|---|---|---|
+| Mobile | < 600px | Phones |
+| Tablet | 600–1023px | Tablets, small laptops |
+| Desktop | 1024–1439px | Laptops, standard monitors |
+| Wide Desktop | ≥ 1440px | Large monitors, ultrawide |
+
+### Navigation
+
+- **Mobile / Tablet**: Bottom `NavigationBar` with 4 tabs (Map, Feed, Routes, Profile) + FAB for hazard reporting
+- **Desktop**: Left `NavigationRail` sidebar
+  - Icon-only rail (72px) on standard desktop
+  - Full sidebar with labels (260px) on wide desktop
+  - Report hazard button in rail leading position
+  - "SmartRoad" label in trailing position
+  - Vertical divider between rail and content
+
+### Content Width
+
+- **Mobile / Tablet**: Full width
+- **Desktop**: Max 900px centered
+- **Wide Desktop**: Max 1100px centered
+- **Narrow content (forms, auth cards)**: Max 520px
+
+### List → Grid Transitions
+
+- **Feed Screen**: Single-column list on mobile/tablet → 2-column grid on desktop → 3-column grid on wide desktop
+- **Routes Screen (all tabs)**: Same grid transition pattern
+- **Grid card aspect ratio**: 1.4 (feed) / 1.6 (routes)
+
+### Map HUD
+
+- **Search bar**: Full width on mobile/tablet → constrained to 900px max, centered on desktop
+- **Control dock**: Right-side positioned buttons (zoom, weather, fuel, location) — same on all breakpoints
+
+### Component Guidelines
+
+#### Buttons (Heedful Style)
+
+- **Primary**: Yellow fill (`#FFC107`) with dark text (`#0F0F0F`), bold weight
+- **Secondary**: Yellow outline (`#FFC107`) with yellow text, no fill
+- **Text buttons**: Yellow text, no border
+
+#### Input Fields
+
+- Neutral dark fields with yellow focus treatment
+- Inputs stay calm until interaction
+
+#### Cards
+
+- Dark layered surfaces (`#1A1A1A` on `#0F0F0F`)
+- Subtle border definition (`#424242`, 1px)
+- Restrained shadow depth
+
+#### Icons
+
+- Geometric, technical, and structured — not decorative or generic
+- Use Material outlined icons as default, filled for selected/active states
+
 ## Version History
 
 - **v1.0** (2025-01-XX): Initial branding guidelines established
@@ -497,6 +683,7 @@ When adding branding:
 - **v1.2** (2026-01-07): Refreshed auth screen layout (single-viewport, responsive) and navigation bar styling
 - **v1.3** (2026-01-07): Added glass map HUD, map search recents, and routes UX polish (dialog + empty states)
 - **v1.4** (2026-02-07): Added music app picker, default music app setting, and `smartroad://` deep links
+- **v2.0** (2026-06-11): Heedful brand alignment — dark graphite + yellow accent palette, responsive desktop sidebar navigation, grid layouts for feed/routes, constrained map HUD, Inter + Space Grotesk typography
 
 ---
 

@@ -103,10 +103,7 @@ class NavigationHazardWarningBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor.withOpacity(0.95),
         borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-        border: Border.all(
-          color: severityColor.withOpacity(0.5),
-          width: 1.2,
-        ),
+        border: Border.all(color: severityColor.withOpacity(0.5), width: 1.2),
         boxShadow: AppTheme.shadowLarge,
       ),
       child: Row(
@@ -166,5 +163,3 @@ class NavigationHazardWarningBanner extends StatelessWidget {
     );
   }
 }
-
-

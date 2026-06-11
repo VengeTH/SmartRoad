@@ -107,42 +107,50 @@ class _LegalDocumentList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final documents = LegalDocumentType.values;
+    final isDesktop = AppTheme.isDesktop(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text("Legal & Policies"),
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(AppTheme.spacingMD),
-        itemCount: documents.length,
-        separatorBuilder: (_, __) => const SizedBox(height: AppTheme.spacingSM),
-        itemBuilder: (context, index) {
-          final doc = documents[index];
-          return Card(
-            child: ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(AppTheme.spacingSM),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMD),
-                ),
-                child: Icon(doc.icon, color: AppTheme.primaryColor, size: 24),
-              ),
-              title: Text(
-                doc.title,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => _LegalDocumentViewer(documentType: doc),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: isDesktop ? 800.0 : double.infinity,
+          ),
+          child: ListView.separated(
+            padding: EdgeInsets.all(isDesktop ? AppTheme.spacingXXL : AppTheme.spacingMD),
+            itemCount: documents.length,
+            separatorBuilder: (_, __) => const SizedBox(height: AppTheme.spacingSM),
+            itemBuilder: (context, index) {
+              final doc = documents[index];
+              return Card(
+                child: ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(AppTheme.spacingSM),
+                    decoration: BoxDecoration(
+                      color: AppTheme.brandAccentColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMD),
+                    ),
+                    child: Icon(doc.icon, color: AppTheme.brandAccentColor, size: 24),
                   ),
-                );
-              },
-            ),
-          );
-        },
+                  title: Text(
+                    doc.title,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => _LegalDocumentViewer(documentType: doc),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }

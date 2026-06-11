@@ -119,8 +119,22 @@ class _GatePassScreenState extends ConsumerState<GatePassScreen>
           return TabBarView(
             controller: _tabController,
             children: [
-              _buildGatePassView(activeStickers),
-              _buildHistoryView(),
+              Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: AppTheme.isDesktop(context) ? 700.0 : double.infinity,
+                  ),
+                  child: _buildGatePassView(activeStickers),
+                ),
+              ),
+              Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: AppTheme.isDesktop(context) ? 900.0 : double.infinity,
+                  ),
+                  child: _buildHistoryView(),
+                ),
+              ),
             ],
           );
         },
@@ -242,58 +256,61 @@ class _GatePassScreenState extends ConsumerState<GatePassScreen>
       behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppTheme.spacingXL),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // * Sticker selector
-            if (activeStickers.length > 1) ...[
-              _buildStickerSelector(activeStickers),
-              const SizedBox(height: AppTheme.spacingXL),
-            ],
-
-            // * Active day-pass badge (if any)
-            _buildDayPassBadge(),
-
-            // * QR Code Card
-            Container(
-              padding: const EdgeInsets.all(AppTheme.spacingXL),
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceColor,
-                borderRadius: BorderRadius.circular(AppTheme.radiusXL),
-                border: Border.all(color: AppTheme.borderColor, width: 1.5),
-                boxShadow: AppTheme.shadowLarge,
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    _selectedSticker!.hoaName,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: AppTheme.spacingSM),
-                  Text(
-                    'Gate Pass',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: AppTheme.maxContentWidth(context)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // * Sticker selector
+                if (activeStickers.length > 1) ...[
+                  _buildStickerSelector(activeStickers),
                   const SizedBox(height: AppTheme.spacingXL),
+                ],
 
-                  // * QR Code
-                  Container(
-                    padding: const EdgeInsets.all(AppTheme.spacingMD),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(AppTheme.radiusLG),
-                    ),
-                    child: QrImageView(
-                      data: qrData,
-                      version: QrVersions.auto,
-                      size: 280.0,
-                      backgroundColor: Colors.white,
-                    ),
+                // * Active day-pass badge (if any)
+                _buildDayPassBadge(),
+
+                // * QR Code Card
+                Container(
+                  padding: const EdgeInsets.all(AppTheme.spacingXL),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceColor,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusXL),
+                    border: Border.all(color: AppTheme.borderColor, width: 1.5),
+                    boxShadow: AppTheme.shadowLarge,
                   ),
+                  child: Column(
+                    children: [
+                      Text(
+                        _selectedSticker!.hoaName,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingSM),
+                      Text(
+                        'Gate Pass',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingXL),
+
+                      // * QR Code
+                      Container(
+                        padding: const EdgeInsets.all(AppTheme.spacingMD),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(AppTheme.radiusLG),
+                        ),
+                        child: QrImageView(
+                          data: qrData,
+                          version: QrVersions.auto,
+                          size: AppTheme.isDesktop(context) ? 320.0 : 280.0,
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
                   const SizedBox(height: AppTheme.spacingXL),
 
                   // * Refresh info
@@ -332,11 +349,13 @@ class _GatePassScreenState extends ConsumerState<GatePassScreen>
               ),
             ),
 
-            const SizedBox(height: AppTheme.spacingXL),
+                const SizedBox(height: AppTheme.spacingXL),
 
-            // * Sticker Info Card
-            _buildStickerInfoCard(),
-          ],
+                // * Sticker Info Card
+                _buildStickerInfoCard(),
+              ],
+            ),
+          ),
         ),
       ),
     );

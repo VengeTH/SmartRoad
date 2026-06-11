@@ -54,18 +54,24 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // * App logo
+              // * App logo (tinted to Heedful yellow)
               ClipRRect(
                 borderRadius: BorderRadius.circular(AppTheme.radiusLG),
                 child: Container(
                   width: 120,
                   height: 120,
                   color: AppTheme.backgroundColor,
-                  child: Image.asset(
-                    "assets/app_icon.png",
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.contain,
+                  child: ColorFiltered(
+                    colorFilter: ColorFilter.mode(
+                      AppTheme.brandAccentColor,
+                      BlendMode.srcIn,
+                    ),
+                    child: Image.asset(
+                      "assets/app_icon.png",
+                      width: 120,
+                      height: 120,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
               ),

@@ -8429,11 +8429,15 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 tooltip: "Fuel prices",
               ),
             ),
-            // * Search Bar - Top Center
+            // * Search Bar - Top Center (constrained width on desktop)
             Positioned(
               top: AppTheme.spacingMD,
-              left: AppTheme.spacingMD,
-              right: AppTheme.spacingMD,
+              left: AppTheme.isDesktop(context)
+                  ? MediaQuery.of(context).size.width * 0.15
+                  : AppTheme.spacingMD,
+              right: AppTheme.isDesktop(context)
+                  ? MediaQuery.of(context).size.width * 0.15
+                  : AppTheme.spacingMD,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(AppTheme.radiusLG),
                 child: AnimatedContainer(
@@ -10041,4 +10045,3 @@ class _MapScreenState extends ConsumerState<MapScreen>
 }
 
 // * Toolbar button widget removed - no longer used
-

@@ -1,12 +1,12 @@
 /**
  * SmartRoad Backend — Smart Routing Service
- * 
+ *
  * Takes a route from GraphHopper and enhances it with SmartRoad intelligence:
  * - Flood zone avoidance
- * - Hazard awareness  
+ * - Hazard awareness
  * - Village entrance suggestions
  * - HOA restriction checks
- * 
+ *
  * This is where SmartRoad becomes unique from standard map apps.
  */
 const { haversineKm } = require("../utils/geo");

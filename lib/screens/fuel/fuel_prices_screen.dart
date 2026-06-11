@@ -666,25 +666,61 @@ class _FuelPricesScreenState extends ConsumerState<FuelPricesScreen> {
                         }
                         return RefreshIndicator(
                           onRefresh: () async => _getInitialPosition(),
-                          child: ListView.builder(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppTheme.spacingMD,
-                              vertical: AppTheme.spacingSM,
-                            ),
-                            itemCount: sorted.length,
-                            itemBuilder: (context, index) {
-                              final station = sorted[index];
-                              final distM = FuelUtils.calculateDistance(
-                                position.latitude,
-                                position.longitude,
-                                station.latitude,
-                                station.longitude,
-                              );
-                              return _StationCard(
-                                station: station,
-                                addressOverride: _addressOverrides[station.id],
-                                distanceKm: distM / 1000.0,
-                                onTap: () => _showStationSheet(station),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isDesktop = AppTheme.isDesktop(context);
+                              final columns = isDesktop ? 2 : 1;
+                              final padding = AppTheme.responsivePadding(context);
+
+                              if (columns == 1) {
+                                return ListView.builder(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: padding,
+                                    vertical: AppTheme.spacingSM,
+                                  ),
+                                  itemCount: sorted.length,
+                                  itemBuilder: (context, index) {
+                                    final station = sorted[index];
+                                    final distM = FuelUtils.calculateDistance(
+                                      position.latitude,
+                                      position.longitude,
+                                      station.latitude,
+                                      station.longitude,
+                                    );
+                                    return _StationCard(
+                                      station: station,
+                                      addressOverride: _addressOverrides[station.id],
+                                      distanceKm: distM / 1000.0,
+                                      onTap: () => _showStationSheet(station),
+                                    );
+                                  },
+                                );
+                              }
+
+                              return GridView.builder(
+                                padding: EdgeInsets.all(padding),
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  crossAxisSpacing: AppTheme.spacingMD,
+                                  mainAxisSpacing: AppTheme.spacingMD,
+                                  childAspectRatio: 1.8,
+                                ),
+                                itemCount: sorted.length,
+                                itemBuilder: (context, index) {
+                                  final station = sorted[index];
+                                  final distM = FuelUtils.calculateDistance(
+                                    position.latitude,
+                                    position.longitude,
+                                    station.latitude,
+                                    station.longitude,
+                                  );
+                                  return _StationCard(
+                                    station: station,
+                                    addressOverride: _addressOverrides[station.id],
+                                    distanceKm: distM / 1000.0,
+                                    onTap: () => _showStationSheet(station),
+                                  );
+                                },
                               );
                             },
                           ),

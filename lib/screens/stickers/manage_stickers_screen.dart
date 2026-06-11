@@ -53,72 +53,96 @@ class _ManageStickersScreenState extends ConsumerState<ManageStickersScreen> {
   }
   
   Widget _buildContent(List<HOA> hoas, List<Sticker> stickers) {
+    final isDesktop = AppTheme.isDesktop(context);
+    final columns = isDesktop ? 2 : 1;
+    final padding = AppTheme.responsivePadding(context);
+
     return ScrollConfiguration(
       behavior: ScrollConfiguration.of(context).copyWith(
         scrollbars: false,
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppTheme.spacingXL),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // * Header
-          Text(
-            "Manage Your Stickers",
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
+        padding: EdgeInsets.all(padding),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: AppTheme.maxContentWidth(context)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // * Header
+                Text(
+                  "Manage Your Stickers",
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingSM),
+                Text(
+                  "Upload physical stickers or view your digital stickers",
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingXL),
+
+                // * Add Physical Sticker Button
+                ElevatedButton.icon(
+                  onPressed: () => _showAddPhysicalStickerDialog(hoas),
+                  icon: const Icon(
+                    Icons.add_photo_alternate,
+                    size: 22,
+                  ),
+                  label: Text(
+                    "I have a physical sticker",
+                    style: TextStyle(
+                      fontSize: AppTheme.isMobile(context) ? 16 : 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(
+                      vertical: AppTheme.isMobile(context) ? AppTheme.spacingMD : AppTheme.spacingLG,
+                      horizontal: AppTheme.isMobile(context) ? AppTheme.spacingLG : AppTheme.spacingXL,
+                    ),
+                    minimumSize: Size(0, AppTheme.responsiveButtonHeight(context)),
+                    elevation: 3,
+                    shadowColor: AppTheme.brandAccentColor.withOpacity(0.4),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingXL),
+
+                // * Current Stickers List
+                Text(
+                  "Your Stickers",
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingMD),
+
+                if (stickers.isEmpty)
+                  _buildEmptyState()
+                else if (columns == 1)
+                  ...stickers.map((sticker) => _buildStickerCard(sticker))
+                else
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      crossAxisSpacing: AppTheme.spacingMD,
+                      mainAxisSpacing: AppTheme.spacingMD,
+                      childAspectRatio: 1.4,
+                    ),
+                    itemCount: stickers.length,
+                    itemBuilder: (context, index) {
+                      return _buildStickerCard(stickers[index]);
+                    },
+                  ),
+              ],
             ),
           ),
-          const SizedBox(height: AppTheme.spacingSM),
-          Text(
-            "Upload physical stickers or view your digital stickers",
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppTheme.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacingXL),
-          
-          // * Add Physical Sticker Button
-          ElevatedButton.icon(
-            onPressed: () => _showAddPhysicalStickerDialog(hoas),
-            icon: const Icon(
-              Icons.add_photo_alternate,
-              size: 22,
-            ),
-            label: Text(
-              "I have a physical sticker",
-              style: TextStyle(
-                fontSize: AppTheme.isMobile(context) ? 16 : 17,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              padding: EdgeInsets.symmetric(
-                vertical: AppTheme.isMobile(context) ? AppTheme.spacingMD : AppTheme.spacingLG,
-                horizontal: AppTheme.isMobile(context) ? AppTheme.spacingLG : AppTheme.spacingXL,
-              ),
-              minimumSize: Size(0, AppTheme.responsiveButtonHeight(context)),
-              elevation: 3,
-              shadowColor: AppTheme.primaryColor.withOpacity(0.4),
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacingXL),
-          
-          // * Current Stickers List
-          Text(
-            "Your Stickers",
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacingMD),
-          
-          if (stickers.isEmpty)
-            _buildEmptyState()
-          else
-            ...stickers.map((sticker) => _buildStickerCard(sticker)),
-        ],
-      ),
+        ),
       ),
     );
   }

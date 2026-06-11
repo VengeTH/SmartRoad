@@ -450,7 +450,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         icon: Icons.alt_route_rounded,
         title: "PH-aware routing",
         subtitle: "Tolls, restrictions, and local traffic rules in mind.",
-        iconColor: AppTheme.primaryColor,
+        iconColor: AppTheme.brandAccentColor,
       ),
       const _StoryFeature(
         icon: Icons.groups_2_outlined,
@@ -481,13 +481,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   vertical: AppTheme.spacingXS,
                 ),
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.15),
+                  color: AppTheme.brandAccentColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(AppTheme.radiusFull),
                 ),
                 child: Text(
                   "THE HEEDFUL",
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: AppTheme.primaryColor,
+                    color: AppTheme.brandAccentColor,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -588,13 +588,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       vertical: AppTheme.spacingXS,
                     ),
                     decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withOpacity(0.15),
+                      color: AppTheme.brandAccentColor.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(AppTheme.radiusFull),
                     ),
                     child: Text(
                       "THE HEEDFUL",
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: AppTheme.primaryColor,
+                        color: AppTheme.brandAccentColor,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -717,7 +717,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             ElevatedButton(
               onPressed: _isLoading ? null : _handleLogin,
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryColor,
+                backgroundColor: AppTheme.brandAccentColor,
+                foregroundColor: const Color(0xFF0F0F0F),
                 padding: const EdgeInsets.symmetric(
                   vertical: AppTheme.spacingSM,
                 ),
@@ -758,7 +759,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         vertical: buttonVerticalPadding,
                       ),
                       side: BorderSide(
-                        color: AppTheme.primaryColor.withOpacity(0.5),
+                        color: AppTheme.brandAccentColor.withOpacity(0.5),
                         width: 1.5,
                       ),
                     ),
@@ -819,7 +820,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   child: Text(
                     "Privacy Policy",
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppTheme.primaryColor,
+                      color: AppTheme.brandAccentColor,
                       decoration: TextDecoration.underline,
                     ),
                   ),
@@ -837,7 +838,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   child: Text(
                     "Terms of Service",
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppTheme.primaryColor,
+                      color: AppTheme.brandAccentColor,
                       decoration: TextDecoration.underline,
                     ),
                   ),

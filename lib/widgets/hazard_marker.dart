@@ -5,12 +5,9 @@ import "../core/theme/app_theme.dart";
 /// * Custom marker widget for hazards
 class HazardMarker extends StatelessWidget {
   final Hazard hazard;
-  
-  const HazardMarker({
-    super.key,
-    required this.hazard,
-  });
-  
+
+  const HazardMarker({super.key, required this.hazard});
+
   IconData _getIconForType(HazardType type) {
     switch (type) {
       case HazardType.pothole:
@@ -33,7 +30,7 @@ class HazardMarker extends StatelessWidget {
         return Icons.cleaning_services_outlined;
     }
   }
-  
+
   Color _getColorForSeverity(SeverityLevel severity) {
     switch (severity) {
       case SeverityLevel.low:
@@ -44,31 +41,22 @@ class HazardMarker extends StatelessWidget {
         return AppTheme.errorColor;
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final severityColor = _getColorForSeverity(hazard.severity);
     final icon = _getIconForType(hazard.type);
-    
+
     return Container(
       width: 34,
       height: 34,
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor.withOpacity(0.95),
         shape: BoxShape.circle,
-        border: Border.all(
-          color: severityColor.withOpacity(0.9),
-          width: 2,
-        ),
+        border: Border.all(color: severityColor.withOpacity(0.9), width: 2),
         boxShadow: AppTheme.shadowSmall,
       ),
-      child: Icon(
-        icon,
-        color: severityColor,
-        size: 18,
-      ),
+      child: Icon(icon, color: severityColor, size: 18),
     );
   }
 }
-
-

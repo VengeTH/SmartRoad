@@ -92,6 +92,8 @@ class _RoutesScreenState extends ConsumerState<RoutesScreen>
       );
     }
 
+    final isDesktop = AppTheme.isDesktop(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Routes"),
@@ -196,6 +198,10 @@ class _DiscoverTabState extends ConsumerState<_DiscoverTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = AppTheme.isDesktop(context);
+    final columns = isDesktop ? 2 : 1;
+    final padding = AppTheme.responsivePadding(context);
+
     return Column(
       children: [
         // * Filter chips
@@ -209,9 +215,7 @@ class _DiscoverTabState extends ConsumerState<_DiscoverTab> {
                   label: const Text("All Vehicles"),
                   selected: _selectedVehicle == null,
                   onSelected: (selected) {
-                    setState(() {
-                      _selectedVehicle = null;
-                    });
+                    setState(() => _selectedVehicle = null);
                     _loadRoutes();
                   },
                 ),
@@ -236,62 +240,100 @@ class _DiscoverTabState extends ConsumerState<_DiscoverTab> {
           ),
         ),
         const Divider(height: 1),
-        // * Routes list
+        // * Routes list/grid
         Expanded(
           child:
               _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.brandAccentColor,
+                      ),
+                    )
                   : _discoveredRoutes.isEmpty
                   ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.explore_outlined,
-                          size: 64,
-                          color: AppTheme.textSecondary.withOpacity(0.5),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          "No routes found nearby",
-                          style: TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 16,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.explore_outlined,
+                            size: 64,
+                            color: AppTheme.textSecondary.withOpacity(0.5),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Create a route to get started",
-                          style: TextStyle(
-                            color: AppTheme.textTertiary,
-                            fontSize: 14,
+                          const SizedBox(height: 16),
+                          Text(
+                            "No routes found nearby",
+                            style: TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 16,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  )
+                          const SizedBox(height: 8),
+                          Text(
+                            "Create a route to get started",
+                            style: TextStyle(
+                              color: AppTheme.textTertiary,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
                   : RefreshIndicator(
-                    onRefresh: _loadRoutes,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _discoveredRoutes.length,
-                      itemBuilder: (context, index) {
-                        final route = _discoveredRoutes[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: RouteCard(
-                            route: route,
-                            onTap: () => _showRouteDetails(route),
-                            onUse: () => _useRoute(route),
-                            onPurchase:
-                                route.isFree
-                                    ? null
-                                    : () => _purchaseRoute(route),
+                      onRefresh: _loadRoutes,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: AppTheme.maxContentWidth(context),
                           ),
-                        );
-                      },
+                          child: columns == 1
+                              ? ListView.builder(
+                                  padding: EdgeInsets.all(padding),
+                                  itemCount: _discoveredRoutes.length,
+                                  itemBuilder: (context, index) {
+                                    final route = _discoveredRoutes[index];
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: RouteCard(
+                                        route: route,
+                                        onTap: () =>
+                                            _showRouteDetails(route),
+                                        onUse: () => _useRoute(route),
+                                        onPurchase:
+                                            route.isFree
+                                                ? null
+                                                : () => _purchaseRoute(route),
+                                      ),
+                                    );
+                                  },
+                                )
+                              : GridView.builder(
+                                  padding: EdgeInsets.all(padding),
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: columns,
+                                        crossAxisSpacing: AppTheme.spacingMD,
+                                        mainAxisSpacing: AppTheme.spacingMD,
+                                        childAspectRatio: 1.6,
+                                      ),
+                                  itemCount: _discoveredRoutes.length,
+                                  itemBuilder: (context, index) {
+                                    final route = _discoveredRoutes[index];
+                                    return RouteCard(
+                                      route: route,
+                                      onTap: () => _showRouteDetails(route),
+                                      onUse: () => _useRoute(route),
+                                      onPurchase:
+                                          route.isFree
+                                              ? null
+                                              : () => _purchaseRoute(route),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ),
                     ),
-                  ),
         ),
       ],
     );
@@ -413,51 +455,86 @@ class _MyRoutesTabState extends ConsumerState<_MyRoutesTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = AppTheme.isDesktop(context);
+    final columns = isDesktop ? 2 : 1;
+    final padding = AppTheme.responsivePadding(context);
+
     return _isLoading
-        ? const Center(child: CircularProgressIndicator())
+        ? Center(
+            child: CircularProgressIndicator(color: AppTheme.brandAccentColor),
+          )
         : _myRoutes.isEmpty
         ? Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.bookmark_border,
-                size: 64,
-                color: AppTheme.textSecondary.withOpacity(0.5),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                "No saved routes yet",
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "Create a route during navigation",
-                style: TextStyle(color: AppTheme.textTertiary, fontSize: 14),
-              ),
-            ],
-          ),
-        )
-        : RefreshIndicator(
-          onRefresh: _loadMyRoutes,
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: _myRoutes.length,
-            itemBuilder: (context, index) {
-              final route = _myRoutes[index];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: RouteCard(
-                  route: route,
-                  onTap: () => _showRouteDetails(route),
-                  onUse: () => _useRoute(route),
-                  onEdit: () => _editRoute(route),
-                  showEdit: true,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.bookmark_border,
+                  size: 64,
+                  color: AppTheme.textSecondary.withOpacity(0.5),
                 ),
-              );
-            },
-          ),
-        );
+                const SizedBox(height: 16),
+                Text(
+                  "No saved routes yet",
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Create a route during navigation",
+                  style: TextStyle(color: AppTheme.textTertiary, fontSize: 14),
+                ),
+              ],
+            ),
+          )
+        : RefreshIndicator(
+            onRefresh: _loadMyRoutes,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: AppTheme.maxContentWidth(context),
+                ),
+                child: columns == 1
+                    ? ListView.builder(
+                        padding: EdgeInsets.all(padding),
+                        itemCount: _myRoutes.length,
+                        itemBuilder: (context, index) {
+                          final route = _myRoutes[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: RouteCard(
+                              route: route,
+                              onTap: () => _showRouteDetails(route),
+                              onUse: () => _useRoute(route),
+                              onEdit: () => _editRoute(route),
+                              showEdit: true,
+                            ),
+                          );
+                        },
+                      )
+                    : GridView.builder(
+                        padding: EdgeInsets.all(padding),
+                        gridDelegate:
+                            SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
+                          crossAxisSpacing: AppTheme.spacingMD,
+                          mainAxisSpacing: AppTheme.spacingMD,
+                          childAspectRatio: 1.6,
+                        ),
+                        itemCount: _myRoutes.length,
+                        itemBuilder: (context, index) {
+                          final route = _myRoutes[index];
+                          return RouteCard(
+                            route: route,
+                            onTap: () => _showRouteDetails(route),
+                            onUse: () => _useRoute(route),
+                            onEdit: () => _editRoute(route),
+                            showEdit: true,
+                          );
+                        },
+                      ),
+              ),
+            ),
+          );
   }
 
   void _showRouteDetails(SavedRoute route) {
@@ -530,29 +607,81 @@ class _PopularRoutesTabState extends ConsumerState<_PopularRoutesTab> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = AppTheme.isDesktop(context);
+    final columns = isDesktop ? 2 : 1;
+    final padding = AppTheme.responsivePadding(context);
+
     return _isLoading
-        ? const Center(child: CircularProgressIndicator())
+        ? Center(
+            child: CircularProgressIndicator(color: AppTheme.brandAccentColor),
+          )
         : _popularRoutes.isEmpty
-        ? const Center(child: Text("No popular routes"))
-        : RefreshIndicator(
-          onRefresh: _loadPopularRoutes,
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: _popularRoutes.length,
-            itemBuilder: (context, index) {
-              final route = _popularRoutes[index];
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: RouteCard(
-                  route: route,
-                  onTap: () => _showRouteDetails(route),
-                  onUse: () => _useRoute(route),
-                  onPurchase: route.isFree ? null : () => _purchaseRoute(route),
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.trending_up,
+                  size: 64,
+                  color: AppTheme.textSecondary.withOpacity(0.5),
                 ),
-              );
-            },
-          ),
-        );
+                const SizedBox(height: 16),
+                Text(
+                  "No popular routes yet",
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+                ),
+              ],
+            ),
+          )
+        : RefreshIndicator(
+            onRefresh: _loadPopularRoutes,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: AppTheme.maxContentWidth(context),
+                ),
+                child: columns == 1
+                    ? ListView.builder(
+                        padding: EdgeInsets.all(padding),
+                        itemCount: _popularRoutes.length,
+                        itemBuilder: (context, index) {
+                          final route = _popularRoutes[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: RouteCard(
+                              route: route,
+                              onTap: () => _showRouteDetails(route),
+                              onUse: () => _useRoute(route),
+                              onPurchase:
+                                  route.isFree ? null : () => _purchaseRoute(route),
+                            ),
+                          );
+                        },
+                      )
+                    : GridView.builder(
+                        padding: EdgeInsets.all(padding),
+                        gridDelegate:
+                            SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
+                          crossAxisSpacing: AppTheme.spacingMD,
+                          mainAxisSpacing: AppTheme.spacingMD,
+                          childAspectRatio: 1.6,
+                        ),
+                        itemCount: _popularRoutes.length,
+                        itemBuilder: (context, index) {
+                          final route = _popularRoutes[index];
+                          return RouteCard(
+                            route: route,
+                            onTap: () => _showRouteDetails(route),
+                            onUse: () => _useRoute(route),
+                            onPurchase:
+                                route.isFree ? null : () => _purchaseRoute(route),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          );
   }
 
   void _showRouteDetails(SavedRoute route) {

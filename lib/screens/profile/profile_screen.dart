@@ -16,6 +16,7 @@ import "../admin/fuel_price_report_review_screen.dart";
 import "../fuel/fuel_prices_screen.dart";
 import "../about/about_screen.dart";
 import "../legal/legal_screen.dart";
+import "../settings/settings_screen.dart";
 import "navigation_settings_screen.dart";
 import "../../widgets/music_control_settings_card.dart";
 
@@ -35,7 +36,22 @@ class ProfileScreen extends ConsumerWidget {
 
     if (userId == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text("Profile")),
+        appBar: AppBar(
+          title: const Text("Profile"),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const NavigationSettingsScreen(),
+                  ),
+                );
+              },
+              tooltip: "Navigation Settings",
+            ),
+          ],
+        ),
         body: const _GuestProfileContent(),
       );
     }
@@ -44,6 +60,17 @@ class ProfileScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text("Profile"),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SettingsScreen(),
+                ),
+              );
+            },
+            tooltip: "Settings",
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
@@ -177,16 +204,16 @@ class _GuestProfileContent extends StatelessWidget {
                       width: 56,
                       height: 56,
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withOpacity(0.12),
+                        color: AppTheme.brandAccentColor.withOpacity(0.12),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: AppTheme.primaryColor.withOpacity(0.35),
+                          color: AppTheme.brandAccentColor.withOpacity(0.35),
                           width: 2,
                         ),
                       ),
                       child: const Icon(
                         Icons.person_outline,
-                        color: AppTheme.primaryColor,
+                        color: AppTheme.brandAccentColor,
                         size: 28,
                       ),
                     ),
@@ -513,6 +540,7 @@ class _ProfileContentState extends State<_ProfileContent> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isMobile = AppTheme.isMobile(context);
+    final isDesktop = AppTheme.isDesktop(context);
     final padding = AppTheme.responsivePadding(context);
     final maxWidth = AppTheme.maxContentWidth(context);
 
@@ -522,105 +550,137 @@ class _ProfileContentState extends State<_ProfileContent> {
         child: SingleChildScrollView(
           padding: EdgeInsets.all(padding),
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxWidth),
+            constraints: BoxConstraints(maxWidth: isDesktop ? 700.0 : maxWidth),
             child: Column(
               children: [
                 const SizedBox(height: AppTheme.spacingMD),
-                // * Profile Photo Section
-                Stack(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: AppTheme.primaryColor,
-                          width: 3,
-                        ),
-                        boxShadow: AppTheme.shadowMedium,
-                      ),
-                      child: CircleAvatar(
-                        radius: 64,
-                        backgroundColor: AppTheme.surfaceVariant,
-                        backgroundImage:
-                            _selectedImage != null
-                                ? FileImage(_selectedImage!)
-                                : widget.profile.photoUrl != null
-                                ? NetworkImage(widget.profile.photoUrl!)
-                                : null,
-                        onBackgroundImageError:
-                            _selectedImage != null ||
-                                    widget.profile.photoUrl != null
-                                ? (exception, stackTrace) {
-                                  // * Handle image load error
-                                  debugPrint(
-                                    "Error loading profile image: $exception",
-                                  );
-                                }
-                                : null,
-                        child:
-                            widget.profile.photoUrl == null &&
-                                    _selectedImage == null
-                                ? Icon(
-                                  Icons.person,
-                                  size: 64,
-                                  color: AppTheme.textSecondary,
-                                )
-                                : null,
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryColor,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppTheme.backgroundColor,
-                            width: 3,
+                // * Profile Photo Section - centered in card on desktop
+                Container(
+                  padding: EdgeInsets.all(isDesktop ? AppTheme.spacingXXL : AppTheme.spacingXL),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceColor,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusXL),
+                    border: Border.all(color: AppTheme.borderColor, width: 1),
+                  ),
+                  child: Column(
+                    children: [
+                      Stack(
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppTheme.brandAccentColor,
+                                width: 3,
+                              ),
+                              boxShadow: AppTheme.shadowMedium,
+                            ),
+                            child: CircleAvatar(
+                              radius: 64,
+                              backgroundColor: AppTheme.surfaceVariant,
+                              backgroundImage:
+                                  _selectedImage != null
+                                      ? FileImage(_selectedImage!)
+                                      : widget.profile.photoUrl != null
+                                      ? NetworkImage(widget.profile.photoUrl!)
+                                      : null,
+                              onBackgroundImageError:
+                                  _selectedImage != null ||
+                                          widget.profile.photoUrl != null
+                                      ? (exception, stackTrace) {
+                                        debugPrint(
+                                          "Error loading profile image: $exception",
+                                        );
+                                      }
+                                      : null,
+                              child:
+                                  widget.profile.photoUrl == null &&
+                                          _selectedImage == null
+                                      ? Icon(
+                                        Icons.person,
+                                        size: 64,
+                                        color: AppTheme.textSecondary,
+                                      )
+                                      : null,
+                            ),
                           ),
-                          boxShadow: AppTheme.shadowSmall,
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.camera_alt, size: 20),
-                          onPressed: _pickImage,
-                          color: Colors.white,
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppTheme.brandAccentColor,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppTheme.backgroundColor,
+                                  width: 3,
+                                ),
+                                boxShadow: AppTheme.shadowSmall,
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.camera_alt, size: 20),
+                                onPressed: _pickImage,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppTheme.spacingXL),
+                      // * Name Field
+                      TextField(
+                        controller: _nameController,
+                        style: TextStyle(color: AppTheme.textPrimary, fontSize: 16),
+                        decoration: InputDecoration(
+                          labelText: "Full Name",
+                          prefixIcon: const Icon(
+                            Icons.person_outline,
+                            color: AppTheme.textSecondary,
+                            size: 24,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: AppTheme.spacingMD),
+                      // * Email (read-only)
+                      TextField(
+                        controller: _emailController,
+                        style: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
+                        decoration: InputDecoration(
+                          labelText: "Email",
+                          prefixIcon: const Icon(
+                            Icons.email_outlined,
+                            color: AppTheme.textSecondary,
+                            size: 24,
+                          ),
+                        ),
+                        readOnly: true,
+                        enabled: false,
+                      ),
+                      const SizedBox(height: AppTheme.spacingLG),
+                      // * Save Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _isUpdating ? null : _updateProfile,
+                          icon: _isUpdating
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(Icons.save),
+                          label: Text(_isUpdating ? "Saving..." : "Save Changes"),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: AppTheme.spacingXL),
-                // * Name Field
-                TextField(
-                  controller: _nameController,
-                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 16),
-                  decoration: InputDecoration(
-                    labelText: "Full Name",
-                    prefixIcon: const Icon(
-                      Icons.person_outline,
-                      color: AppTheme.textSecondary,
-                      size: 24,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppTheme.spacingMD),
-                // * Email (read-only)
-                TextField(
-                  controller: _emailController,
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 16),
-                  decoration: InputDecoration(
-                    labelText: "Email",
-                    prefixIcon: const Icon(
-                      Icons.email_outlined,
-                      color: AppTheme.textSecondary,
-                      size: 24,
-                    ),
-                  ),
-                  readOnly: true,
-                  enabled: false,
-                ),
-                const SizedBox(height: AppTheme.spacingLG),
                 // * Stats Cards
                 Row(
                   children: [

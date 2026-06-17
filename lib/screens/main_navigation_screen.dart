@@ -1,6 +1,6 @@
 import "package:flutter/material.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "map/map_screen.dart";
+import "../features/map/map_screen_bridge.dart";
 import "feed/feed_screen.dart";
 import "routes/routes_screen.dart";
 import "profile/profile_screen.dart";
@@ -22,7 +22,7 @@ class MainNavigationScreen extends ConsumerStatefulWidget {
 
 class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   final List<Widget> _screens = [
-    const MapScreen(),
+    const MapScreenBridge(),
     const FeedScreen(),
     const RoutesScreen(),
     const ProfileScreen(),

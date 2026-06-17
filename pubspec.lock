@@ -298,10 +298,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_map
-      sha256: "391e7dc95cc3f5190748210a69d4cfeb5d8f84dcdfa9c3235d0a9d7742ccb3f8"
+      sha256: "03b71c02806ff20c3718d108cbbb3638142ebafe368d8ce2dd22a33344bcb02b"
       url: "https://pub.dev"
     source: hosted
-    version: "8.2.2"
+    version: "8.3.0"
   flutter_media_controller:
     dependency: "direct main"
     description:
@@ -512,6 +512,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.19.0"
+  js:
+    dependency: transitive
+    description:
+      name: js
+      sha256: "53385261521cc4a0c4658fd0ad07a7d14591cf8fc33abbceae306ddb974888dc"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.2"
   json_annotation:
     dependency: transitive
     description:
@@ -568,14 +576,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.1"
-  logger:
-    dependency: transitive
+  maplibre_gl:
+    dependency: "direct main"
     description:
-      name: logger
-      sha256: a7967e31b703831a893bbc3c3dd11db08126fe5f369b5c648a36f821979f5be3
+      name: maplibre_gl
+      sha256: "9dd9eebee52f42a45aaa9cdb912afa47845c37007b26a799aa482ecd368804c8"
       url: "https://pub.dev"
     source: hosted
-    version: "2.6.2"
+    version: "0.19.0+2"
+  maplibre_gl_platform_interface:
+    dependency: transitive
+    description:
+      name: maplibre_gl_platform_interface
+      sha256: a95fa38a3532253f32dfe181389adfe9f402773e58ac902d9c4efad3209e0903
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.19.0+2"
+  maplibre_gl_web:
+    dependency: transitive
+    description:
+      name: maplibre_gl_web
+      sha256: "7f1540b384f16f3c9bc8b4ebdfca96fb07f6dab5d9ef4dd0e102985dba238691"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.19.0+2"
   matcher:
     dependency: transitive
     description:
@@ -596,10 +620,10 @@ packages:
     dependency: transitive
     description:
       name: meta
-      sha256: "23f08335362185a5ea2ad3a4e597f1375e78bce8a040df5c600c8d3552ef2394"
+      sha256: "1741988757a65eb6b36abe716829688cf01910bbf91c34354ff7ec1c3de2b349"
       url: "https://pub.dev"
     source: hosted
-    version: "1.17.0"
+    version: "1.18.0"
   mgrs_dart:
     dependency: transitive
     description:
@@ -897,10 +921,10 @@ packages:
     dependency: transitive
     description:
       name: test_api
-      sha256: "8161c84903fd860b26bfdefb7963b3f0b68fee7adea0f59ef805ecca346f0c7a"
+      sha256: "949a932224383300f01be9221c39180316445ecb8e7547f70a41a35bf421fb9e"
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.10"
+    version: "0.7.11"
   timezone:
     dependency: transitive
     description:
@@ -1078,5 +1102,5 @@ packages:
     source: hosted
     version: "3.1.3"
 sdks:
-  dart: ">=3.9.0-0 <4.0.0"
+  dart: ">=3.10.0-0 <4.0.0"
   flutter: ">=3.29.0"

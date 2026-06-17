@@ -39,7 +39,8 @@ dependencies:
   flutter_riverpod: ^2.4.9
 
   # Maps & Location
-  flutter_map: ^8.2.0  # * Upgraded for infinite horizontal scrolling support
+  flutter_map: ^8.2.0  # * Legacy — being replaced by MapLibre
+  maplibre_gl: ^0.19.0  # * MapLibre GL — new primary map engine
   latlong2: ^0.9.1
   geolocator: ^11.0.0
   permission_handler: ^11.3.0

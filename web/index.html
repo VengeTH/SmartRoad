@@ -29,8 +29,21 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
+  <!-- MapLibre GL JS v3.6.2 (stable, compatible with maplibre_gl_web) -->
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+
   <title>SmartRoad</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    /* Ensure platform views fill their container */
+    iframe {
+      height: 100% !important;
+    }
+    [style*="plugins.flutter.io/mapbox_gl"] {
+      height: 100% !important;
+    }
+  </style>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

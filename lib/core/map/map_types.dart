@@ -47,10 +47,7 @@ class MapBounds {
       coord.longitude >= west &&
       coord.longitude <= east;
 
-  MapCoord get center => MapCoord(
-        (south + north) / 2,
-        (west + east) / 2,
-      );
+  MapCoord get center => MapCoord((south + north) / 2, (west + east) / 2);
 
   double get latitudeSpan => north - south;
   double get longitudeSpan => east - west;
@@ -75,13 +72,12 @@ class MapCameraPosition {
     double? zoom,
     double? bearing,
     double? tilt,
-  }) =>
-      MapCameraPosition(
-        center: center ?? this.center,
-        zoom: zoom ?? this.zoom,
-        bearing: bearing ?? this.bearing,
-        tilt: tilt ?? this.tilt,
-      );
+  }) => MapCameraPosition(
+    center: center ?? this.center,
+    zoom: zoom ?? this.zoom,
+    bearing: bearing ?? this.bearing,
+    tilt: tilt ?? this.tilt,
+  );
 }
 
 /// * Map style definition

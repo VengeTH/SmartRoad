@@ -29,8 +29,18 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   ];
 
   static const _navLabels = ["Map", "Feed", "Routes", "Profile"];
-  static const _navIcons = [Icons.map_outlined, Icons.feed_outlined, Icons.route_outlined, Icons.person_outline];
-  static const _navSelectedIcons = [Icons.map, Icons.feed, Icons.route, Icons.person];
+  static const _navIcons = [
+    Icons.map_outlined,
+    Icons.feed_outlined,
+    Icons.route_outlined,
+    Icons.person_outline,
+  ];
+  static const _navSelectedIcons = [
+    Icons.map,
+    Icons.feed,
+    Icons.route,
+    Icons.person,
+  ];
 
   void _onDestinationSelected(int index) {
     final isGuest = ref.read(authStateProvider).valueOrNull == null;
@@ -63,9 +73,9 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
       );
       return;
     }
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ReportHazardScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ReportHazardScreen()));
   }
 
   @override
@@ -82,17 +92,30 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   }
 
   /// * Desktop layout: NavigationRail sidebar + content area
-  Widget _buildDesktopLayout(int currentIndex, bool isMapNavigating, bool showLabels) {
+  Widget _buildDesktopLayout(
+    int currentIndex,
+    bool isMapNavigating,
+    bool showLabels,
+  ) {
     return Scaffold(
       body: Row(
         children: [
           NavigationRail(
             selectedIndex: currentIndex,
             onDestinationSelected: _onDestinationSelected,
-            labelType: showLabels ? NavigationRailLabelType.all : NavigationRailLabelType.none,
+            labelType:
+                showLabels
+                    ? NavigationRailLabelType.all
+                    : NavigationRailLabelType.none,
             backgroundColor: AppTheme.surfaceColor,
-            selectedIconTheme: const IconThemeData(color: AppTheme.brandAccentColor, size: 24),
-            unselectedIconTheme: IconThemeData(color: AppTheme.textSecondary, size: 22),
+            selectedIconTheme: const IconThemeData(
+              color: AppTheme.brandAccentColor,
+              size: 24,
+            ),
+            unselectedIconTheme: IconThemeData(
+              color: AppTheme.textSecondary,
+              size: 22,
+            ),
             selectedLabelTextStyle: const TextStyle(
               color: AppTheme.textPrimary,
               fontWeight: FontWeight.w700,
@@ -107,7 +130,10 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
             leading: Padding(
               padding: const EdgeInsets.only(top: 16),
               child: IconButton(
-                icon: const Icon(Icons.add_alert, color: AppTheme.brandAccentColor),
+                icon: const Icon(
+                  Icons.add_alert,
+                  color: AppTheme.brandAccentColor,
+                ),
                 tooltip: "Report hazard",
                 onPressed: _onReportHazard,
               ),
@@ -137,8 +163,14 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
               );
             }),
           ),
-          const VerticalDivider(thickness: 1, width: 1, color: AppTheme.borderColor),
-          Expanded(child: IndexedStack(index: currentIndex, children: _screens)),
+          const VerticalDivider(
+            thickness: 1,
+            width: 1,
+            color: AppTheme.borderColor,
+          ),
+          Expanded(
+            child: IndexedStack(index: currentIndex, children: _screens),
+          ),
         ],
       ),
     );
@@ -159,15 +191,16 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
           );
         }),
       ),
-      floatingActionButton: currentIndex == 0
-          ? FloatingActionButton(
-              heroTag: "report_hazard_fab",
-              onPressed: _onReportHazard,
-              mini: isMapNavigating,
-              tooltip: "Report hazard",
-              child: const Icon(Icons.add_alert),
-            )
-          : null,
+      floatingActionButton:
+          currentIndex == 0
+              ? FloatingActionButton(
+                heroTag: "report_hazard_fab",
+                onPressed: _onReportHazard,
+                mini: isMapNavigating,
+                tooltip: "Report hazard",
+                child: const Icon(Icons.add_alert),
+              )
+              : null,
     );
   }
 }

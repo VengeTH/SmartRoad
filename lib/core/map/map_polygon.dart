@@ -46,17 +46,16 @@ class MapPolygon {
     FillPattern? fillPattern,
     String? label,
     Map<String, dynamic>? properties,
-  }) =>
-      MapPolygon(
-        id: id ?? this.id,
-        rings: rings ?? this.rings,
-        fillColor: fillColor ?? this.fillColor,
-        fillOpacity: fillOpacity ?? this.fillOpacity,
-        strokeColor: strokeColor ?? this.strokeColor,
-        strokeWidth: strokeWidth ?? this.strokeWidth,
-        strokeDashPattern: strokeDashPattern ?? this.strokeDashPattern,
-        fillPattern: fillPattern ?? this.fillPattern,
-        label: label ?? this.label,
-        properties: properties ?? this.properties,
-      );
+  }) => MapPolygon(
+    id: id ?? this.id,
+    rings: rings ?? this.rings,
+    fillColor: fillColor ?? this.fillColor,
+    fillOpacity: fillOpacity ?? this.fillOpacity,
+    strokeColor: strokeColor ?? this.strokeColor,
+    strokeWidth: strokeWidth ?? this.strokeWidth,
+    strokeDashPattern: strokeDashPattern ?? this.strokeDashPattern,
+    fillPattern: fillPattern ?? this.fillPattern,
+    label: label ?? this.label,
+    properties: properties ?? this.properties,
+  );
 }

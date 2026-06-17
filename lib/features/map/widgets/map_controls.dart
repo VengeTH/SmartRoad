@@ -21,9 +21,10 @@ class MapControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isActive
-        ? (activeColor ?? AppTheme.primaryColor)
-        : AppTheme.surfaceColor;
+    final color =
+        isActive
+            ? (activeColor ?? AppTheme.primaryColor)
+            : AppTheme.surfaceColor;
     final iconColor = isActive ? Colors.white : AppTheme.textPrimary;
 
     return Container(
@@ -60,9 +61,8 @@ class MapControlColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: buttons.expand(
-        (btn) => [btn, const SizedBox(height: 8)],
-      ).toList(),
+      children:
+          buttons.expand((btn) => [btn, const SizedBox(height: 8)]).toList(),
     );
   }
 }
@@ -90,11 +90,7 @@ class ZoomControls extends StatelessWidget {
   Widget build(BuildContext context) {
     return MapControlColumn(
       buttons: [
-        MapControlButton(
-          icon: Icons.add,
-          onTap: onZoomIn,
-          tooltip: "Zoom In",
-        ),
+        MapControlButton(icon: Icons.add, onTap: onZoomIn, tooltip: "Zoom In"),
         MapControlButton(
           icon: Icons.remove,
           onTap: onZoomOut,
@@ -146,22 +142,22 @@ class MapSearchBar extends StatelessWidget {
         focusNode: focusNode,
         decoration: InputDecoration(
           hintText: "Search places, roads, landmarks...",
-          prefixIcon:
-              const Icon(Icons.search, color: AppTheme.textSecondary),
-          suffixIcon: isLoading
-              ? const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : controller.text.isNotEmpty
+          prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
+          suffixIcon:
+              isLoading
+                  ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                  : controller.text.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: onClear,
-                    )
+                    icon: const Icon(Icons.clear),
+                    onPressed: onClear,
+                  )
                   : null,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -169,8 +165,10 @@ class MapSearchBar extends StatelessWidget {
           ),
           filled: true,
           fillColor: AppTheme.surfaceColor,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
         ),
         onSubmitted: (_) => onSubmitted(),
       ),

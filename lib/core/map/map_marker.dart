@@ -30,7 +30,8 @@ class MapMarker {
   final double rotation;
   final bool draggable;
   final Map<String, dynamic> properties;
-  final Widget? customWidget; // for complex markers (falls back to symbol layer)
+  final Widget?
+  customWidget; // for complex markers (falls back to symbol layer)
 
   const MapMarker({
     required this.id,
@@ -58,20 +59,19 @@ class MapMarker {
     bool? draggable,
     Map<String, dynamic>? properties,
     Widget? customWidget,
-  }) =>
-      MapMarker(
-        id: id ?? this.id,
-        coord: coord ?? this.coord,
-        iconImageId: iconImageId ?? this.iconImageId,
-        label: label ?? this.label,
-        anchor: anchor ?? this.anchor,
-        iconSize: iconSize ?? this.iconSize,
-        iconOpacity: iconOpacity ?? this.iconOpacity,
-        rotation: rotation ?? this.rotation,
-        draggable: draggable ?? this.draggable,
-        properties: properties ?? this.properties,
-        customWidget: customWidget ?? this.customWidget,
-      );
+  }) => MapMarker(
+    id: id ?? this.id,
+    coord: coord ?? this.coord,
+    iconImageId: iconImageId ?? this.iconImageId,
+    label: label ?? this.label,
+    anchor: anchor ?? this.anchor,
+    iconSize: iconSize ?? this.iconSize,
+    iconOpacity: iconOpacity ?? this.iconOpacity,
+    rotation: rotation ?? this.rotation,
+    draggable: draggable ?? this.draggable,
+    properties: properties ?? this.properties,
+    customWidget: customWidget ?? this.customWidget,
+  );
 }
 
 /// * Cluster marker (aggregates multiple markers)

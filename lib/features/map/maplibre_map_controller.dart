@@ -56,10 +56,7 @@ class SmartRoadMapController {
     }
   }
 
-  Future<void> moveTo({
-    required MapCoord center,
-    double zoom = 12.0,
-  }) async {
+  Future<void> moveTo({required MapCoord center, double zoom = 12.0}) async {
     await ready;
     try {
       await _controller?.animateCamera(
@@ -74,10 +71,7 @@ class SmartRoadMapController {
     }
   }
 
-  Future<void> fitBounds(
-    MapBounds bounds, {
-    double padding = 50.0,
-  }) async {
+  Future<void> fitBounds(MapBounds bounds, {double padding = 50.0}) async {
     await ready;
     try {
       await _controller?.animateCamera(
@@ -150,10 +144,22 @@ class SmartRoadMapController {
   /// * sheet.  This silences the `styleimagemissing` warnings that flood
   /// * the console on web.
   static const Set<String> _missingSpriteNames = {
-    'office', 'atm', 'recycling', 'gate', 'ferry_terminal',
-    'sports_centre', 'rowing', 'brownfield', 'multi',
-    'swimming_pool', 'motorcycle_parking', 'bicycle_parking',
-    'lift_gate', 'toll_booth', 'bollard', 'hackerspace',
+    'office',
+    'atm',
+    'recycling',
+    'gate',
+    'ferry_terminal',
+    'sports_centre',
+    'rowing',
+    'brownfield',
+    'multi',
+    'swimming_pool',
+    'motorcycle_parking',
+    'bicycle_parking',
+    'lift_gate',
+    'toll_booth',
+    'bollard',
+    'hackerspace',
     'border_control',
   };
 
@@ -183,7 +189,9 @@ class SmartRoadMapController {
         // Image may already exist – ignore.
       }
     }
-    debugPrint('🗺️ [SmartRoadMap] Registered ${_missingSpriteNames.length} sprite fallbacks');
+    debugPrint(
+      '🗺️ [SmartRoadMap] Registered ${_missingSpriteNames.length} sprite fallbacks',
+    );
   }
 
   // ── User-Location Marker (low-level source + layer) ──────
@@ -292,7 +300,8 @@ class SmartRoadMapController {
     } catch (e) {
       debugPrint('❌ [SmartRoadMap] updateUserLocationMarker error: $e');
       // Might need to re-create if the sources were removed.
-      if (e.toString().contains('source') || e.toString().contains('not found')) {
+      if (e.toString().contains('source') ||
+          e.toString().contains('not found')) {
         await showUserLocationMarker(position);
       }
     }
@@ -302,10 +311,17 @@ class SmartRoadMapController {
   Future<void> removeUserLocationMarker() async {
     final ctrl = _controller;
     if (ctrl == null) return;
-    try { await ctrl.removeLayer(_locRingLayerId); } catch (_) {}
-    try { await ctrl.removeSource(_locRingSourceId); } catch (_) {}
-    try { await ctrl.removeLayer(_locLayerId); } catch (_) {}
-    try { await ctrl.removeSource(_locSourceId); } catch (_) {}
+    try {
+      await ctrl.removeLayer(_locRingLayerId);
+    } catch (_) {}
+    try {
+      await ctrl.removeSource(_locRingSourceId);
+    } catch (_) {}
+    try {
+      await ctrl.removeLayer(_locLayerId);
+    } catch (_) {}
+    try {
+      await ctrl.removeSource(_locSourceId);
+    } catch (_) {}
   }
-
 }

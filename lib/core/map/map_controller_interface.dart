@@ -30,18 +30,11 @@ class MapEvent {
   final MapCameraPosition? position;
   final MapCoord? tapCoord;
 
-  const MapEvent({
-    required this.type,
-    this.position,
-    this.tapCoord,
-  });
+  const MapEvent({required this.type, this.position, this.tapCoord});
 }
 
 /// * Camera fit mode
-enum CameraFitMode {
-  bounds,
-  padding,
-}
+enum CameraFitMode { bounds, padding }
 
 /// * Camera bounds configuration
 class CameraBoundsOptions {
@@ -69,18 +62,27 @@ abstract class IMapController {
   // ── Camera ─────────────────────────────────────────────────
   MapCameraPosition get currentPosition;
 
-  Future<void> moveCamera(MapCoord center, double zoom,
-      {MapAnimationDuration duration = MapAnimationDuration.normal});
+  Future<void> moveCamera(
+    MapCoord center,
+    double zoom, {
+    MapAnimationDuration duration = MapAnimationDuration.normal,
+  });
 
-  Future<void> rotateCamera(double bearing,
-      {MapAnimationDuration duration = MapAnimationDuration.normal});
+  Future<void> rotateCamera(
+    double bearing, {
+    MapAnimationDuration duration = MapAnimationDuration.normal,
+  });
 
-  Future<void> animateTo(MapCameraPosition position,
-      {MapAnimationDuration duration = MapAnimationDuration.normal});
+  Future<void> animateTo(
+    MapCameraPosition position, {
+    MapAnimationDuration duration = MapAnimationDuration.normal,
+  });
 
-  Future<void> fitBounds(MapBounds bounds,
-      {double padding = 50.0,
-      MapAnimationDuration duration = MapAnimationDuration.normal});
+  Future<void> fitBounds(
+    MapBounds bounds, {
+    double padding = 50.0,
+    MapAnimationDuration duration = MapAnimationDuration.normal,
+  });
 
   // ── Bounds / Constraints ───────────────────────────────────
   void setCameraBounds(CameraBoundsOptions options);
@@ -102,8 +104,10 @@ abstract class IMapController {
   Future<void> removeImage(String imageId);
 
   // ── Query ───────────────────────────────────────────────────
-  Future<List<MapFeature<MapCoord>>> queryFeatures(
-      {MapCoord? atPoint, String? layerId});
+  Future<List<MapFeature<MapCoord>>> queryFeatures({
+    MapCoord? atPoint,
+    String? layerId,
+  });
 
   // ── Event Listeners ─────────────────────────────────────────
   void addListener(OnMapEvent listener);

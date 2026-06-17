@@ -52,16 +52,22 @@ class MapLibreLayerController {
     if (ctrl == null) return;
     final sourceId = 'src_$id';
     final layerId = 'lyr_$id';
-    try { await ctrl.removeLayer(layerId); } catch (_) {}
-    try { await ctrl.removeSource(sourceId); } catch (_) {}
     try {
-      await ctrl.addSource(sourceId, RasterSourceProperties(
-        tiles: [tileUrlTemplate],
-        tileSize: 256,
-      ));
-      await ctrl.addLayer(sourceId, layerId, RasterLayerProperties(
-        rasterOpacity: opacity,
-      ));
+      await ctrl.removeLayer(layerId);
+    } catch (_) {}
+    try {
+      await ctrl.removeSource(sourceId);
+    } catch (_) {}
+    try {
+      await ctrl.addSource(
+        sourceId,
+        RasterSourceProperties(tiles: [tileUrlTemplate], tileSize: 256),
+      );
+      await ctrl.addLayer(
+        sourceId,
+        layerId,
+        RasterLayerProperties(rasterOpacity: opacity),
+      );
     } catch (e) {
       debugPrint('❌ [MapLibreLayers] Failed raster $id: $e');
     }
@@ -70,8 +76,12 @@ class MapLibreLayerController {
   Future<void> removeWeatherLayer(String id) async {
     final ctrl = _controller;
     if (ctrl == null) return;
-    try { await ctrl.removeLayer('lyr_$id'); } catch (_) {}
-    try { await ctrl.removeSource('src_$id'); } catch (_) {}
+    try {
+      await ctrl.removeLayer('lyr_$id');
+    } catch (_) {}
+    try {
+      await ctrl.removeSource('src_$id');
+    } catch (_) {}
   }
 
   // ── Route Lines ────────────────────────────────────────────
@@ -88,15 +98,17 @@ class MapLibreLayerController {
     if (ctrl == null || ctrl.lineManager == null) return;
     final latLngs = coordinates.map((c) => LatLng(c[1], c[0])).toList();
     try {
-      await ctrl.lineManager!.add(Line(
-        'route_$routeId',
-        LineOptions(
-          geometry: latLngs,
-          lineColor: color.toHex(),
-          lineWidth: width,
-          lineOpacity: opacity,
+      await ctrl.lineManager!.add(
+        Line(
+          'route_$routeId',
+          LineOptions(
+            geometry: latLngs,
+            lineColor: color.toHex(),
+            lineWidth: width,
+            lineOpacity: opacity,
+          ),
         ),
-      ));
+      );
     } catch (e) {
       debugPrint('❌ [MapLibreLayers] Failed route $routeId: $e');
     }
@@ -105,7 +117,9 @@ class MapLibreLayerController {
   Future<void> removeAllRoutes() async {
     final ctrl = _controller;
     if (ctrl == null || ctrl.lineManager == null) return;
-    try { await ctrl.lineManager!.clear(); } catch (_) {}
+    try {
+      await ctrl.lineManager!.clear();
+    } catch (_) {}
   }
 
   // ── Hazard Circles ─────────────────────────────────────────
@@ -128,28 +142,35 @@ class MapLibreLayerController {
         'medium' => const Color(0xFFFB8C00),
         _ => const Color(0xFF43A047),
       };
-      circles.add(Circle(
-        'hazard_${circles.length}',
-        CircleOptions(
-          geometry: LatLng(lat, lng),
-          circleColor: c.toHex(),
-          circleRadius: 8,
-          circleOpacity: 0.85,
-          circleStrokeColor: '#FFFFFF',
-          circleStrokeWidth: 2,
+      circles.add(
+        Circle(
+          'hazard_${circles.length}',
+          CircleOptions(
+            geometry: LatLng(lat, lng),
+            circleColor: c.toHex(),
+            circleRadius: 8,
+            circleOpacity: 0.85,
+            circleStrokeColor: '#FFFFFF',
+            circleStrokeWidth: 2,
+          ),
         ),
-      ));
+      );
     }
     if (circles.isNotEmpty) {
-      try { await ctrl.circleManager!.addAll(circles); }
-      catch (e) { debugPrint('❌ [MapLibreLayers] Hazards: $e'); }
+      try {
+        await ctrl.circleManager!.addAll(circles);
+      } catch (e) {
+        debugPrint('❌ [MapLibreLayers] Hazards: $e');
+      }
     }
   }
 
   Future<void> removeAllHazards() async {
     final ctrl = _controller;
     if (ctrl == null || ctrl.circleManager == null) return;
-    try { await ctrl.circleManager!.clear(); } catch (_) {}
+    try {
+      await ctrl.circleManager!.clear();
+    } catch (_) {}
   }
 
   // ── HOA Entrance Circles ───────────────────────────────────
@@ -173,28 +194,35 @@ class MapLibreLayerController {
         'emergency' => const Color(0xFFB71C1C),
         _ => const Color(0xFF4E342E),
       };
-      circles.add(Circle(
-        'hoa_${circles.length}',
-        CircleOptions(
-          geometry: LatLng(lat, lng),
-          circleColor: c.toHex(),
-          circleRadius: 10,
-          circleOpacity: 0.9,
-          circleStrokeColor: '#FFFFFF',
-          circleStrokeWidth: 2,
+      circles.add(
+        Circle(
+          'hoa_${circles.length}',
+          CircleOptions(
+            geometry: LatLng(lat, lng),
+            circleColor: c.toHex(),
+            circleRadius: 10,
+            circleOpacity: 0.9,
+            circleStrokeColor: '#FFFFFF',
+            circleStrokeWidth: 2,
+          ),
         ),
-      ));
+      );
     }
     if (circles.isNotEmpty) {
-      try { await ctrl.circleManager!.addAll(circles); }
-      catch (e) { debugPrint('❌ [MapLibreLayers] HOA: $e'); }
+      try {
+        await ctrl.circleManager!.addAll(circles);
+      } catch (e) {
+        debugPrint('❌ [MapLibreLayers] HOA: $e');
+      }
     }
   }
 
   Future<void> removeAllHoaEntrances() async {
     final ctrl = _controller;
     if (ctrl == null || ctrl.circleManager == null) return;
-    try { await ctrl.circleManager!.clear(); } catch (_) {}
+    try {
+      await ctrl.circleManager!.clear();
+    } catch (_) {}
   }
 
   // ── Flood Zone Fills ───────────────────────────────────────
@@ -212,20 +240,23 @@ class MapLibreLayerController {
       'moderate' => const Color(0x44FDD835),
       _ => const Color(0x4443A047),
     };
-    final outerRing = (coordinates.isNotEmpty ? coordinates.first : [])
-        .map((c) => LatLng(c[1], c[0]))
-        .toList();
+    final outerRing =
+        (coordinates.isNotEmpty ? coordinates.first : [])
+            .map((c) => LatLng(c[1], c[0]))
+            .toList();
     if (outerRing.length < 3) return;
     try {
-      await ctrl.fillManager!.add(Fill(
-        'flood_$zoneId',
-        FillOptions(
-          geometry: [outerRing],
-          fillColor: c.toHex(),
-          fillOpacity: 0.35,
-          fillOutlineColor: '#E53935',
+      await ctrl.fillManager!.add(
+        Fill(
+          'flood_$zoneId',
+          FillOptions(
+            geometry: [outerRing],
+            fillColor: c.toHex(),
+            fillOpacity: 0.35,
+            fillOutlineColor: '#E53935',
+          ),
         ),
-      ));
+      );
     } catch (e) {
       debugPrint('❌ [MapLibreLayers] Flood: $e');
     }
@@ -234,16 +265,22 @@ class MapLibreLayerController {
   Future<void> removeAllFloodZones() async {
     final ctrl = _controller;
     if (ctrl == null || ctrl.fillManager == null) return;
-    try { await ctrl.fillManager!.clear(); } catch (_) {}
+    try {
+      await ctrl.fillManager!.clear();
+    } catch (_) {}
   }
 
   // ── Traffic ────────────────────────────────────────────────
 
   Future<void> addTrafficLayer({
-    required String tileUrlTemplate, double opacity = 0.7,
+    required String tileUrlTemplate,
+    double opacity = 0.7,
   }) async {
-    await addWeatherTileLayer(id: 'traffic',
-        tileUrlTemplate: tileUrlTemplate, opacity: opacity);
+    await addWeatherTileLayer(
+      id: 'traffic',
+      tileUrlTemplate: tileUrlTemplate,
+      opacity: opacity,
+    );
   }
 
   Future<void> removeTrafficLayer() async {
@@ -255,10 +292,18 @@ class MapLibreLayerController {
   Future<void> clearAll() async {
     final ctrl = _controller;
     if (ctrl == null) return;
-    try { ctrl.lineManager?.clear(); } catch (_) {}
-    try { ctrl.circleManager?.clear(); } catch (_) {}
-    try { ctrl.fillManager?.clear(); } catch (_) {}
-    try { ctrl.symbolManager?.clear(); } catch (_) {}
+    try {
+      ctrl.lineManager?.clear();
+    } catch (_) {}
+    try {
+      ctrl.circleManager?.clear();
+    } catch (_) {}
+    try {
+      ctrl.fillManager?.clear();
+    } catch (_) {}
+    try {
+      ctrl.symbolManager?.clear();
+    } catch (_) {}
     state.reset();
   }
 }

@@ -47,17 +47,16 @@ class MapPolyline {
     List<double>? dashPattern,
     bool? isSelected,
     Map<String, dynamic>? properties,
-  }) =>
-      MapPolyline(
-        id: id ?? this.id,
-        points: points ?? this.points,
-        color: color ?? this.color,
-        width: width ?? this.width,
-        opacity: opacity ?? this.opacity,
-        cap: cap ?? this.cap,
-        join: join ?? this.join,
-        dashPattern: dashPattern ?? this.dashPattern,
-        isSelected: isSelected ?? this.isSelected,
-        properties: properties ?? this.properties,
-      );
+  }) => MapPolyline(
+    id: id ?? this.id,
+    points: points ?? this.points,
+    color: color ?? this.color,
+    width: width ?? this.width,
+    opacity: opacity ?? this.opacity,
+    cap: cap ?? this.cap,
+    join: join ?? this.join,
+    dashPattern: dashPattern ?? this.dashPattern,
+    isSelected: isSelected ?? this.isSelected,
+    properties: properties ?? this.properties,
+  );
 }

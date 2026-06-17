@@ -84,12 +84,15 @@ class _MapLibreMapScreenState extends ConsumerState<MapLibreMapScreen> {
         accuracy: LocationAccuracy.high,
         distanceFilter: 5, // only update when moving ≥5 m
       ),
-    ).listen((pos) {
-      if (!mounted) return;
-      _onLocationUpdate(pos.latitude, pos.longitude);
-    }, onError: (e) {
-      debugPrint('⚠️ [MapLibreMapScreen] Location stream error: $e');
-    });
+    ).listen(
+      (pos) {
+        if (!mounted) return;
+        _onLocationUpdate(pos.latitude, pos.longitude);
+      },
+      onError: (e) {
+        debugPrint('⚠️ [MapLibreMapScreen] Location stream error: $e');
+      },
+    );
   }
 
   void _onLocationUpdate(double lat, double lng) {
@@ -118,10 +121,7 @@ class _MapLibreMapScreenState extends ConsumerState<MapLibreMapScreen> {
   void _centerOnLocation() {
     if (!_isMapReady) return;
     _mapCtrl.animateTo(
-      center: MapCoord(
-        _currentLocation.latitude,
-        _currentLocation.longitude,
-      ),
+      center: MapCoord(_currentLocation.latitude, _currentLocation.longitude),
       zoom: MapConfig.defaultZoom,
     );
   }
@@ -187,10 +187,7 @@ class _MapLibreMapScreenState extends ConsumerState<MapLibreMapScreen> {
 
   void _zoomIn() {
     _mapCtrl.animateTo(
-      center: MapCoord(
-        _currentLocation.latitude,
-        _currentLocation.longitude,
-      ),
+      center: MapCoord(_currentLocation.latitude, _currentLocation.longitude),
       zoom: (_mapCtrl.currentCameraPosition?.zoom ?? MapConfig.defaultZoom)
           .clamp(MapConfig.minZoom, MapConfig.maxZoom),
     );
@@ -198,10 +195,7 @@ class _MapLibreMapScreenState extends ConsumerState<MapLibreMapScreen> {
 
   void _zoomOut() {
     _mapCtrl.animateTo(
-      center: MapCoord(
-        _currentLocation.latitude,
-        _currentLocation.longitude,
-      ),
+      center: MapCoord(_currentLocation.latitude, _currentLocation.longitude),
       zoom: (_mapCtrl.currentCameraPosition?.zoom ?? MapConfig.defaultZoom)
           .clamp(MapConfig.minZoom, MapConfig.maxZoom),
     );
@@ -221,7 +215,10 @@ class _MapLibreMapScreenState extends ConsumerState<MapLibreMapScreen> {
               _mapCtrl.registerMissingSpriteFallbacks();
               // Place a marker at the current (possibly default) location.
               _mapCtrl.showUserLocationMarker(
-                ml.LatLng(_currentLocation.latitude, _currentLocation.longitude),
+                ml.LatLng(
+                  _currentLocation.latitude,
+                  _currentLocation.longitude,
+                ),
               );
             },
             onUserLocationUpdated: (location) {
@@ -284,11 +281,7 @@ class _MapLibreMapScreenState extends ConsumerState<MapLibreMapScreen> {
             ),
 
           // ── Zoom Controls ─────────────────────────────────
-          Positioned(
-            right: 16,
-            bottom: 120,
-            child: _buildZoomControls(),
-          ),
+          Positioned(right: 16, bottom: 120, child: _buildZoomControls()),
         ],
       ),
     );
@@ -306,25 +299,25 @@ class _MapLibreMapScreenState extends ConsumerState<MapLibreMapScreen> {
         focusNode: _searchFocus,
         decoration: InputDecoration(
           hintText: "Search places, roads...",
-          prefixIcon:
-              const Icon(Icons.search, color: AppTheme.textSecondary),
-          suffixIcon: _isSearching
-              ? const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : _searchCtrl.text.isNotEmpty
+          prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondary),
+          suffixIcon:
+              _isSearching
+                  ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                  : _searchCtrl.text.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        setState(() => _showSearchResults = false);
-                      },
-                    )
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _searchCtrl.clear();
+                      setState(() => _showSearchResults = false);
+                    },
+                  )
                   : null,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -332,8 +325,10 @@ class _MapLibreMapScreenState extends ConsumerState<MapLibreMapScreen> {
           ),
           filled: true,
           fillColor: AppTheme.surfaceColor,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
         ),
         onSubmitted: (v) => _search(v),
       ),
@@ -360,66 +355,70 @@ class _MapLibreMapScreenState extends ConsumerState<MapLibreMapScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: AppTheme.borderColor),
-              ),
+              border: Border(bottom: BorderSide(color: AppTheme.borderColor)),
             ),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
                     hasResults ? "Search Results" : "Recent Locations",
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 TextButton(
-                  onPressed: () =>
-                      setState(() => _showSearchResults = false),
+                  onPressed: () => setState(() => _showSearchResults = false),
                   child: const Text("Close"),
                 ),
               ],
             ),
           ),
           Expanded(
-            child: hasResults
-                ? ListView.builder(
-                    itemCount: _searchResults.length,
-                    itemBuilder: (ctx, i) {
-                      final r = _searchResults[i];
-                      return ListTile(
-                        leading: const Icon(Icons.place,
-                            color: AppTheme.primaryColor),
-                        title: Text(
-                          r.displayName,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () => _onResultTapped(r),
-                      );
-                    },
-                  )
-                : _isLoadingRecents
+            child:
+                hasResults
+                    ? ListView.builder(
+                      itemCount: _searchResults.length,
+                      itemBuilder: (ctx, i) {
+                        final r = _searchResults[i];
+                        return ListTile(
+                          leading: const Icon(
+                            Icons.place,
+                            color: AppTheme.primaryColor,
+                          ),
+                          title: Text(
+                            r.displayName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () => _onResultTapped(r),
+                        );
+                      },
+                    )
+                    : _isLoadingRecents
                     ? const Center(child: CircularProgressIndicator())
                     : ListView.builder(
-                        itemCount: _recentLocations.length,
-                        itemBuilder: (ctx, i) {
-                          final r = _recentLocations[i];
-                          return ListTile(
-                            leading: const Icon(Icons.history,
-                                color: AppTheme.textSecondary),
-                            title: Text(r.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                            onTap: () => _mapCtrl.animateTo(
-                                  center: MapCoord(r.latitude, r.longitude),
-                                  zoom: 15,
-                                ),
-                          );
-                        },
-                      ),
+                      itemCount: _recentLocations.length,
+                      itemBuilder: (ctx, i) {
+                        final r = _recentLocations[i];
+                        return ListTile(
+                          leading: const Icon(
+                            Icons.history,
+                            color: AppTheme.textSecondary,
+                          ),
+                          title: Text(
+                            r.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap:
+                              () => _mapCtrl.animateTo(
+                                center: MapCoord(r.latitude, r.longitude),
+                                zoom: 15,
+                              ),
+                        );
+                      },
+                    ),
           ),
         ],
       ),
@@ -431,33 +430,45 @@ class _MapLibreMapScreenState extends ConsumerState<MapLibreMapScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         _ctrlBtn(Icons.add, "Zoom In", () {
-          final z = _mapCtrl.currentCameraPosition?.zoom ??
-              MapConfig.defaultZoom;
+          final z =
+              _mapCtrl.currentCameraPosition?.zoom ?? MapConfig.defaultZoom;
           _mapCtrl.animateTo(
             center: MapCoord(
-                _currentLocation.latitude, _currentLocation.longitude),
+              _currentLocation.latitude,
+              _currentLocation.longitude,
+            ),
             zoom: (z + 1).clamp(MapConfig.minZoom, MapConfig.maxZoom),
           );
         }),
         const SizedBox(height: 8),
         _ctrlBtn(Icons.remove, "Zoom Out", () {
-          final z = _mapCtrl.currentCameraPosition?.zoom ??
-              MapConfig.defaultZoom;
+          final z =
+              _mapCtrl.currentCameraPosition?.zoom ?? MapConfig.defaultZoom;
           _mapCtrl.animateTo(
             center: MapCoord(
-                _currentLocation.latitude, _currentLocation.longitude),
+              _currentLocation.latitude,
+              _currentLocation.longitude,
+            ),
             zoom: (z - 1).clamp(MapConfig.minZoom, MapConfig.maxZoom),
           );
         }),
         const SizedBox(height: 8),
-        _ctrlBtn(Icons.my_location, "My Location", _centerOnLocation,
-            active: _hasPreciseLocation),
+        _ctrlBtn(
+          Icons.my_location,
+          "My Location",
+          _centerOnLocation,
+          active: _hasPreciseLocation,
+        ),
       ],
     );
   }
 
-  Widget _ctrlBtn(IconData icon, String tooltip, VoidCallback onTap,
-      {bool active = false}) {
+  Widget _ctrlBtn(
+    IconData icon,
+    String tooltip,
+    VoidCallback onTap, {
+    bool active = false,
+  }) {
     return Container(
       width: 44,
       height: 44,
@@ -473,8 +484,11 @@ class _MapLibreMapScreenState extends ConsumerState<MapLibreMapScreen> {
         ],
       ),
       child: IconButton(
-        icon: Icon(icon,
-            color: active ? Colors.white : AppTheme.textPrimary, size: 22),
+        icon: Icon(
+          icon,
+          color: active ? Colors.white : AppTheme.textPrimary,
+          size: 22,
+        ),
         onPressed: onTap,
         tooltip: tooltip,
       ),

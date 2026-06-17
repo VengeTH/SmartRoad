@@ -89,8 +89,9 @@ class HazardFeatureController {
     final props = feature['properties'] as Map<String, dynamic>?;
     if (props == null) return null;
 
-    final coords = (feature['geometry'] as Map<String, dynamic>?)?['coordinates']
-        as List<dynamic>?;
+    final coords =
+        (feature['geometry'] as Map<String, dynamic>?)?['coordinates']
+            as List<dynamic>?;
     if (coords == null || coords.length < 2) return null;
 
     return Hazard(
@@ -99,15 +100,16 @@ class HazardFeatureController {
       type: HazardType.fromString(props['type'] as String? ?? 'roadblock'),
       description: props['description'] as String? ?? '',
       severity: SeverityLevel.fromString(
-          props['severity'] as String? ?? 'medium'),
+        props['severity'] as String? ?? 'medium',
+      ),
       latitude: (coords[1] as num).toDouble(),
       longitude: (coords[0] as num).toDouble(),
       imageUrl: props['image_url'] as String?,
-      createdAt: DateTime.tryParse(
-              props['created_at'] as String? ?? '') ??
+      createdAt:
+          DateTime.tryParse(props['created_at'] as String? ?? '') ??
           DateTime.now(),
-      updatedAt: DateTime.tryParse(
-              props['updated_at'] as String? ?? '') ??
+      updatedAt:
+          DateTime.tryParse(props['updated_at'] as String? ?? '') ??
           DateTime.now(),
     );
   }

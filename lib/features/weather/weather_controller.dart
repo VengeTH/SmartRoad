@@ -13,12 +13,7 @@ import '../../services/weather_layer_manager.dart';
 import '../../config/weather_config.dart';
 
 /// * Weather layer type for MapLibre rendering
-enum MapLibreWeatherLayer {
-  rain,
-  clouds,
-  temperature,
-  none,
-}
+enum MapLibreWeatherLayer { rain, clouds, temperature, none }
 
 /// * Weather state for the feature controller
 class WeatherFeatureState {
@@ -34,8 +29,12 @@ class WeatherFeatureState {
 }
 
 /// * Callback for toggling weather layers on the map
-typedef WeatherLayerToggleCallback = Future<void> Function(
-    MapLibreWeatherLayer layer, bool enabled, double opacity);
+typedef WeatherLayerToggleCallback =
+    Future<void> Function(
+      MapLibreWeatherLayer layer,
+      bool enabled,
+      double opacity,
+    );
 
 /// * Weather Feature Controller
 class WeatherFeatureController {
@@ -131,11 +130,7 @@ class WeatherFeatureController {
   Future<void> setRainOpacity(double opacity) async {
     _state.rainOpacity = opacity;
     if (_state.rainEnabled && _onLayerToggle != null) {
-      await _onLayerToggle!(
-        MapLibreWeatherLayer.rain,
-        true,
-        opacity,
-      );
+      await _onLayerToggle!(MapLibreWeatherLayer.rain, true, opacity);
     }
   }
 
@@ -143,11 +138,7 @@ class WeatherFeatureController {
   Future<void> setCloudsOpacity(double opacity) async {
     _state.cloudsOpacity = opacity;
     if (_state.cloudsEnabled && _onLayerToggle != null) {
-      await _onLayerToggle!(
-        MapLibreWeatherLayer.clouds,
-        true,
-        opacity,
-      );
+      await _onLayerToggle!(MapLibreWeatherLayer.clouds, true, opacity);
     }
   }
 
@@ -155,11 +146,7 @@ class WeatherFeatureController {
   Future<void> setTemperatureOpacity(double opacity) async {
     _state.temperatureOpacity = opacity;
     if (_state.temperatureEnabled && _onLayerToggle != null) {
-      await _onLayerToggle!(
-        MapLibreWeatherLayer.temperature,
-        true,
-        opacity,
-      );
+      await _onLayerToggle!(MapLibreWeatherLayer.temperature, true, opacity);
     }
   }
 

@@ -59,8 +59,8 @@ class NavigationController {
     this.onOffRoute,
     this.onArrival,
     this.onProgress,
-  })  : assert(route.length >= 2, 'Route must have at least 2 points'),
-        _state = NavigationState.idle;
+  }) : assert(route.length >= 2, 'Route must have at least 2 points'),
+       _state = NavigationState.idle;
 
   NavigationState get state => _state;
   double get currentSpeed => _currentSpeed;
@@ -112,7 +112,8 @@ class NavigationController {
   /// * Update current location (call frequently from GPS stream)
   void updateLocation(LatLng position) {
     if (_state != NavigationState.navigating &&
-        _state != NavigationState.offRoute) return;
+        _state != NavigationState.offRoute)
+      return;
 
     // Calculate speed
     if (_lastPosition != null && _lastPositionTime != null) {
@@ -170,11 +171,12 @@ class NavigationController {
   bool _isOffRoute(LatLng position) {
     // Find minimum distance to any segment of the route
     double minDist = double.infinity;
-    for (int i = _currentSegmentIndex;
-        i < math.min(_currentSegmentIndex + 5, route.length - 1);
-        i++) {
-      final dist = _distanceToSegment(
-          position, route[i], route[i + 1]);
+    for (
+      int i = _currentSegmentIndex;
+      i < math.min(_currentSegmentIndex + 5, route.length - 1);
+      i++
+    ) {
+      final dist = _distanceToSegment(position, route[i], route[i + 1]);
       if (dist < minDist) minDist = dist;
     }
     return minDist > offRouteThresholdMeters * 2; // Convert to radius
@@ -182,19 +184,23 @@ class NavigationController {
 
   /// * Emit progress update
   void _emitProgress() {
-    onProgress?.call(NavigationProgress(
-      distanceKm: remainingDistanceMeters / 1000,
-      duration: Duration(
-        seconds: (remainingDistanceMeters / (_currentSpeed.clamp(1, 200) / 3.6))
-            .toInt(),
+    onProgress?.call(
+      NavigationProgress(
+        distanceKm: remainingDistanceMeters / 1000,
+        duration: Duration(
+          seconds:
+              (remainingDistanceMeters / (_currentSpeed.clamp(1, 200) / 3.6))
+                  .toInt(),
+        ),
+        currentSpeed: _currentSpeed,
+        averageSpeed:
+            _recentSpeeds.isNotEmpty
+                ? _recentSpeeds.reduce((a, b) => a + b) / _recentSpeeds.length
+                : null,
+        remainingInstructionIndex: _currentSegmentIndex,
+        isOffRoute: _state == NavigationState.offRoute,
       ),
-      currentSpeed: _currentSpeed,
-      averageSpeed: _recentSpeeds.isNotEmpty
-          ? _recentSpeeds.reduce((a, b) => a + b) / _recentSpeeds.length
-          : null,
-      remainingInstructionIndex: _currentSegmentIndex,
-      isOffRoute: _state == NavigationState.offRoute,
-    ));
+    );
   }
 
   /// * Reroute calculation (call when off-route)
@@ -224,7 +230,8 @@ class NavigationController {
     if (ab < 0.001) return _distanceMeters(p, a);
 
     // Project p onto ab (approximate using lat/lng proportions)
-    final t = ((p.latitude - a.latitude) * (b.latitude - a.latitude) +
+    final t =
+        ((p.latitude - a.latitude) * (b.latitude - a.latitude) +
             (p.longitude - a.longitude) * (b.longitude - a.longitude)) /
         (ab * ab);
 

@@ -50,8 +50,9 @@ app.*.map.json
 .env.*.local
 
 # Backend API
-backend/api/node_modules/
-backend/api/coverage/
+backend/api/bin/
+backend/api/smartroad-api
+backend/api/*.exe
 backend/api/logs/
 backend/api/.env
 !backend/api/.env.example

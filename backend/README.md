@@ -1,54 +1,53 @@
 # SmartRoad Backend Services
 
-Backend infrastructure for SmartRoad navigation app.
+Backend infrastructure for the SmartRoad navigation app.
 
 ## Structure
 
 ```
 backend/
-├── graphhopper/        # Self-hosted routing engine (Docker)
-├── api/                # SmartRoad API (placeholder - future)
-├── database/           # Database setup notes (future)
+├── api/                # SmartRoad Go API service (routing, auth, hazards, realtime)
+├── graphhopper/        # Self-hosted routing engine (Docker + OSM Philippines)
+├── database/           # PostgreSQL + PostGIS schema and database notes
 └── docker-compose.yml  # Unified backend orchestration
 ```
 
 ## Services
 
-### GraphHopper (MVP - Active)
+### SmartRoad API (Go)
 
-Self-hosted routing engine providing:
-- Motorcycle routing
-- Toll avoidance
-- Fastest route calculation
+Main backend API service built with Golang:
+- **Routing Proxy & Safety Scorer:** Proxies requests to GraphHopper, assesses flood and hazard danger along routes, provides straight-line fallback.
+- **Authentication:** JWT tokens and bcrypt password hashing (`/api/auth/register`, `/api/auth/login`, `/api/auth/me`).
+- **Hazards & Weather:** Hazard reports with spatial proximity and bounding box queries, weather alerts via Open-Meteo & PAGASA.
+- **Community & HOAs:** Comments, likes, 5-star ratings, HOA access verification, village entrances.
+- **Realtime Pub/Sub:** WebSocket streaming on `/ws`.
+- **Route as a Product:** Save and discover community routes on `/api/v1/routes`.
 
-**Status:** ✅ Ready for use
-
-**Documentation:** See [graphhopper/README.md](./graphhopper/README.md)
-
-**Quick Start:**
-```bash
-cd backend
-docker-compose up -d graphhopper
-```
-
-### SmartRoad API (Future)
-
-Main backend API service.
-
-**Status:** 🚧 Placeholder only - Not implemented in MVP
+**Status:** ✅ Active (Go 1.24)
 
 **Documentation:** See [api/README.md](./api/README.md)
 
-### Database (Future)
+### GraphHopper Routing Engine
 
-PostgreSQL database for:
-- User data
-- Route caching
-- Analytics
+Self-hosted routing engine providing:
+- Motorcycle, car, truck, and pedestrian routing profiles
+- Toll avoidance
+- Fastest route calculation using Philippines OpenStreetMap data
 
-**Status:** 🚧 Not implemented in MVP
+**Status:** ✅ Active
 
-**Note:** Currently using Supabase for MVP. Database service will be added in future phases.
+**Documentation:** See [graphhopper/README.md](./graphhopper/README.md)
+
+### PostgreSQL Database + PostGIS
+
+Database service for:
+- User profiles & permissions
+- Route as a Product (`saved_routes`)
+- Hazards & community comments
+- Village entrances and HOA sticker logs
+
+**Status:** ✅ Configured via `docker-compose.yml` and SQL schemas
 
 ## Quick Start
 
@@ -62,8 +61,11 @@ docker-compose up -d
 ### Start Individual Service
 
 ```bash
-# GraphHopper only
+# Start GraphHopper only
 docker-compose up -d graphhopper
+
+# Start API only
+docker-compose up -d api
 ```
 
 ### View Logs
@@ -73,7 +75,7 @@ docker-compose up -d graphhopper
 docker-compose logs -f
 
 # Specific service
-docker-compose logs -f graphhopper
+docker-compose logs -f api
 ```
 
 ### Stop Services
@@ -84,79 +86,60 @@ docker-compose down
 
 ## Development Workflow
 
-### MVP Phase (Current)
-
-1. **GraphHopper** is the only active backend service
-2. Flutter app can call GraphHopper directly for routing
-3. Supabase handles authentication and data storage
-
-### Future Phases
-
-1. **Phase 2:** Implement SmartRoad API
-   - Wrap GraphHopper calls
-   - Add authentication middleware
-   - Implement basic business logic
-
-2. **Phase 3:** Add permission system
-   - Route access control
-   - HOA restrictions
-   - User role management
-
-3. **Phase 4:** Route selling
-   - Payment integration
-   - Premium route access
-   - Subscription management
-
-4. **Phase 5:** Advanced features
-   - Route analytics
-   - Traffic integration
-   - ML optimization
+1. **Routing flow:** Flutter App → SmartRoad Go API (`http://localhost:3000/api/routing/route`) → GraphHopper (`http://graphhopper:8989`).
+   *Note:* Flutter never calls GraphHopper directly.
+2. If GraphHopper is offline or starting up, the Go API returns a smooth offline fallback route so clients can always navigate.
+3. Local Go API can be run natively without Docker:
+   ```bash
+   cd backend/api
+   go run ./cmd/server
+   ```
 
 ## Environment Variables
 
-Create a `.env` file in `backend/` directory (optional):
+Configure in `backend/api/.env` (or via docker-compose environment):
 
 ```env
+# Server
+PORT=3000
+APP_ENV=development
+
 # GraphHopper
-GRAPHHOPPER_MEMORY=2g
-GRAPHHOPPER_PORT=8989
+GRAPH_HOPPER_URL=http://graphhopper:8989
+GRAPH_HOPPER_TIMEOUT_MS=15000
+GRAPH_HOPPER_MAX_RETRIES=2
 
-# API (Future)
-API_PORT=3000
-NODE_ENV=development
+# JWT Authentication
+JWT_SECRET=your-secret-key-here
+JWT_EXPIRES_IN_DAYS=7
 
-# Database (Future)
-POSTGRES_DB=smartroad
-POSTGRES_USER=smartroad
-POSTGRES_PASSWORD=change_me
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_MAX_REQUESTS=100
 ```
 
 ## Network Architecture
 
 ```
-┌─────────────────┐
-│  Flutter App    │
-│  (Mobile)       │
-└────────┬────────┘
-         │
-         │ HTTP/HTTPS
-         │
-┌────────▼─────────────────────────┐
-│  SmartRoad API (Future)          │
-│  - Authentication                │
-│  - Business Logic                │
-│  - Route Processing              │
-└────────┬─────────────────────────┘
-         │
-         │ Internal Network
-         │
-┌────────▼────────┐    ┌──────────────┐
-│  GraphHopper    │    │  PostgreSQL  │
-│  (Routing)      │    │  (Future)    │
-└─────────────────┘    └──────────────┘
+┌─────────────────────────────────┐
+│          Flutter App            │
+└────────────────┬────────────────┘
+                 │ HTTP / WS
+                 ▼
+┌─────────────────────────────────┐
+│     SmartRoad Go API (:3000)    │
+│  - JWT Auth & User Profiles     │
+│  - Safety & Hazard Scoring      │
+│  - Realtime Pub/Sub (/ws)       │
+│  - Route-as-a-Product (/api/v1) │
+└──────┬──────────────────┬───────┘
+       │                  │
+       ▼ (internal)       ▼ (internal)
+┌──────────────┐   ┌──────────────┐
+│ GraphHopper  │   │  PostgreSQL  │
+│ Routing:8989 │   │ + PostGIS    │
+└──────────────┘   └──────────────┘
 ```
-
-**Current MVP:** Flutter app connects directly to GraphHopper (bypassing API layer).
 
 ## Troubleshooting
 

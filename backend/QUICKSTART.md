@@ -118,23 +118,27 @@ docker-compose up -d
 
 ## Next Steps
 
-1. ✅ GraphHopper is running
-2. 📱 Integrate with Flutter app (update routing service)
-3. 🚧 Implement SmartRoad API (future)
-4. 🚧 Add database service (future)
+1. ✅ GraphHopper is running on `http://localhost:8989`
+2. ✅ SmartRoad Go API is running on `http://localhost:3000`
+3. 📱 Flutter app connects to the API via `API_BASE_URL` (default `http://localhost:3000`)
+4. 💾 PostgreSQL + PostGIS available for persistent storage
 
 ## Integration with Flutter
 
-Update `lib/services/routing_service.dart`:
+The Flutter app communicates through the SmartRoad API at `API_BASE_URL`:
 
-```dart
-// Change GraphHopper URL to:
-final String graphhopperUrl = 'http://localhost:8989';  // For emulator
-// Or use your machine's IP for physical device:
-// final String graphhopperUrl = 'http://192.168.1.100:8989';
+```bash
+# Windows
+run.bat
+
+# PowerShell
+./run-with-env.ps1
+
+# Custom API URL (e.g. for physical devices on local network)
+flutter run --dart-define=API_BASE_URL=http://192.168.1.100:3000
 ```
 
-**Note:** For physical devices, use your computer's local IP address instead of `localhost`.
+**Note:** For physical devices, pass your machine's LAN IP address for `API_BASE_URL`. Routing calls will go to `http://<IP>:3000/api/routing/route`, which forwards to GraphHopper and applies safety checks.
 
 
 

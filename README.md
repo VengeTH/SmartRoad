@@ -243,20 +243,21 @@ git clone <repository-url>
 cd SmartRoad
 ```
 
-### 2. Backend Setup (Optional for MVP)
+### 2. Backend Setup (Docker)
 
-**GraphHopper Routing Engine:**
+**SmartRoad Go API & GraphHopper Routing Engine:**
 
 ```bash
 cd backend
-docker-compose up -d graphhopper
+docker-compose up -d
 ```
 
-**First run:** GraphHopper will download and process Philippines OSM data (30-60 minutes). Subsequent runs use cached data (~1-2 minutes).
+**Services launched:**
+- **SmartRoad Go API** (`http://localhost:3000`): Routing proxy, safety assessment, JWT auth, hazard reporting, community, and WebSocket realtime updates.
+- **GraphHopper** (`http://localhost:8989`): Routing engine with Philippines OSM data. First run takes 30-60 minutes to download and cache OSM data; subsequent runs start in seconds.
+- **PostgreSQL & Redis**: Database & cache infrastructure.
 
-**Documentation:** See [backend/README.md](./backend/README.md) and [backend/graphhopper/README.md](./backend/graphhopper/README.md)
-
-**Note:** For MVP, the Flutter app can work without GraphHopper (uses Supabase only). GraphHopper is required for routing features.
+**Documentation:** See [backend/README.md](./backend/README.md) and [backend/api/README.md](./backend/api/README.md)
 
 ### 3. Flutter App Setup
 

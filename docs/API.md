@@ -16,7 +16,7 @@ SmartRoad uses a combination of APIs:
 7. **Overpass API** — Ambient POI data (OpenStreetMap)
 8. **RainViewer** — Radar precipitation tiles
 9. **Gemini** — AI sticker verification & commute guide augmentation
-10. **Future: SmartRoad API** — Custom backend (Node.js/Go/Python)
+10. **SmartRoad Go API** — Custom high-performance Golang backend (routing proxy, safety scoring, auth, hazards, community, websockets)
 
 ---
 
@@ -233,19 +233,48 @@ POST /models/gemini-2.5-flash:generateContent?key={API_KEY}
 
 ---
 
-## 10. Future: SmartRoad API
+## 10. SmartRoad Go Backend API
 
-**Planned endpoints** (not yet implemented):
+**Base URL:** Configured via `API_BASE_URL` (default `http://localhost:3000`)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `POST /api/auth/login` | POST | Custom authentication |
-| `GET /api/routes/:id` | GET | Get route details |
-| `POST /api/routes` | POST | Create new route |
-| `GET /api/hazards` | GET | List hazards near location |
-| `POST /api/hazards` | POST | Report hazard |
-| `GET /api/marketplace` | GET | Browse route marketplace |
-| `POST /api/marketplace/purchase` | POST | Purchase a route |
+High-performance Go backend service that acts as the single entry point for Flutter navigation, safety analysis, and data management.
+
+### Implemented Endpoints
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/health` | GET | None | Backend service health and version check |
+| `/api/routing/route` | POST | None | Calculates route with GraphHopper proxy, offline fallback, safety scoring, HOA checks |
+| `/api/routing/vehicles` | GET | None | Supported vehicle types list (`car`, `motorcycle`, `delivery_rider`, etc.) |
+| `/api/routing/health` | GET | None | Routing subsystem health check |
+| `/api/auth/register` | POST | None | Create user account with bcrypt password hashing |
+| `/api/auth/login` | POST | None | Sign in and receive JWT token |
+| `/api/auth/me` | GET | Bearer | Current user profile |
+| `/api/profile` | GET / PUT | Bearer | Get or update user profile |
+| `/api/hazards` | GET / POST | Optional/Bearer | List hazards with filters / Report new hazard |
+| `/api/hazards/nearby` | GET | None | Hazards near coordinates (`lat`, `lng`, `radiusKm`) |
+| `/api/hazards/bounds` | GET | None | Hazards within bounding box (`minLat`, `maxLat`, `minLng`, `maxLng`) |
+| `/api/hazards/:id` | GET / PUT / DELETE | Optional/Bearer | Get, update, or remove hazard report |
+| `/api/weather/current` | GET | None | Current weather via Open-Meteo & PAGASA |
+| `/api/weather/alerts` | GET | None | 3-day precipitation warnings |
+| `/api/community/comments` | GET / POST | Optional/Bearer | List or post comments |
+| `/api/community/comments/:id` | PUT / DELETE | Bearer | Update or delete comment |
+| `/api/community/likes/toggle` | POST | Bearer | Like / unlike toggle |
+| `/api/community/likes/count` | GET | None | Get item like count |
+| `/api/community/ratings` | POST | Bearer | Submit 1–5 star rating |
+| `/api/community/ratings/summary` | GET | None | Average rating and review count |
+| `/api/entrances` | GET / POST | Optional/Bearer | List or suggest village entrances |
+| `/api/entrances/:id/verify` | PUT | Bearer | Admin entrance verification |
+| `/api/entrances/nearby` | GET | None | Entrances near coordinate |
+| `/api/flood-zones` | GET / POST | Optional/Bearer | Monitored flood zones |
+| `/api/flood-zones/nearby` | GET | None | Check flood zones near coordinate |
+| `/api/hoas` | GET | None | List active homeowner associations |
+| `/api/hoas/register` | POST | Bearer | Register HOA |
+| `/api/hoas/:id` | GET | None | HOA details |
+| `/api/v1/routes/save` | POST | Optional/Bearer | Save community route |
+| `/api/v1/routes/discover` | GET | None | Discover routes by location proximity |
+| `/api/v1/routes/:id` | GET | None | Route details |
+| `/ws` | GET (Upgrade) | None | WebSocket channel subscription and realtime event streaming |
 
 ---
 

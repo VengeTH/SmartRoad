@@ -86,9 +86,9 @@ docker-compose networks:
 
 services:
   graphhopper:    → 172.20.0.2 (smartroad-backend)
-  api:            → 172.20.0.3 (smartroad-backend) [future]
-  postgres:       → 172.20.0.4 (smartroad-backend) [future]
-  redis:          → 172.20.0.5 (smartroad-backend) [future]
+  api:            → 172.20.0.3 (smartroad-backend) [Go API]
+  postgres:       → 172.20.0.4 (smartroad-backend)
+  redis:          → 172.20.0.5 (smartroad-backend)
   cloudflared:    → 172.20.0.2 (smartroad-backend) [via tunnel]
 ```
 

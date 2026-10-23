@@ -20,7 +20,7 @@ This project reads config via `String.fromEnvironment(...)` / `bool.fromEnvironm
 - **Backend API** (replaces former Supabase dependency):
   - `API_BASE_URL` (default `http://localhost:3000`); validated in [lib/core/config/env.dart](../lib/core/config/env.dart); when unset the app runs in demo mode with local/in-memory data.
   - Flutter NEVER calls GraphHopper directly. All routing goes through the backend API at `/api/routing/route`.
-  - See [backend/api/](../backend/api/) for the Node.js/Express API implementation.
+  - See [backend/api/](../backend/api/) for the Golang backend API implementation.
 - **Database**: PostgreSQL 15+ with PostGIS extension; schema is under the `SmartRoad` namespace (tables like `SmartRoad.profiles`, `SmartRoad.hazards`). All schema files are in `supabase/` (legacy name preserved for compatibility).
 - Gemini (sticker verification; free tier available):
   - `GEMINI_API_KEY` (read in [lib/core/config/env.dart](../lib/core/config/env.dart); used by sticker verification flows under `lib/services/`)
@@ -32,7 +32,7 @@ This project reads config via `String.fromEnvironment(...)` / `bool.fromEnvironm
 - GraphHopper routing:
   - `GRAPH_HOPPER_URL` (default `http://localhost:8989`) — configured on the backend API, NOT in Flutter
   - Flutter calls the SmartRoad Backend API (`/api/routing/route`) instead of GraphHopper directly
-  - The backend API (`backend/api/src/services/routing-service.js`) proxies requests to GraphHopper with retry + timeout
+  - The backend Go API (`backend/api/internal/services/routing_service.go`) proxies requests to GraphHopper with retry + timeout
   - Fallback: when the backend API is unreachable, `RoutingService` uses straight-line fallback
 
 ## Backend (required for real routing)

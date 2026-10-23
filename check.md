@@ -61,7 +61,7 @@
 - [x] Docker Compose _(confirmed: `backend/docker-compose.yml` exists)_
 - [x] Git _(confirmed: `.git` directory exists)_
 - [ ] Nginx _(❌ `nginx.conf` not found in repo — no config committed)_
-- [x] Node _(confirmed: `backend/api/package.json` exists; Express.js backend)_
+- [x] Go / Golang _(confirmed: `backend/api/go.mod` exists; Go 1.24 backend service)_
 - [x] PostgreSQL _(confirmed: docker-compose postgres service + schema files exist)_
 - [x] Redis _(✅ now configured in `docker-compose.yml` — redis:7-alpine service)_
 - [x] Cloudflared _(not configured)_
@@ -192,7 +192,7 @@
 
 ### Routing Service
 
-- [x] `POST /api/routing/route` _(✅ `backend/api/src/routes/routing.js`)_
+- [x] `POST /api/routing/route` _(✅ `backend/api/internal/handlers/routing_handler.go`)_
 - [ ] `GET /api/routing/route` _(not implemented)_
 - [ ] `POST /api/routing/optimize` _(not implemented)_
 - [x] `GET /api/routing/vehicles` _(✅ lists supported vehicle types)_
@@ -200,7 +200,7 @@
 
 ### Weather Service
 
-- [x] `GET /api/weather/current` _(✅ `backend/api/src/routes/weather.js`)_
+- [x] `GET /api/weather/current` _(✅ `backend/api/internal/handlers/weather_handler.go`)_
 - [x] `GET /api/weather/alerts` _(✅ weather alerts endpoint)_
 - [ ] `GET /api/weather/layer` _(not implemented — weather tiles rendered client-side)_
 

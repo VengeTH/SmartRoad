@@ -1,6 +1,7 @@
-node_modules/
-npm-debug.log
+bin/
+*.exe
+smartroad-api
 logs/
 .env
-coverage/
 .git/
+

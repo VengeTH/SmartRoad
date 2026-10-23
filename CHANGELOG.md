@@ -4,6 +4,26 @@ This document tracks all version updates, feature additions, and significant cha
 
 ---
 
+## Version 2.8.4 - Target Arrival Speed Guidance & Route Activity Logs
+
+**Release Date:** October 2026
+**Focus:** Target Arrival Time Calculation, Speed Advisory, Legal Speed Guardrails, Route Search & Trip Logs
+
+### Target Arrival Time & Required Speed Advisory
+
+- **Arrival Deadline Planning**: Added arrival time targeting to `RoutePreviewSheet` and active navigation overlay, supporting quick buffers (+15m, +30m) and custom time selection.
+- **Dynamic Speed Calculation**: Implemented `TargetSpeedService` and `RequiredSpeedResult` calculating required travel speed taking into account traffic delays and pedestrian crossing stops (~18 seconds deceleration/stop per lane).
+- **Statutory Speed Guardrails & Legal Warnings**: Evaluates required speed against active road speed limits and Philippine statutory limits (RA 4136). Emits prominent warning marks (`⚠️ EXCEEDS LEGAL LIMIT`) and legal disclaimers if target arrival requires unlawful overspeeding.
+- **HUD Live Monitoring**: Active navigation overlay dynamically recalculates required speed against remaining distance and displays advisory pills and legal warnings in real time.
+
+### Route Search & Trip Departure Logs
+
+- **Separated Event Logs**: Implemented `RouteActivityLogService` and `RouteActivityLog` with persistent Hive storage, distinguishing between searches (`Searched Only` status) and actual navigation starts (`Ride Initiated` status with departure timestamp).
+- **Interactive Logs Sheet**: Added `RouteActivityLogsSheet` with filter chips (`All`, `Searched Only`, `Ride Initiated`), distance/duration breakdown, and one-tap route preview/navigation.
+- **Access Points**: Integrated quick-access chip in map search recents overlay and action button in Routes screen AppBar.
+
+---
+
 ## Version 2.8.3 - Map Interaction Polish & UI Overhaul
 
 **Release Date:** March 2026

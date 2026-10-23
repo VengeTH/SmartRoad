@@ -11,6 +11,7 @@ import "../../widgets/create_route_dialog.dart";
 import "../../providers/navigation_provider.dart";
 import "../../providers/route_creation_provider.dart";
 import "../../providers/auth_provider.dart";
+import "../../widgets/route_activity_logs_sheet.dart";
 
 /// * Routes screen - View, create, and manage saved routes
 class RoutesScreen extends ConsumerStatefulWidget {
@@ -98,6 +99,20 @@ class _RoutesScreenState extends ConsumerState<RoutesScreen>
       appBar: AppBar(
         title: const Text("Routes"),
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history_toggle_off),
+            tooltip: "Search & Trip Logs",
+            onPressed: () {
+              RouteActivityLogsSheet.show(
+                context,
+                onSelectLog: (destination, mode, label) {
+                  ref.read(navigationTabProvider.notifier).switchToMap();
+                },
+              );
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [

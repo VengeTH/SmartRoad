@@ -56,6 +56,24 @@ Users can report routes that are:
 
 Reports affect route trust score and visibility.
 
+### 5. Target Arrival Time & Required Speed Advisory
+
+When previewing or navigating a route:
+- **Target Arrival Time**: Users can set an arrival deadline (using quick buffer presets like on-ETA, +15m, +30m, or a custom time picker).
+- **Speed Calculation**: Computes the required driving speed $S_{\text{req}} = \frac{\text{Distance}}{T_{\text{moving}}}$.
+- **Friction Delays**: Accounts for traffic congestion buffer and urban pedestrian crossings/lanes (~18 seconds yield/deceleration delay per crossing).
+- **Legal Speed Compliance & Warnings**:
+  - Compares computed speed against the active highway speed limit or Philippine statutory limits (RA 4136).
+  - Emits prominent warning marks (`⚠️ EXCEEDS LEGAL LIMIT`) and legal disclaimers if target arrival requires unlawful overspeeding.
+  - Dynamically updates the required speed in the active navigation HUD as remaining distance changes.
+
+### 6. Search Time Logs & Trip Start Time Logs
+
+Comprehensive local audit logging separates search activity from actual trip starts:
+- **Searched Only**: Logged with exact timestamp when a route calculation/search occurs.
+- **Ride Initiated**: Logged when the driver taps "Start Navigation", recording departure time and initial target speed.
+- **Logs Viewer**: Bottom sheet accessible via search recents chip or the Routes tab action bar with filters (`All`, `Searched Only`, `Ride Initiated`) and one-tap re-routing.
+
 ## Implementation Files
 
 ### Core Components
@@ -78,6 +96,18 @@ Reports affect route trust score and visibility.
    - Bottom sheet showing reroute options
    - Filters routes based on ownership
    - Shows return to saved route option
+
+5. **`lib/services/target_speed_service.dart`** & **`lib/models/required_speed_result.dart`**
+   - Calculates required speed to meet target arrival time
+   - Accounts for traffic and pedestrian crossing delays
+   - Evaluates legal limit compliance and formats warning disclaimers
+
+6. **`lib/services/route_activity_log_service.dart`** & **`lib/models/route_activity_log.dart`**
+   - Persistent Hive storage for route search and initiated trip logs
+   - Differentiates searched-only routes from initiated rides with respective timestamps
+
+7. **`lib/widgets/route_activity_logs_sheet.dart`**
+   - Interactive sheet to inspect, filter, clear, or navigate from search and trip logs
 
 ### Integration Points
 

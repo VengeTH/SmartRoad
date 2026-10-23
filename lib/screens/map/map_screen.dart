@@ -69,6 +69,11 @@ import "../../widgets/navigation_speed_hud.dart";
 import "../../widgets/music_control_widget.dart";
 import "../../utils/polyline_smoothing.dart";
 import "../../models/weather_state.dart";
+import "../../models/required_speed_result.dart";
+import "../../models/route_activity_log.dart";
+import "../../services/target_speed_service.dart";
+import "../../services/route_activity_log_service.dart";
+import "../../widgets/route_activity_logs_sheet.dart";
 // * Route utilities removed - using inline functions
 
 /// * Navigation overlay widget
@@ -81,6 +86,8 @@ class _NavigationOverlay extends StatelessWidget {
   final double? remainingDistance;
   final Duration? remainingDuration;
   final bool isOffRoute;
+  final DateTime? targetArrivalTime;
+  final RequiredSpeedResult? targetSpeedResult;
 
   const _NavigationOverlay({
     required this.mode,
@@ -91,6 +98,8 @@ class _NavigationOverlay extends StatelessWidget {
     this.remainingDistance,
     this.remainingDuration,
     this.isOffRoute = false,
+    this.targetArrivalTime,
+    this.targetSpeedResult,
   });
 
   String _getModeName(String mode) {
@@ -259,6 +268,94 @@ class _NavigationOverlay extends StatelessWidget {
                       fontFamily: 'monospace',
                     ),
                   ),
+                if (targetArrivalTime != null) ...[
+                  const SizedBox(height: AppTheme.spacingXS),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: (targetSpeedResult?.isExceedingLegalLimit ?? false)
+                              ? AppTheme.errorColor.withOpacity(0.15)
+                              : AppTheme.primaryColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: (targetSpeedResult?.isExceedingLegalLimit ?? false)
+                                ? AppTheme.errorColor
+                                : AppTheme.primaryColor.withOpacity(0.4),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.alarm_on,
+                              size: 12,
+                              color: (targetSpeedResult?.isExceedingLegalLimit ?? false)
+                                  ? AppTheme.errorColor
+                                  : AppTheme.primaryColor,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              "Target: ${targetArrivalTime!.hour.toString().padLeft(2, '0')}:${targetArrivalTime!.minute.toString().padLeft(2, '0')}",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: (targetSpeedResult?.isExceedingLegalLimit ?? false)
+                                    ? AppTheme.errorColor
+                                    : AppTheme.primaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (targetSpeedResult != null && targetSpeedResult!.requiredSpeedKph > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (targetSpeedResult!.isExceedingLegalLimit)
+                                ? AppTheme.errorColor.withOpacity(0.15)
+                                : AppTheme.surfaceVariant,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: (targetSpeedResult!.isExceedingLegalLimit)
+                                  ? AppTheme.errorColor
+                                  : AppTheme.borderColor,
+                            ),
+                          ),
+                          child: Text(
+                            "Req: ${targetSpeedResult!.requiredSpeedKph.toStringAsFixed(0)} km/h",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: (targetSpeedResult!.isExceedingLegalLimit)
+                                  ? AppTheme.errorColor
+                                  : AppTheme.textPrimary,
+                            ),
+                          ),
+                        ),
+                      if (targetSpeedResult?.isExceedingLegalLimit == true)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.errorColor,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            "⚠️ EXCEEDS LEGAL LIMIT (${targetSpeedResult!.legalSpeedLimitKph} MAX)",
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -813,6 +910,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
   final WeatherLayerManager _weatherLayerManager = WeatherLayerManager();
   final LocationSearchService _locationSearchService = LocationSearchService();
   final SpeedLimitService _speedLimitService = SpeedLimitService();
+  final RouteActivityLogService _activityLogService = RouteActivityLogService();
+  final TargetSpeedService _targetSpeedService = TargetSpeedService();
+  String? _lastRouteSearchLogId;
+  DateTime? _activeTargetArrivalTime;
+  RequiredSpeedResult? _activeTargetSpeedResult;
   final WeatherService _weatherService = WeatherService();
   StreamSubscription<Position>? _positionSubscription;
   StreamSubscription<CompassEvent>? _compassSubscription;
@@ -941,6 +1043,16 @@ class _MapScreenState extends ConsumerState<MapScreen>
       _searchResultDistanceLoading.clear();
     });
     _loadRecentLocations();
+  }
+
+  void _showActivityLogsSheet() {
+    RouteActivityLogsSheet.show(
+      context,
+      onSelectLog: (destination, mode, label) {
+        _pendingNavigationLabel = label;
+        _startNavigation(destination, mode);
+      },
+    );
   }
 
   Map<String, dynamic> _recentToSearchResultMap(RecentLocation recent) {
@@ -3039,6 +3151,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   route: route,
                   vehicleType: vehicleType,
                   vehicleModeName: vehicleModeName,
+                  mode: mode,
+                  initialTargetArrivalTime: _activeTargetArrivalTime,
+                  currentSpeedLimit: _speedLimitResult,
+                  onStartWithTarget: (targetTime, speedResult) {
+                    _activeTargetArrivalTime = targetTime;
+                    _activeTargetSpeedResult = speedResult;
+                  },
                   onSaveRoute:
                       _canCreateOrSaveRoutes
                           ? () {
@@ -3104,6 +3223,35 @@ class _MapScreenState extends ConsumerState<MapScreen>
       _navigationMode = mode;
       _activeRoutingProfile = mode == 'car' ? 'car' : 'motorcycle_sub400';
     });
+
+    final destinationLabel =
+        (_pendingNavigationLabel?.trim().isNotEmpty ?? false)
+            ? _pendingNavigationLabel!.trim()
+            : "Destination (${destination.latitude.toStringAsFixed(3)}, ${destination.longitude.toStringAsFixed(3)})";
+
+    // * Record initiated trip log (distinct from search log)
+    try {
+      await _activityLogService.logTripInitiated(
+        searchLogId: _lastRouteSearchLogId,
+        originLabel: "Current Location",
+        destinationLabel: destinationLabel,
+        originLat: _currentLocation.latitude,
+        originLon: _currentLocation.longitude,
+        destinationLat: destination.latitude,
+        destinationLon: destination.longitude,
+        distanceKm: _routeDistance,
+        estimatedDurationMinutes: _routeDuration.inMinutes,
+        mode: mode,
+        targetArrivalTime: _activeTargetArrivalTime,
+        requiredSpeedKph: _activeTargetSpeedResult?.requiredSpeedKph,
+        legalSpeedLimitKph: _activeTargetSpeedResult?.legalSpeedLimitKph ??
+            _speedLimitResult.speedLimitKph,
+        isExceedingLimit:
+            _activeTargetSpeedResult?.isExceedingLegalLimit ?? false,
+      );
+    } catch (e) {
+      debugPrint("⚠️ [MapScreen] Failed to record initiated trip log: $e");
+    }
 
     // * Persist as a recent navigation destination (best-effort).
     try {
@@ -3328,6 +3476,43 @@ class _MapScreenState extends ConsumerState<MapScreen>
         });
       }
 
+      // * Compute required speed if target arrival is active
+      if (_activeTargetArrivalTime != null) {
+        _activeTargetSpeedResult = _targetSpeedService.computeRequiredSpeed(
+          distanceKm: route.distance,
+          targetArrivalTime: _activeTargetArrivalTime!,
+          mode: mode,
+          currentSpeedLimit: _speedLimitResult,
+          baseEstimatedDuration: route.duration,
+        );
+      }
+
+      // * Record route search time log (marked as searched only until navigation is started)
+      try {
+        final destLabel = (_pendingNavigationLabel?.trim().isNotEmpty ?? false)
+            ? _pendingNavigationLabel!.trim()
+            : "Destination (${destination.latitude.toStringAsFixed(3)}, ${destination.longitude.toStringAsFixed(3)})";
+        final searchLog = await _activityLogService.logRouteSearch(
+          originLabel: "Current Location",
+          destinationLabel: destLabel,
+          originLat: routeOrigin.latitude,
+          originLon: routeOrigin.longitude,
+          destinationLat: destination.latitude,
+          destinationLon: destination.longitude,
+          distanceKm: route.distance,
+          estimatedDurationMinutes: route.duration.inMinutes,
+          mode: mode,
+          targetArrivalTime: _activeTargetArrivalTime,
+          requiredSpeedKph: _activeTargetSpeedResult?.requiredSpeedKph,
+          legalSpeedLimitKph: _speedLimitResult.speedLimitKph,
+          isExceedingLimit:
+              _activeTargetSpeedResult?.isExceedingLegalLimit ?? false,
+        );
+        _lastRouteSearchLogId = searchLog.id;
+      } catch (e) {
+        debugPrint("⚠️ [MapScreen] Failed to record route search log: $e");
+      }
+
       debugPrint(
         "📍 [MapScreen] Route calculated: "
         "${_routeDistance.toStringAsFixed(2)} km, "
@@ -3493,6 +3678,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
               seconds: (remainingHours * 3600).round(),
             );
           }
+        }
+
+        // * Recompute required speed dynamically based on remaining distance
+        if (_activeTargetArrivalTime != null && _remainingDistance > 0) {
+          _activeTargetSpeedResult = _targetSpeedService.computeRequiredSpeed(
+            distanceKm: _remainingDistance / 1000.0,
+            targetArrivalTime: _activeTargetArrivalTime!,
+            mode: _navigationMode ?? "car",
+            currentSpeedLimit: _speedLimitResult,
+            baseEstimatedDuration: _remainingDuration,
+          );
         }
       }
     });
@@ -5231,6 +5427,13 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 route: route,
                 vehicleType: vehicleType,
                 vehicleModeName: vehicleModeName,
+                mode: mode,
+                initialTargetArrivalTime: _activeTargetArrivalTime,
+                currentSpeedLimit: _speedLimitResult,
+                onStartWithTarget: (targetTime, speedResult) {
+                  _activeTargetArrivalTime = targetTime;
+                  _activeTargetSpeedResult = speedResult;
+                },
                 onSaveRoute:
                     _canCreateOrSaveRoutes
                         ? () {
@@ -5569,6 +5772,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
       _navigationHazardDistanceMeters = null;
       _navigationHazardMutedUntil.clear();
       _navigationHazardHapticAt.clear();
+      _activeTargetArrivalTime = null;
+      _activeTargetSpeedResult = null;
       _currentSpeedKph = null;
       _speedLimitResult = const SpeedLimitResult(
         speedLimitKph: null,
@@ -8744,6 +8949,29 @@ class _MapScreenState extends ConsumerState<MapScreen>
                                           child: Row(
                                             children: [
                                               ActionChip(
+                                                avatar: const Icon(
+                                                  Icons.history_toggle_off,
+                                                  size: 16,
+                                                  color: AppTheme.primaryColor,
+                                                ),
+                                                label: const Text(
+                                                  'Search & Trip Logs',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                onPressed: () {
+                                                  HapticFeedback.lightImpact();
+                                                  setState(() {
+                                                    _showSearchResults = false;
+                                                  });
+                                                  _showActivityLogsSheet();
+                                                },
+                                              ),
+                                              const SizedBox(
+                                                width: AppTheme.spacingSM,
+                                              ),
+                                              ActionChip(
                                                 label: const Text(
                                                   'Restaurants',
                                                 ),
@@ -9167,6 +9395,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
                       _remainingDistance > 0 ? _remainingDistance / 1000 : null,
                   remainingDuration: _remainingDuration,
                   isOffRoute: _isOffRoute,
+                  targetArrivalTime: _activeTargetArrivalTime,
+                  targetSpeedResult: _activeTargetSpeedResult,
                 ),
               ),
               // * Speed HUD (driver-focused)

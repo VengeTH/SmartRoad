@@ -78,6 +78,17 @@ smartroad/
   - Overspeed warnings (tolerance configurable)
 - **Customizable Navigation Avatar**:
   - Choose arrow/car/motorcycle/etc. icon for the user marker
+- **Target Arrival Time & Required Speed Advisory**:
+  - Compute target driving speed based on user-specified desired arrival time (via presets or custom time picker)
+  - Accounts for route distance, traffic congestion buffer, and urban pedestrian crossing/lane deceleration stops (~18s per crossing)
+  - Statutory speed limit compliance: compares required speed against detected road limits or default statutory maximums (RA 4136 / urban limits)
+  - Legal speed warnings: prominent warning marks and notices if arriving on time requires exceeding legal speed limits, advising safety and compliance over speed
+  - Live in-navigation speed monitoring directly in the navigation overlay HUD
+- **Route Search & Trip Start Time Logs**:
+  - Persistent local logging of route searches (`Searched Only` status with search timestamp)
+  - Distinct logging of ride departures (`Ride Initiated` status with start timestamp) when user initiates navigation
+  - Dedicated "Search & Trip Logs" sheet with status filter chips (`All`, `Searched Only`, `Ride Initiated`), distance/duration breakdown, and one-tap re-routing
+  - Accessible via the map search recents overlay and the Routes tab action bar
 - **Location Options**: Long-press map to pin location with options (Get Directions, Save, Share, View on Map)
 
 ### Music Control

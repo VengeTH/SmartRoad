@@ -19,6 +19,7 @@ type Config struct {
 	RateLimitMax          int
 	LogLevel              string
 	CORSOrigin            string
+	OpenWeatherMapAPIKey  string
 }
 
 func Load() *Config {
@@ -43,6 +44,7 @@ func Load() *Config {
 	}
 
 	corsOrigin := getEnv("CORS_ORIGIN", "*")
+	owmKey := getEnv("OPENWEATHERMAP_API_KEY", "")
 
 	return &Config{
 		Env:                   env,
@@ -57,6 +59,7 @@ func Load() *Config {
 		RateLimitMax:          rlMax,
 		LogLevel:              logLevel,
 		CORSOrigin:            corsOrigin,
+		OpenWeatherMapAPIKey:  owmKey,
 	}
 }
 

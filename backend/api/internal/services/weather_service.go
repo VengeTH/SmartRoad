@@ -3,10 +3,13 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"smartroad-api/internal/config"
 	"smartroad-api/internal/models"
 )
 
@@ -15,16 +18,25 @@ type cachedWeather struct {
 	ts   time.Time
 }
 
-type WeatherService struct {
-	client *http.Client
-	cache  map[string]*cachedWeather
-	mu     sync.RWMutex
+type byteCacheItem struct {
+	data []byte
+	ts   time.Time
 }
 
-func NewWeatherService() *WeatherService {
+type WeatherService struct {
+	cfg       *config.Config
+	client    *http.Client
+	cache     map[string]*cachedWeather
+	byteCache map[string]*byteCacheItem
+	mu        sync.RWMutex
+}
+
+func NewWeatherService(cfg *config.Config) *WeatherService {
 	return &WeatherService{
-		client: &http.Client{Timeout: 8 * time.Second},
-		cache:  make(map[string]*cachedWeather),
+		cfg:       cfg,
+		client:    &http.Client{Timeout: 10 * time.Second},
+		cache:     make(map[string]*cachedWeather),
+		byteCache: make(map[string]*byteCacheItem),
 	}
 }
 
@@ -167,8 +179,8 @@ func (s *WeatherService) GetWeatherAlerts(lat, lon float64) ([]models.WeatherAle
 
 	var res struct {
 		Daily struct {
-			Time                       []string  `json:"time"`
-			PrecipitationSum           []float64 `json:"precipitation_sum"`
+			Time                        []string  `json:"time"`
+			PrecipitationSum            []float64 `json:"precipitation_sum"`
 			PrecipitationProbabilityMax []float64 `json:"precipitation_probability_max"`
 		} `json:"daily"`
 	}
@@ -225,5 +237,133 @@ func mapWeatherCode(code int) string {
 		return "Thunderstorm"
 	default:
 		return "Variable"
+	}
+}
+
+func (s *WeatherService) ProxyRainViewer(timestamp, z, x, y string) ([]byte, error) {
+	cacheKey := fmt.Sprintf("rainviewer:%s:%s:%s:%s", timestamp, z, x, y)
+	if data := s.getByteCache(cacheKey, 5*time.Minute); data != nil {
+		return data, nil
+	}
+
+	url := fmt.Sprintf("https://tilecache.rainviewer.com/v2/radar/%s/%s/%s/%s/2/1_1.png", timestamp, z, x, y)
+	data, err := s.fetchBytes(url)
+	if err != nil {
+		return nil, err
+	}
+
+	s.setByteCache(cacheKey, data)
+	return data, nil
+}
+
+func (s *WeatherService) ProxyRainViewerWeatherMaps() ([]byte, error) {
+	cacheKey := "rainviewer:weather-maps"
+	if data := s.getByteCache(cacheKey, 5*time.Minute); data != nil {
+		return data, nil
+	}
+
+	url := "https://api.rainviewer.com/public/weather-maps.json"
+	data, err := s.fetchBytes(url)
+	if err != nil {
+		return nil, err
+	}
+
+	s.setByteCache(cacheKey, data)
+	return data, nil
+}
+
+func (s *WeatherService) ProxyOpenMeteoForecast(query string) ([]byte, error) {
+	cacheKey := fmt.Sprintf("openmeteo:%s", query)
+	if data := s.getByteCache(cacheKey, 5*time.Minute); data != nil {
+		return data, nil
+	}
+
+	url := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?%s", query)
+	data, err := s.fetchBytes(url)
+	if err != nil {
+		return nil, err
+	}
+
+	s.setByteCache(cacheKey, data)
+	return data, nil
+}
+
+func (s *WeatherService) ProxyOpenWeatherMap(layer, z, x, y, appID string) ([]byte, error) {
+	apiKey := appID
+	if apiKey == "" && s.cfg != nil {
+		apiKey = s.cfg.OpenWeatherMapAPIKey
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("OpenWeatherMap API key not configured")
+	}
+
+	owmLayer := layer
+	switch strings.ToLower(layer) {
+	case "precipitation":
+		owmLayer = "precipitation_new"
+	case "temperature":
+		owmLayer = "temp_new"
+	case "clouds":
+		owmLayer = "clouds_new"
+	}
+
+	cacheKey := fmt.Sprintf("owm:%s:%s:%s:%s", owmLayer, z, x, y)
+	if data := s.getByteCache(cacheKey, 10*time.Minute); data != nil {
+		return data, nil
+	}
+
+	url := fmt.Sprintf("https://tile.openweathermap.org/map/%s/%s/%s/%s.png?appid=%s", owmLayer, z, x, y, apiKey)
+	data, err := s.fetchBytes(url)
+	if err != nil {
+		return nil, err
+	}
+
+	s.setByteCache(cacheKey, data)
+	return data, nil
+}
+
+func (s *WeatherService) fetchBytes(url string) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+	if strings.Contains(url, "rainviewer.com") {
+		req.Header.Set("Referer", "https://www.rainviewer.com/")
+	}
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("upstream returned status %d", resp.StatusCode)
+	}
+
+	return io.ReadAll(resp.Body)
+}
+
+func (s *WeatherService) getByteCache(key string, ttl time.Duration) []byte {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if item, exists := s.byteCache[key]; exists {
+		if time.Since(item.ts) < ttl {
+			return item.data
+		}
+	}
+	return nil
+}
+
+func (s *WeatherService) setByteCache(key string, data []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.byteCache[key] = &byteCacheItem{
+		data: data,
+		ts:   time.Now(),
 	}
 }

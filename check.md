@@ -490,8 +490,8 @@ Possibly biggest future feature.
 - [x] Graph Built Successfully — _user-confirmed (not verifiable from code)_
 - [x] **Create PostgreSQL + PostGIS** — _✅ done (postgis/postgis:15-3.4 in docker-compose, `CREATE EXTENSION postgis` in schema)_
 - [x] **Design Database Schemas** — _✅ done (7+ migration files, all core tables created)_
-- [x] **Build Backend API** — _✅ done (Express.js — routing, auth, hazards, weather, community, HOA, entrances, flood-zones)_
-- [x] **Connect Backend → GraphHopper** — _✅ done (`routing-service.js` proxies Flutter requests → GraphHopper with retry + timeout)_
+- [x] **Build Backend API** — _✅ done (Golang — routing, auth, hazards, weather, community, HOA, entrances, flood-zones, websockets)_
+- [x] **Connect Backend → GraphHopper** — _✅ done (`routing_service.go` proxies Flutter requests → GraphHopper with retry + timeout + fallback)_
 - [x] **Create Flutter Map** — _✅ done (`map_screen.dart` — OSM, current location, search, pins, routing)_
 - [x] **Display Routes** — _✅ done (route preview, navigation overlay, route following)_
 - [x] **Navigation MVP** — _✅ done (turn-by-turn, reroute, distance tracking, speed HUD, hazard warnings)_

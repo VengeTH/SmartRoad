@@ -1,37 +1,24 @@
 # Troubleshooting 403 Forbidden Errors
 
-## Step 1: Run the improved fix
+## Diagnosis & Resolution
+
+SmartRoad's Go API (`backend/api`) incorporates browser-mimicking headers and caching for all radar and weather requests.
+
+### Testing the Go Proxy:
 
 ```bash
-cd ~/SmartRoad
-chmod +x fix-proxy-403-v2.sh
-./fix-proxy-403-v2.sh
-```
+# Check Go API health
+curl http://localhost:3000/api/health
 
-## Step 2: Test with diagnostic endpoint
-
-```bash
-# This will show detailed information about what RainViewer is returning
-curl http://localhost:3000/test-rainviewer | jq
-```
-
-Look for:
-- `status`: Should be 200, not 403
-- `headers`: Check what RainViewer is sending back
-- Any error messages
-
-## Step 3: Check detailed logs
-
-```bash
-pm2 logs weather-proxy --lines 100
+# Test RainViewer proxy through Go backend
+curl -I http://localhost:3000/rainviewer/1766994000/7/107/59
 ```
 
 Look for:
-- `[RainViewer] Response status: 403 Forbidden` - This means RainViewer is blocking
-- `[RainViewer] Error body:` - This might contain a reason
-- Any exception messages
+- `status`: Should be 200 OK
+- `Content-Type`: `image/png`
 
-## Step 4: Test direct connection
+### Testing Direct Connection:
 
 **On your server:**
 ```bash

@@ -14,10 +14,10 @@ import (
 )
 
 var (
-	ErrUserExists        = errors.New("EMAIL_EXISTS")
-	ErrInvalidCreds      = errors.New("INVALID_CREDENTIALS")
-	ErrValidationFailed  = errors.New("VALIDATION_ERROR")
-	ErrUserNotFound      = errors.New("USER_NOT_FOUND")
+	ErrUserExists       = errors.New("EMAIL_EXISTS")
+	ErrInvalidCreds     = errors.New("INVALID_CREDENTIALS")
+	ErrValidationFailed = errors.New("VALIDATION_ERROR")
+	ErrUserNotFound     = errors.New("USER_NOT_FOUND")
 )
 
 type AuthService struct {

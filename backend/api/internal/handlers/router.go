@@ -77,9 +77,15 @@ func SetupRouter(deps *AppDependencies) http.Handler {
 	mux.Handle("PUT /api/hazards/{id}", authMw.RequireAuth(http.HandlerFunc(hazardH.HandleHazardByID)))
 	mux.Handle("DELETE /api/hazards/{id}", authMw.RequireAuth(http.HandlerFunc(hazardH.HandleHazardByID)))
 
-	// Weather
+	// Weather & Proxy endpoints
 	mux.HandleFunc("GET /api/weather/current", weatherH.HandleCurrent)
 	mux.HandleFunc("GET /api/weather/alerts", weatherH.HandleAlerts)
+	mux.HandleFunc("GET /api/weather/open-meteo/forecast", weatherH.HandleOpenMeteoForecast)
+	mux.HandleFunc("GET /open-meteo/forecast", weatherH.HandleOpenMeteoForecast)
+	mux.HandleFunc("GET /api/weather/rainviewer/{path...}", weatherH.HandleRainViewer)
+	mux.HandleFunc("GET /rainviewer/{path...}", weatherH.HandleRainViewer)
+	mux.HandleFunc("GET /api/weather/openweathermap/{path...}", weatherH.HandleOpenWeatherMap)
+	mux.HandleFunc("GET /openweathermap/{path...}", weatherH.HandleOpenWeatherMap)
 
 	// Community
 	mux.Handle("GET /api/community/comments", authMw.OptionalAuth(http.HandlerFunc(communityH.HandleComments)))

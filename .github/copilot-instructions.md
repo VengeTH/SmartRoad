@@ -1,7 +1,7 @@
 # SmartRoad – Copilot coding agent notes
 
 ## Big picture
-- This repo root is the Flutter app (see [README.md](../README.md)); `backend/` contains Docker services (GraphHopper routing, Node.js/Express API, PostgreSQL, Redis).
+- This repo root is the Flutter app (see [README.md](../README.md)); `backend/` contains Docker services (GraphHopper routing, Go/Golang API, PostgreSQL, Redis).
 - App boot is in [lib/main.dart](../lib/main.dart): initializes `SupabaseService`, `RouteService`, `OfflineCacheService`, `NotificationService` before `ProviderScope`.
 - State management uses Riverpod (`flutter_riverpod`): providers live under `lib/providers/`, UI commonly uses `ConsumerWidget`/`ConsumerStatefulWidget` + `ref.watch(...)`.
 - **Routing architecture**: Flutter → SmartRoad Backend API → GraphHopper. Flutter NEVER calls GraphHopper directly.

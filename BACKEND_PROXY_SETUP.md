@@ -27,134 +27,23 @@ I've implemented all the Flutter-side code to support a backend proxy for weathe
 
 ---
 
-## ❌ What You Need To Do (Backend Side)
+## ✅ Backend Implementation (Go Backend in `backend/api`)
 
-### Step 1: Create Backend Server
+The backend proxy is now **fully implemented in Go** inside the official `backend/api` service.
 
-You need to create a backend server that acts as a proxy. Here's a Node.js/Express example:
+### Active Endpoints Handled by the Go Backend:
+- `/open-meteo/forecast` (and `/api/weather/open-meteo/forecast`) — Proxies forecast requests with 5-minute memory caching.
+- `/rainviewer/{timestamp}/{z}/{x}/{y}` (and `/api/weather/rainviewer/...`) — Proxies radar tiles with binary image caching and CORS.
+- `/rainviewer/weather-maps` — Proxies RainViewer map timestamps list.
+- `/openweathermap/{layer}/{z}/{x}/{y}` — Proxies tile layers using server-side or query `OPENWEATHERMAP_API_KEY`.
+- `/api/weather/current` & `/api/weather/alerts` — High-level location weather reports.
 
-**File: `backend/routes/weather-proxy.js`**
-
-```javascript
-const express = require('express');
-const router = express.Router();
-const fetch = require('node-fetch');
-const cors = require('cors');
-
-router.use(cors());
-
-// * Proxy for RainViewer tiles
-router.get('/rainviewer/:timestamp/:z/:x/:y', async (req, res) => {
-  try {
-    const { timestamp, z, x, y } = req.params;
-    const url = `https://tilecache.rainviewer.com/v2/radar/${timestamp}/${z}/${x}/${y}/2/1_1.png`;
-    
-    const response = await fetch(url);
-    const buffer = await response.buffer();
-    
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=300'); // * Cache for 5 minutes
-    res.send(buffer);
-  } catch (error) {
-    console.error('RainViewer proxy error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// * Proxy for Open-Meteo API (with caching)
-const openMeteoCache = new Map();
-const CACHE_DURATION = 5 * 60 * 1000; // * 5 minutes
-
-router.get('/open-meteo/forecast', async (req, res) => {
-  try {
-    const { latitude, longitude, current } = req.query;
-    const cacheKey = `${latitude}_${longitude}_${current}`;
-    
-    // * Check cache
-    if (openMeteoCache.has(cacheKey)) {
-      const cached = openMeteoCache.get(cacheKey);
-      if (Date.now() - cached.timestamp < CACHE_DURATION) {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('X-Cache', 'HIT');
-        return res.json(cached.data);
-      }
-    }
-    
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=${current}`;
-    const response = await fetch(url);
-    const data = await response.json();
-    
-    // * Cache response
-    openMeteoCache.set(cacheKey, {
-      data,
-      timestamp: Date.now()
-    });
-    
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('X-Cache', 'MISS');
-    res.json(data);
-  } catch (error) {
-    console.error('Open-Meteo proxy error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-module.exports = router;
-```
-
-**File: `backend/server.js` (or `app.js`)**
-
-```javascript
-const express = require('express');
-const weatherProxy = require('./routes/weather-proxy');
-
-const app = express();
-
-// * Mount weather proxy routes
-app.use('/api/weather', weatherProxy);
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Weather proxy server running on port ${PORT}`);
-});
-```
-
-**File: `backend/package.json`**
-
-```json
-{
-  "name": "weather-proxy",
-  "version": "1.0.0",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.18.0",
-    "node-fetch": "^2.6.7",
-    "cors": "^2.8.5"
-  }
-}
-```
-
-### Step 2: Deploy Backend Server
-
-Deploy your backend server to a hosting platform:
-
-**Option A: Heroku**
+### Starting the Backend
 ```bash
 cd backend
-heroku create your-weather-proxy
-git push heroku main
+docker-compose up -d
 ```
-
-**Option B: DigitalOcean / AWS / Any VPS**
-- Set up Node.js on your server
-- Install dependencies: `npm install`
-- Run server: `node server.js` (or use PM2: `pm2 start server.js`)
-
-**Option C: Vercel / Netlify Functions**
-- Convert to serverless functions (requires different structure)
+The Go API runs on port 3000 by default.
 
 ### Step 3: Configure Flutter App
 
@@ -229,16 +118,17 @@ For production builds, add to your build script or CI/CD pipeline.
 
 ## 📝 Summary
 
-**What I Did:**
-- ✅ Created `WeatherConfig` class
-- ✅ Updated all weather services to use proxy URLs
+**Implementation Status:**
+- ✅ Created `WeatherConfig` class in Flutter
+- ✅ Updated all weather services to support proxy URLs
 - ✅ Updated UI to show proxy status
 - ✅ Made layers conditionally available based on proxy configuration
+- ✅ Implemented complete Go backend proxy in `backend/api` (Open-Meteo, RainViewer, OpenWeatherMap)
+- ✅ Deployed via unified `docker-compose.yml`
 
-**What You Need To Do:**
-- ❌ Create backend server (Node.js/Express example provided)
-- ❌ Deploy backend to hosting platform
-- ❌ Set `WEATHER_PROXY_URL` environment variable in Flutter
-- ❌ Test endpoints and verify everything works
+To test in Flutter:
+```bash
+flutter run --dart-define=WEATHER_PROXY_URL=http://localhost:3000
+```
 
 Once you complete these steps, weather layers will work on all platforms including web! 🎉

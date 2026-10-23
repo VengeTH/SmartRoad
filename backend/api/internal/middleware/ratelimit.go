@@ -16,10 +16,10 @@ type clientLimit struct {
 }
 
 type RateLimiter struct {
-	window   time.Duration
-	max      int
-	clients  map[string]*clientLimit
-	mu       sync.Mutex
+	window  time.Duration
+	max     int
+	clients map[string]*clientLimit
+	mu      sync.Mutex
 }
 
 func NewRateLimiter(window time.Duration, max int) *RateLimiter {

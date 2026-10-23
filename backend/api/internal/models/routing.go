@@ -46,20 +46,20 @@ type RouteMetadata struct {
 }
 
 type RouteData struct {
-	Points              []LatLngPoint  `json:"points"`
-	DistanceKm          float64        `json:"distance_km"`
-	DistanceMeters      int64          `json:"distance_meters"`
-	DurationSeconds     int64          `json:"duration_seconds"`
-	DurationMinutes     int64          `json:"duration_minutes"`
-	DurationFormatted   string         `json:"duration_formatted"`
-	Instructions        string         `json:"instructions,omitempty"`
-	Vehicle             string         `json:"vehicle"`
-	IsFallback          bool           `json:"is_fallback,omitempty"`
-	HOAWarning          bool           `json:"hoa_warning,omitempty"`
-	HOAMissingStickers  []string       `json:"hoa_missing_stickers,omitempty"`
-	Metadata            RouteMetadata  `json:"metadata"`
-	SafetyScore         float64        `json:"safety_score,omitempty"`
-	Warnings            []RouteWarning `json:"warnings,omitempty"`
+	Points             []LatLngPoint  `json:"points"`
+	DistanceKm         float64        `json:"distance_km"`
+	DistanceMeters     int64          `json:"distance_meters"`
+	DurationSeconds    int64          `json:"duration_seconds"`
+	DurationMinutes    int64          `json:"duration_minutes"`
+	DurationFormatted  string         `json:"duration_formatted"`
+	Instructions       string         `json:"instructions,omitempty"`
+	Vehicle            string         `json:"vehicle"`
+	IsFallback         bool           `json:"is_fallback,omitempty"`
+	HOAWarning         bool           `json:"hoa_warning,omitempty"`
+	HOAMissingStickers []string       `json:"hoa_missing_stickers,omitempty"`
+	Metadata           RouteMetadata  `json:"metadata"`
+	SafetyScore        float64        `json:"safety_score,omitempty"`
+	Warnings           []RouteWarning `json:"warnings,omitempty"`
 }
 
 type VehicleTypeInfo struct {

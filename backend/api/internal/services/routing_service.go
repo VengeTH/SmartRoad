@@ -19,9 +19,9 @@ import (
 )
 
 var (
-	ErrNoRouteFound     = errors.New("NO_ROUTE")
-	ErrInvalidGeometry  = errors.New("INVALID_ROUTE_GEOMETRY")
-	ErrGraphHopperDown  = errors.New("UPSTREAM_UNAVAILABLE")
+	ErrNoRouteFound    = errors.New("NO_ROUTE")
+	ErrInvalidGeometry = errors.New("INVALID_ROUTE_GEOMETRY")
+	ErrGraphHopperDown = errors.New("UPSTREAM_UNAVAILABLE")
 )
 
 type RoutingService struct {
@@ -51,11 +51,11 @@ func NewRoutingService(cfg *config.Config, hazardService *HazardService, floodSe
 // GraphHopper Response schema
 type ghResponse struct {
 	Paths []struct {
-		Distance     float64 `json:"distance"`
-		Time         int64   `json:"time"`
-		Ascend       *float64 `json:"ascend"`
-		Descend      *float64 `json:"descend"`
-		Points       struct {
+		Distance float64  `json:"distance"`
+		Time     int64    `json:"time"`
+		Ascend   *float64 `json:"ascend"`
+		Descend  *float64 `json:"descend"`
+		Points   struct {
 			Coordinates [][]float64 `json:"coordinates"`
 		} `json:"points"`
 		Instructions []struct {

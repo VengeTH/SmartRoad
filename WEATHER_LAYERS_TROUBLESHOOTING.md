@@ -69,59 +69,21 @@ if (!kIsWeb) {
 
 ---
 
-### Option 2: Implement Backend Proxy (Recommended for Production)
+### Option 2: Use Built-in Backend Proxy (Recommended for Production)
 
 **Pros**: Works on all platforms, bypasses CORS and rate limits  
-**Cons**: Requires backend server setup
+**Status**: Built-in to SmartRoad Go Backend (`backend/api`)
 
-#### Step-by-Step: Backend Proxy Setup
+The SmartRoad Go API natively includes weather proxying for:
+- Open-Meteo forecast requests (`/open-meteo/forecast` and `/api/weather/open-meteo/forecast`)
+- RainViewer radar tiles (`/rainviewer/{timestamp}/{z}/{x}/{y}`)
+- OpenWeatherMap layers (`/openweathermap/{layer}/{z}/{x}/{y}`)
 
-**Step 1: Create Backend Proxy Endpoint**
-
-Create a new file in your backend (e.g., Node.js/Express):
-
-```javascript
-// backend/routes/weather-proxy.js
-const express = require('express');
-const router = express.Router();
-const fetch = require('node-fetch');
-const cors = require('cors');
-
-router.use(cors());
-
-// * Proxy for RainViewer tiles
-router.get('/rainviewer/:timestamp/:z/:x/:y', async (req, res) => {
-  try {
-    const { timestamp, z, x, y } = req.params;
-    const url = `https://tilecache.rainviewer.com/v2/radar/${timestamp}/${z}/${x}/${y}/2/1_1.png`;
-    
-    const response = await fetch(url);
-    const buffer = await response.buffer();
-    
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.send(buffer);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// * Proxy for Open-Meteo API (with caching)
-const openMeteoCache = new Map();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-router.get('/open-meteo/forecast', async (req, res) => {
-  try {
-    const { latitude, longitude, current } = req.query;
-    const cacheKey = `${latitude}_${longitude}_${current}`;
-    
-    // * Check cache
-    if (openMeteoCache.has(cacheKey)) {
-      const cached = openMeteoCache.get(cacheKey);
-      if (Date.now() - cached.timestamp < CACHE_DURATION) {
-        return res.json(cached.data);
-      }
-    }
+Simply start the backend:
+```bash
+cd backend
+docker-compose up -d
+```
     
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=${current}`;
     const response = await fetch(url);

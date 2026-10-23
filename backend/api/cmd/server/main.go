@@ -30,7 +30,7 @@ func main() {
 	floodService := services.NewFloodService()
 	hoaService := services.NewHOAService()
 	communityService := services.NewCommunityService()
-	weatherService := services.NewWeatherService()
+	weatherService := services.NewWeatherService(cfg)
 	routingService := services.NewRoutingService(cfg, hazardService, floodService)
 	routeProductService := services.NewRouteProductService()
 	hub := websocket.GetHub()

@@ -1,61 +1,24 @@
 # Fix 403 Forbidden Errors for RainViewer
 
-## Problem
-The proxy server is getting **403 Forbidden** errors from RainViewer because it's not sending proper browser-like headers.
+## Status: Resolved in Go Backend
 
-## Solution
+The **403 Forbidden** errors previously experienced by standalone proxy servers were caused by RainViewer blocking automated bot requests that lack standard browser headers.
 
-### Step 1: Run the fix script on your server
+This is now **built directly into the SmartRoad Go API** (`backend/api`):
+- Sends standard browser `User-Agent` (Chrome/Windows NT)
+- Sends image `Accept` headers (`image/webp`, `image/apng`, `image/*`)
+- Sets `Referer` to `https://www.rainviewer.com/` for tile requests
+- Caches radar tiles in memory (5-minute TTL) to avoid hitting rate limits
 
-1. **Copy the fix script to your server:**
-   ```bash
-   # On your Windows machine, copy fix-proxy-403.sh to your server
-   scp fix-proxy-403.sh venge@112.207.162.79:~/SmartRoad/
-   ```
+### How to Run:
 
-2. **SSH into your server:**
-   ```bash
-   ssh venge@112.207.162.79
-   ```
-
-3. **Run the fix script:**
-   ```bash
-   cd ~/SmartRoad
-   chmod +x fix-proxy-403.sh
-   ./fix-proxy-403.sh
-   ```
-
-   The script will:
-   - Backup your current `server.js`
-   - Update it with proper browser headers
-   - Restart the proxy server
-
-### Step 2: Verify the fix
-
-**On your server:**
+Start the Go backend via Docker Compose:
 ```bash
-# Check logs
-pm2 logs weather-proxy --lines 50
-
-# Test a tile request
-curl -I http://localhost:3000/rainviewer/1766994000/7/107/59
+cd backend
+docker-compose up -d
 ```
 
-You should see `200 OK` instead of `403 Forbidden`.
-
-### Step 3: Test from your local machine
-
-**With SSH tunnel running:**
-```powershell
-# Test health endpoint
-curl http://localhost:3000/health
-
-# Test a tile (should return PNG image headers)
-curl -I http://localhost:3000/rainviewer/1766994000/7/107/59
-```
-
-### Step 4: Run Flutter app
-
+Run Flutter with the proxy configured:
 ```bash
 flutter run --dart-define=WEATHER_PROXY_URL=http://localhost:3000
 ```

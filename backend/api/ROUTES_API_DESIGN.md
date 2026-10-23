@@ -3,9 +3,9 @@
 ## Architecture Overview
 
 **Technology Stack:**
-- Node.js + Express (or Fastify for better performance)
+- Go (Golang 1.24+)
 - PostgreSQL + PostGIS for spatial queries
-- Supabase for auth (or JWT)
+- JWT for authentication
 - GraphHopper integration (already exists)
 
 **Core Principle:** Navigation-first. Routes enhance navigation, don't replace it.
